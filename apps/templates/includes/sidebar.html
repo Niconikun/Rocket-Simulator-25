@@ -6,10 +6,10 @@
         <div class="sidebar-wrapper">
             <div class="logo">
                 <a href="javascript:void(0)" class="simple-text logo-mini">
-                    CT
+                    UdeC
                 </a>
                 <a href="javascript:void(0)" class="simple-text logo-normal">
-                    Creative Tim
+                    Aerospace
                 </a>
             </div>
             <ul class="nav">
@@ -20,9 +20,15 @@
                     </a>
                 </li>
                 <li class="{% if 'user' in segment %} active {% endif %}">
-                    <a href="/user.html">
-                        <i class="tim-icons icon-single-02"></i>
-                        <p>User Profile</p>
+                    <a href="/simulator.html">
+                        <i class="tim-icons icon-planet"></i>
+                        <p>Trajectory Analysis</p>
+                    </a>
+                </li>
+                <li class="{% if 'user' in segment %} active {% endif %}">
+                    <a href="/risks.html">
+                        <i class="tim-icons icon-globe-2"></i>
+                        <p>Risk Maps</p>
                     </a>
                 </li>
                 <li class="{% if 'icons' in segment %} active {% endif %}">
@@ -53,18 +59,6 @@
                     <a href="/typography.html">
                         <i class="tim-icons icon-align-center"></i>
                         <p>Typography</p>
-                    </a>
-                </li>
-                <li>
-                    <a href="/rtl.html">
-                        <i class="tim-icons icon-world"></i>
-                        <p>RTL Support</p>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ url_for('authentication_blueprint.logout') }}">
-                        <i class="tim-icons icon-button-power"></i>
-                        <p>Logout</p>
                     </a>
                 </li>
             </ul>

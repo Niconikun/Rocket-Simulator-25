@@ -18,32 +18,23 @@
 /*     brand Colors              */
 /* navbar color */
 :root {
-  --blue: #5e72e4;
-  --indigo: #5603ad;
-  --purple: #8965e0;
-  --pink: #f3a4b5;
-  --red: #f5365c;
-  --orange: #fb6340;
+  --background: #190207;
+  --text-white: #f5efee;
+  --text-red: #b80005;
+  --text-blue: #314ff8;
+  --text-orange: #fb6340;
   --yellow: #ffd600;
   --green: #2dce89;
-  --teal: #11cdef;
-  --cyan: #2bffc6;
-  --white: #ffffff;
-  --gray: #6c757d;
-  --gray-dark: #32325d;
-  --light: #ced4da;
   --lighter: #e9ecef;
-  --primary: #e14eca;
+  --primary: #b80005;
   --secondary: #f4f5f7;
   --success: #00f2c3;
   --info: #1d8cf8;
   --warning: #ff8d72;
-  --danger: #fd5d93;
+  --danger: #070203;
   --light: #adb5bd;
   --dark: #212529;
   --default: #344675;
-  --white: #ffffff;
-  --neutral: #ffffff;
   --darker: black;
   --breakpoint-xs: 0;
   --breakpoint-sm: 576px;
@@ -1798,7 +1789,7 @@ fieldset:disabled a.btn {
 
 .btn-primary {
   color: #ffffff;
-  background-color: #e14eca;
+  background-color: #190207;
   border-color: #e14eca;
   box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08); }
   .btn-primary:hover {
@@ -1809,7 +1800,7 @@ fieldset:disabled a.btn {
     box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 0 rgba(230, 105, 210, 0.5); }
   .btn-primary.disabled, .btn-primary:disabled {
     color: #ffffff;
-    background-color: #e14eca;
+    background-color: #190207;
     border-color: #e14eca; }
   .btn-primary:not(:disabled):not(.disabled):active, .btn-primary:not(:disabled):not(.disabled).active,
   .show > .btn-primary.dropdown-toggle {
@@ -8651,7 +8642,7 @@ a.text-darker:hover, a.text-darker:focus {
 
 .btn-primary {
   background: #e14eca;
-  background-image: linear-gradient(to bottom left, #e14eca, #ba54f5, #e14eca);
+  background-image: linear-gradient(to bottom left, #190207, #ba54f5, #190207);
   background-size: 210% 210%;
   background-position: top right;
   background-color: #e14eca;
@@ -8663,8 +8654,8 @@ a.text-darker:hover, a.text-darker:focus {
     transition: 0.3s ease-in-out; }
   .btn-primary:hover, .btn-primary:focus, .btn-primary:active, .btn-primary.active, .btn-primary:active:focus, .btn-primary:active:hover, .btn-primary.active:focus, .btn-primary.active:hover {
     background-color: #ba54f5 !important;
-    background-image: linear-gradient(to bottom left, #e14eca, #ba54f5, #e14eca) !important;
-    background-image: -moz-linear-gradient(to bottom left, #e14eca, #ba54f5, #e14eca) !important;
+    background-image: linear-gradient(to bottom left, #190207, #ba54f5, #190207) !important;
+    background-image: -moz-linear-gradient(to bottom left, #190207, #ba54f5, #190207) !important;
     color: #ffffff;
     box-shadow: none; }
   .btn-primary:active {
@@ -11084,9 +11075,11 @@ table.tablesorter thead tr .headerSortDown {
   position: fixed;
   right: 0;
   width: 64px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--background);
   z-index: 1031;
-  border-radius: 8px 0 0 8px;
+  border-style: solid;
+  border-width: 1pt;
+  border-color: var(--text-red);
   text-align: center;
   top: 130px; }
   .fixed-plugin li > a,
@@ -11104,9 +11097,11 @@ table.tablesorter thead tr .headerSortDown {
     left: auto !important;
     top: -52px !important;
     width: 290px;
-    border-radius: 0.1875rem;
+    border-style: solid;
+    border-color: #f5efee;
+    border-width: 1pt;
     padding: 0 10px;
-    background: linear-gradient(#222a42, #1d253b); }
+    background: #190207; }
   .fixed-plugin .dropdown .dropdown-menu .tim-icons {
     top: 5px; }
   .fixed-plugin .dropdown-menu:after,
@@ -11297,8 +11292,7 @@ table.tablesorter thead tr .headerSortDown {
 
 .sidebar,
 .off-canvas-sidebar {
-  background: #ba54f5;
-  background: linear-gradient(0deg, #ba54f5 0%, #e14eca 100%);
+  
   height: calc(100vh - 90px);
   width: 230px;
   position: fixed;
@@ -11311,7 +11305,9 @@ table.tablesorter thead tr .headerSortDown {
   box-shadow: 0px 0px 45px 0px rgba(0, 0, 0, 0.6);
   margin-top: 80px;
   margin-left: 20px;
-  border-radius: 5px;
+  border-color: var(--text-white);
+  border-width: 1pt;
+  border-style: solid;
   transition: 0.5s cubic-bezier(0.685, 0.0473, 0.346, 1); }
   .sidebar .sidebar-wrapper,
   .off-canvas-sidebar .sidebar-wrapper {
@@ -11646,7 +11642,7 @@ table.tablesorter thead tr .headerSortDown {
   width: 100%;
   min-height: 100vh;
   border-top: 2px solid #e14eca;
-  background: linear-gradient(#1e1e2f, #1e1e24);
+  background: var(--background);
   transition: all 0.5s cubic-bezier(0.685, 0.0473, 0.346, 1); }
   .main-panel[data="blue"] {
     border-top: 2px solid #1d8cf8; }
