@@ -1,0 +1,25 @@
+Instalación de simulador
+
+1.- Instalar la última versión disponible de python desde la página oficial https://www.python.org/. Por preferencia, marcar la casilla "add to PATH"
+2.- Instalar el editor de cógido que se desea. Por preferencia se usa Visual Studio Code https://code.visualstudio.com/
+3.- Descomprimir el archivo en una carpeta destinada para ello
+4.- Abrir el editor de código y seleccionar carpeta "Simulator"
+
+5.- Instalar (preferentemente mediante "pip install *nombre de librería*" en la cmd) las siguientes librerías (todas en la última versión disponible):
+    -numpy
+    -fluids
+    -pandas
+    -matplotlib
+    -openpyxl
+    -navpy
+    -scipy
+    -datetime
+
+Uso de simulador
+
+1.- Abrir el módulo Main_simulator
+2.- Escoger orientación y posición inicial (y otros datos similares) según solicite el módulo
+3.- Escoger el tiempo de simulación máxima (en este apartado se recomienda no cambiar el paso de tiempo de cada ciclo) como también altitud y alcance máximos
+4.- Correr el código del mismo módulo
+
+***Para eliminar la rotación, entrar el módulo Rocket y en el método update_forces_aero, igualar self.forces_lift a 0
