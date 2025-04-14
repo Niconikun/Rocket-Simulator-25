@@ -3,9 +3,41 @@
 {% block title %} Trajectory Simulator {% endblock %}
 
 <!-- Specific Page CSS goes HERE  -->
-{% block stylesheets %}{% endblock stylesheets %}
+<!--{% block stylesheets %}{% endblock stylesheets %}-->
+{% block content %}
+  <div>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div>
+              <div>
+                <h3>TRAJECTORY SIMULATOR</h3>
+              </div>
+              <div>
+                <p>This is a simple form to collect user data.</p>
+              </div>
+              <div>
+                <a href="/">HOME</a>      
+                <br/><br/>
+                <form>
+                  <label for="fname">First name:</label>
+                  <input type="text" id="fname" name="fname"><br><br>
+                  <label for="lname">Last name:</label>
+                  <input type="text" id="lname" name="lname"><br><br>
+                  <input type="submit" value="Submit">
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+    
 
-
+    <!-- Content goes here -->
+  {% endblock content %}   
 
 <!-- Specific Page JS goes HERE  -->
 {% block javascripts %}{% endblock javascripts %}

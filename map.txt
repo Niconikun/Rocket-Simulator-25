@@ -12,17 +12,11 @@
    |    |         |
    |    |         |-- includes/                  #
    |    |         |    |-- navigation.html       # Top menu component
-   |    |         |    |-- sidebar.html          # Sidebar component
    |    |         |    |-- footer.html           # App Footer
    |    |         |    |-- scripts.html          # Scripts common to all pages
    |    |         |
    |    |         |-- layouts/                   # Master pages
-   |    |         |    |-- base-fullscreen.html  # Used by Authentication pages
    |    |         |    |-- base.html             # Used by common pages
-   |    |         |
-   |    |         |-- accounts/                  # Authentication pages
-   |    |              |-- login.html            # Login page
-   |    |              |-- register.html         # Registration page
    |    |
    |    |-- home/                                # Home Blueprint - serve app pages (private area)
    |         |-- templates/                      # UI Kit Pages

@@ -30,21 +30,17 @@
     <link href="https://fonts.googleapis.com/css?family=Poppins:200,300,400,600,700,800" rel="stylesheet"/>
     <link href="https://use.fontawesome.com/releases/v5.0.6/css/all.css" rel="stylesheet">
     <!-- Nucleo Icons -->
-    <link href="{{ config.ASSETS_ROOT }}/css/nucleo-icons.css" rel="stylesheet"/>
+    <!--<link href="{{ config.ASSETS_ROOT }}/css/nucleo-icons.css" rel="stylesheet"/>-->
     <!-- CSS Files -->
-    <link href="{{ config.ASSETS_ROOT }}/css/black-dashboard.css?v=1.0.0" rel="stylesheet"/>
+    <link href="{{ config.ASSETS_ROOT }}/css/sim-new-style.css" rel="stylesheet"/>
 
     <!-- Specific Page CSS goes HERE  -->
     {% block stylesheets %}{% endblock stylesheets %}
         
 </head>
-<body class="">
+<body>
 
-    <div class="wrapper">
-
-        {% include 'includes/sidebar.html' %}
-
-        <div class="main-panel">
+        <div>
 
             {% include 'includes/navigation.html' %}
 
@@ -53,9 +49,6 @@
             {% include 'includes/footer.html' %}
 
         </div>
-    </div>
-
-    {% include 'includes/fixed-plugin.html' %}
 
     {% include 'includes/scripts.html' %}
 
