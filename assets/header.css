@@ -1,0 +1,46 @@
+body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #000000;
+        }
+        .dashboard-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .inputs-section {
+            background: #fff;
+            padding: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .inputs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+        .inputs-grid label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+        .outputs-section {
+            flex: 1;
+            background: #e9ecef;
+            padding: 32px 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+        .figure-placeholder {
+            width: 80%;
+            height: 320px;
+            background: #fff;
+            border: 2px dashed #b0b0b0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+            font-size: 1.2em;
+            margin-top: 24px;
+        }
