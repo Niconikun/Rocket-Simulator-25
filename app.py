@@ -2,7 +2,7 @@
 # visit http://127.0.0.1:8050/ in your web browser.
 
 
-from dash import Dash, Input, Output, callback, html, dcc, no_update
+from dash import Dash, Input, Output, callback, html, dcc, no_update, State
 from dash.exceptions import PreventUpdate
 import plotly.express as px
 import pandas as pd
@@ -11,6 +11,7 @@ from dash_extensions.enrich import DashProxy
 import numpy as np
 from cmath import pi
 import datetime as dt
+import dash_loading_spinners
 
 import MatTools as Mat
 from Clock import Clock
@@ -21,39 +22,32 @@ from Rocket import Rocket
 #app = Dash()
 app = DashProxy()
 
-app.layout = html.Div(children=[
+app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs first, then the tabs.
+        html.Div(
+                 id="div-loading",
+                 children=[
+                     dash_loading_spinners.Pacman(
+                         fullscreen=True, 
+                         id="loading-whole-app"
+                     )
+                 ]
+             ),
+             html.Div(
+                 className="div-app",
+                 id="div-app",
+                 children = [ #  app layout here
+                ]
+             ),
+    
     html.Section(children=[
-        html.Div(children=[
-            html.H1(dt.datetime.now().strftime('%Y-%m-%d'), style={'font-family': 'Times New Roman','opacity': '0.5','color': 'black', 'fontSize': 12}),
-            html.H1(dt.datetime.now().strftime('%H:%M:%S'), style={'font-family': 'Times New Roman','opacity': '0.5','color': 'black', 'fontSize': 12}),
-            html.H6('Daily Updates')
-        ], style={'float': 'right'}),
-        html.H2('Configuración de la Simulación'),
-        html.Form(children=[
-            html.Div(children=[
-                html.Label('Dropdown'),
-                dcc.Dropdown(['New York City', 'Montréal', 'San Francisco'], 'Montréal'),
-
-                html.Br(),
-                html.Label('Multi-Select Dropdown'),
-                dcc.Dropdown(['New York City', 'Montréal', 'San Francisco'],
-                     ['Montréal', 'San Francisco'],
-                     multi=True),
-
-                html.Br(),
-                html.Label('Radio Items'),
-                dcc.RadioItems(['New York City', 'Montréal', 'San Francisco'], 'Montréal'),
-                ], style={'padding': 10, 'flex': 1}),
-
-                html.Div(children=[
-                    html.Label('Checkboxes'),
-                    dcc.Checklist(['New York City', 'Montréal', 'San Francisco'],
-                      ['Montréal', 'San Francisco']
-                ),
-
-                html.Br(),
-                html.Label('Text Input'),
-                my_input := dcc.Input(value='MTL', type='text'),
+        #Titulo y Header
+        html.H1(children='Rocket Simulation Dashboard'),
+    ]),
+    html.Div(children=[
+        #Tabs for different sections
+        dcc.Tabs(id="tabs-inputs", value='tab-1', children=[
+            dcc.Tab(label='Simulation Parameters', value='tab-1', children=[
+                html.H3('Simulation Parameters'),
 
                 html.Br(),
                 html.Label('Slider'),
@@ -63,41 +57,228 @@ app.layout = html.Div(children=[
                     marks={i: f'Label {i}' if i == 1 else str(i) for i in range(1, 6)},
                     value=5,
                 ),
-
+                html.Label('Step size'),
+                my_input := dcc.Input(value='1', type='number'),
+                
                 html.Br(),
-                html.Label('Time'),
+                html.Label('Date'),
                 dcc.DatePickerSingle(
                     date='2025-06-21',
                     display_format='DD-MM-YYYY'
                 ),
+                
+                html.Label('Time (hh:mm:ss)'),
+                my_input := dcc.Input(value='00:00:00', type='text'),
+
                 html.Br(),
-                html.Label('Time'),
-                html.Time(n_clicks=0, id='time-input'),
-
-            ]), 
-            html.Div(
+                html.Label('Timezone'),
+                dcc.Dropdown(['New York City', 'Montréal', 'San Francisco'],
+                     'Montréal')
+                
+            ]),
+            dcc.Tab(label='Location Conditions & Orientation', value='tab-2', children=[
                 html.Div(children=[
+                    html.Label('Radio Items'),
+                    dcc.RadioItems(['New York City', 'Montréal', 'San Francisco'], 'Montréal'),
+                    html.Br(),
+                    html.Label('Dropdown'),
+                    dcc.Dropdown(['New York City', 'Montréal', 'San Francisco'], 'Montréal'),
+                    html.Br(),
+                    html.Label('Latitude'),
+                    my_input := dcc.Input(value='1', type='number'),
+                    html.Br(),
+                    html.Label('Longitude'),
+                    my_input := dcc.Input(value='1', type='number'),
+                    html.Br(),
+                    html.Label('Average Temperature'),
+                    my_input := dcc.Input(value='1', type='number'),
+                    html.Br(),
+                    html.Label('Launch Angle'),
+                    my_input := dcc.Input(value='1', type='number'),
+                    html.Br(),
+                    html.Label('Platform Orientation (from the north)'),
+                    my_input := dcc.Input(value='1', type='number')
+                ]),
+                
+                html.Div(children=[
+                    html.Div(children=[
                     html.Label('Leaflet Map'),
-                    dl.Map([dl.TileLayer(), dl.Polyline(positions=[[-36.671778, -73.097569], [-37, -73.097569]])], center=[-36.671778, -73.097569], zoom=15, style={'width': '100%', 'height': '500px'}),
+                    dl.Map([dl.TileLayer(), dl.Polyline(positions=[[-36.671778, -73.097569], [-37, -73.097569]])], center=[-36.671778, -73.097569], zoom=15, style={'width': '100%', 'height': '500px'}, id='projection-map'),
                 ])
-            )  
-        ], className='inputs-grid'),
-    ], className='inputs-section'),
-    
+                ]),
+                
+                
+
+            ]),
+            dcc.Tab(label='Rocket Parameters', value='tab-3', children=[
+                html.Label('Radio Items'),
+                dcc.RadioItems(['Preselected', 'Manual'], 'Preselected'),
+                html.Br(),
+                html.Label('Dropdown'),
+                dcc.Dropdown(['Rayo', 'Campanil 1A'], 'Campanil 1A'),
+                html.Br(),
+                html.H3(children='Manual Input'),
+                html.H4(children='Rocket Properties'),
+                html.Br(),
+                html.Label('Burn time'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Initial mass'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Reference area (Lift & Drag)'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Inertia before burning'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Centre of Mass (CoM) before burning'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Inertia after burning'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Centre of Mass (CoM) after burning'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.H4(children='Rocket Geometry'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number'),
+                html.Br(),
+                html.Label('Latitude'),
+                my_input := dcc.Input(value='1', type='number')
+            ]),
+        ], colors={
+            "border": "red",
+            "primary": "red",
+            "background": "red"
+        }),
+        html.Div(id='tabs-content-props1')]),
+
     html.Section(children=[
-        html.Label('Submit button'),
         html.Button('Submit', id='submit-button', n_clicks=0),
-    ], className='inputs-section'),
-    
+        html.Button('Clear', id='clear-button', n_clicks=0) #aca agregar los resultados de la simulacion
+    ]),
+
     html.Section(children=[
-        html.H2('Dashboard Output'),
-        html.Div(children=[
+        #Titulo y Header
+        html.H1(children='Launch Overview'),
+        html.Table(children=[
+            html.Tr(children=[
+                html.Th('Parameter'),
+                html.Th('Value')
+            ]),
+            html.Tr(children=[
+                html.Td('Launch Date'),
+                html.Td(id='launch-date', children='2025-06-21')
+            ]),
+            html.Tr(children=[
+                html.Td('Launch Time'),
+                html.Td(id='launch-time', children='00:00:00')
+            ]),
+            html.Tr(children=[
+                html.Td('Location'),
+                html.Td(id='launch-location', children='Montréal')
+            ]),
+            html.Tr(children=[
+                html.Td('Rocket Name'),
+                html.Td(id='rocket-name', children='Falcon 9'),
+            ]),
+        html.H1(children='Risk Map'),
+        
+                    html.Div(children=[
+                    html.Label('Leaflet Map'),
+                    dl.Map([dl.TileLayer(), dl.Polyline(positions=[[-36.671778, -73.097569], [-37, -73.097569]]), dl.Polygon(positions=[[-36, -73], [-36.5, -73.5], [-37, -73.5], [-36.5, -74]]), dl.Circle(center=[-36.671778, -73.097569], radius=10000)], center=[-36.671778, -73.097569], zoom=15, style={'width': '1000px', 'height': '500px'}, id='risk-map'),
+                    ])
+                
+
+        ]) #aca agregar los resultados de la simulacion
+    ]),
+    html.Div(children=[
+        #Tabs for different sections
+        dcc.Tabs(id="tabs-outputs", value='tab-1', children=[
+            dcc.Tab(label='Bodyframe Velocities vs Time', value='tab-4', children=[
+                html.Div(children=[
             html.P("Aca se mostrara la figura"),
-        ], className='figure-placeholder'),
+        ], className='figure-placeholder')
+            ]),
+            dcc.Tab(label='Altitude vs Range', value='tab-5', children=[
+                html.Div(children=[
+                html.P("Aca se mostrara la figura"),
+        ], className='figure-placeholder')
+            ]),
+            dcc.Tab(label='Lift vs Time', value='tab-6', children=[
+                html.Div(children=[
+                html.P("Aca se mostrara la figura"),
+        ], className='figure-placeholder')
+            ]),
+            dcc.Tab(label='Pitch, Altitude vs Time', value='tab-7', children=[
+                html.Div(children=[
+                html.P("Aca se mostrara la figura"),
+        ], className='figure-placeholder')
+            ]),
+            dcc.Tab(label='Pitch vs Time', value='tab-8', children=[
+                html.Div(children=[
+                html.P("Aca se mostrara la figura"),
+        ], className='figure-placeholder')
+            ]),
+            dcc.Tab(label='Alpha vs Time', value='tab-9', children=[
+                html.Div(children=[
+                html.P("Aca se mostrara la figura"),
+        ], className='figure-placeholder')
+            ]),
+        ], colors={
+            "border": "red",
+            "primary": "red",
+            "background": "red"
+        }),
+        html.Div(id='tabs-content-props2')])
 
-    ], className='outputs-section'),
+    ], className='dashboard-container')
 
-], className='dashboard-container')
+@app.callback(
+        Output("div-loading", "children"),
+        [
+            Input("div-app", "loading_state")
+        ],
+        [
+            State("div-loading", "children"),
+        ]
+    )
+
+def hide_loading_after_startup(
+    loading_state, 
+    children
+    ):
+    if children:
+        print("remove loading spinner!")
+        return None
+    print("spinner already gone!")
+    raise PreventUpdate
 
 if __name__ == '__main__':
     app.run(debug=True)
