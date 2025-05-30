@@ -12,12 +12,23 @@ import numpy as np
 from cmath import pi
 import datetime as dt
 import dash_loading_spinners
+import json
+import urllib.request
+import plotly.graph_objects as go
 
 import MatTools as Mat
 from Clock import Clock
 from Planet import Planet
 from Atmosphere import Atmosphere
 from Rocket import Rocket
+
+#Load and read the geojson file for your map
+
+map_url = "https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson"  #here is a geojson file for Italy
+with urllib.request.urlopen(map_url) as url:
+        jdata = json.loads(url.read().decode())
+
+fig = go.Figure(data=[go.Scatter(x=[1, 2, 3], y=[4, 1, 2])])
 
 #app = Dash()
 app = DashProxy()
@@ -103,7 +114,10 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
                 html.Div(children=[
                     html.Div(children=[
                     html.Label('Leaflet Map'),
-                    dl.Map([dl.TileLayer(), dl.Polyline(positions=[[-36.671778, -73.097569], [-37, -73.097569]])], center=[-36.671778, -73.097569], zoom=15, style={'width': '100%', 'height': '500px'}, id='projection-map'),
+                    dl.Map([
+                        dl.TileLayer(),
+                        dl.Polyline(positions=[[-36.671778, -73.097569], [-37, -73.097569]])
+                        ], center=[-36.671778, -73.097569], zoom=15, style={'width': '100%', 'height': '500px'}, id='projection-map'),
                 ])
                 ]),
                 
@@ -208,6 +222,8 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
                 html.Td('Rocket Name'),
                 html.Td(id='rocket-name', children='Falcon 9'),
             ]),
+        html.H1(children='Trajectory Overview'),
+        
         html.H1(children='Risk Map'),
         
                     html.Div(children=[
@@ -223,32 +239,32 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
         dcc.Tabs(id="tabs-outputs", value='tab-1', children=[
             dcc.Tab(label='Bodyframe Velocities vs Time', value='tab-4', children=[
                 html.Div(children=[
-            html.P("Aca se mostrara la figura"),
+                    dcc.Graph(figure=fig),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Altitude vs Range', value='tab-5', children=[
                 html.Div(children=[
-                html.P("Aca se mostrara la figura"),
+                dcc.Graph(figure=fig),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Lift vs Time', value='tab-6', children=[
                 html.Div(children=[
-                html.P("Aca se mostrara la figura"),
+                dcc.Graph(figure=fig),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Pitch, Altitude vs Time', value='tab-7', children=[
                 html.Div(children=[
-                html.P("Aca se mostrara la figura"),
+                dcc.Graph(figure=fig),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Pitch vs Time', value='tab-8', children=[
                 html.Div(children=[
-                html.P("Aca se mostrara la figura"),
+                dcc.Graph(figure=fig),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Alpha vs Time', value='tab-9', children=[
                 html.Div(children=[
-                html.P("Aca se mostrara la figura"),
+                dcc.Graph(figure=fig),
         ], className='figure-placeholder')
             ]),
         ], colors={
