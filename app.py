@@ -15,6 +15,7 @@ import dash_loading_spinners
 import json
 import urllib.request
 import plotly.graph_objects as go
+import geopandas as gpd
 
 import MatTools as Mat
 from Clock import Clock
@@ -23,10 +24,22 @@ from Atmosphere import Atmosphere
 from Rocket import Rocket
 
 #Load and read the geojson file for your map
+gdf = gpd.read_file('Proyecto sin título.kml', driver='XML')
 
-map_url = "https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson"  #here is a geojson file for Italy
-with urllib.request.urlopen(map_url) as url:
-        jdata = json.loads(url.read().decode())
+gdf_quiriquina = np.stack(gdf[gdf['Name'] == 'Quiriquina'].geometry.apply(np.array))
+gdf_thno = np.stack(gdf[gdf['Name'] == 'Bahía de Talcahuano'].geometry.apply(np.array))
+thno_coords = np.array(gdf_thno[0].exterior.coords)
+quiriquina_coords = np.array(gdf_quiriquina[0].exterior.coords)
+fig_map = px.line_3d(
+    quiriquina_coords,
+    x=quiriquina_coords[:, 0], y=quiriquina_coords[:, 1], z=quiriquina_coords[:, 2],
+    labels={'x': 'Longitude', 'y': 'Latitude', 'z': 'Elevation'})
+fig_map.add_trace(
+    px.line_3d(thno_coords,
+        x=thno_coords[:, 0], y=thno_coords[:, 1], z=thno_coords[:, 2]
+    )
+)
+#fix the map figure to show the two locations
 
 fig = go.Figure(data=[go.Scatter(x=[1, 2, 3], y=[4, 1, 2])])
 
@@ -223,6 +236,7 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
                 html.Td(id='rocket-name', children='Falcon 9'),
             ]),
         html.H1(children='Trajectory Overview'),
+        dcc.Graph(figure=fig_map),
         
         html.H1(children='Risk Map'),
         
@@ -276,7 +290,7 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
 
     ], className='dashboard-container')
 
-@app.callback(
+@callback(
         Output("div-loading", "children"),
         [
             Input("div-app", "loading_state")
