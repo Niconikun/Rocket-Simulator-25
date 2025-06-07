@@ -30,6 +30,31 @@ gdf_quiriquina = np.stack(gdf[gdf['Name'] == 'Quiriquina'].geometry.apply(np.arr
 gdf_thno = np.stack(gdf[gdf['Name'] == 'Bahía de Talcahuano'].geometry.apply(np.array))
 thno_coords = np.array(gdf_thno[0].exterior.coords)
 quiriquina_coords = np.array(gdf_quiriquina[0].exterior.coords)
+
+dict_map = {
+    'type': 'FeatureCollection',
+    'features': [
+        {
+            'type': 'Feature',
+            'geometry': {
+                'type': 'Polygon',
+                'coordinates': [quiriquina_coords.tolist()]
+            },
+            'properties': {'name': 'Quiriquina'}
+        },
+        {
+            'type': 'Feature',
+            'geometry': {
+                'type': 'Polygon',
+                'coordinates': [thno_coords.tolist()]
+            },
+            'properties': {'name': 'Bahía de Talcahuano'}
+        }
+    ]
+}
+
+
+
 fig_map = px.line_3d(
     quiriquina_coords,
     x=quiriquina_coords[:, 0], y=quiriquina_coords[:, 1], z=quiriquina_coords[:, 2],
