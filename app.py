@@ -53,7 +53,7 @@ dict_map = {
     ]
 }
 
-
+ 
 
 fig_map = px.line_3d(
     quiriquina_coords,
