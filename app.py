@@ -31,42 +31,54 @@ gdf_thno = np.stack(gdf[gdf['Name'] == 'Bahía de Talcahuano'].geometry.apply(np
 thno_coords = np.array(gdf_thno[0].exterior.coords)
 quiriquina_coords = np.array(gdf_quiriquina[0].exterior.coords)
 
-dict_map = {
-    'type': 'FeatureCollection',
-    'features': [
-        {
-            'type': 'Feature',
-            'geometry': {
-                'type': 'Polygon',
-                'coordinates': [quiriquina_coords.tolist()]
-            },
-            'properties': {'name': 'Quiriquina'}
-        },
-        {
-            'type': 'Feature',
-            'geometry': {
-                'type': 'Polygon',
-                'coordinates': [thno_coords.tolist()]
-            },
-            'properties': {'name': 'Bahía de Talcahuano'}
-        }
-    ]
-}
+dict_map = dict({
+    'data':[{type:'line3d',
+            'x': quiriquina_coords[:, 0].tolist(),
+            'y': quiriquina_coords[:, 1].tolist(),
+            'z': quiriquina_coords[:, 2].tolist(),
+           },
+           {
+            'type': 'line3d',
+            'x': thno_coords[:, 0].tolist(),
+            'y': thno_coords[:, 1].tolist(),
+            'z': thno_coords[:, 2].tolist(),
+           }],
+    'layout': {'title': {'text':'3D Plot of KML Data'}
+           }
+})
 
  
 
-fig_map = px.line_3d(
-    quiriquina_coords,
+fig_map = go.Figure()
+
+fig_map.add_trace(go.Scatter3d(
     x=quiriquina_coords[:, 0], y=quiriquina_coords[:, 1], z=quiriquina_coords[:, 2],
-    labels={'x': 'Longitude', 'y': 'Latitude', 'z': 'Elevation'})
-fig_map.add_trace(
-    px.line_3d(thno_coords,
-        x=thno_coords[:, 0], y=thno_coords[:, 1], z=thno_coords[:, 2]
-    )
+    mode='lines',
+    name='Line 1',
+    line=dict(color='blue', width=4)
+))
+
+fig_map.add_trace(go.Scatter3d(
+    x=thno_coords[:, 0], y=thno_coords[:, 1], z=thno_coords[:, 2],
+    mode='lines',
+    name='Line 2',
+    line=dict(color='red', width=4)
+))
+
+# Update layout for better visuals
+fig_map.update_layout(
+    title='3D Plot with Two Lines',
+    scene=dict(
+        xaxis=dict(title='Longitude', range=[-73.15, -72.95]),
+        yaxis=dict(title='Latitude', range=[-36.75, -36.6]),
+        zaxis=dict(title='Elevation', range=[0, 50])
+    ),
+    margin=dict(l=0, r=0, b=0, t=40)
 )
-#fix the map figure to show the two locations
 
 fig = go.Figure(data=[go.Scatter(x=[1, 2, 3], y=[4, 1, 2])])
+
+
 
 #app = Dash()
 app = DashProxy()

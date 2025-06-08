@@ -51,3 +51,32 @@ plt.xlim([-73.15, -72.95])
 plt.title('KML Data Plot')
 plt.show()
 '''
+
+
+dict_map = dict({
+    'data':[{type:'line3d',
+            'x': quiriquina_coords[:, 0],
+            'y': quiriquina_coords[:, 1],
+            'z': quiriquina_coords[:, 2],
+            'name': 'Quiriquina',
+            'line': {'color': 'blue'}
+           },
+           {
+            'type': 'line3d',
+            'x': thno_coords[:, 0],
+            'y': thno_coords[:, 1],
+            'z': thno_coords[:, 2],
+            'name': 'Talcahuano',
+            'line': {'color': 'red'}
+           }],
+    'layout': {'title': '3D Plot of KML Data',
+               'scene': {
+                   'xaxis': {'title': 'Longitude'},
+                   'yaxis': {'title': 'Latitude'},
+                   'zaxis': {'title': 'Elevation'},
+                   'aspectmode': 'data'
+               },
+               'height': 600,
+               'width': 800
+           }
+})
