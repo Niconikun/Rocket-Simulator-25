@@ -263,8 +263,9 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
         html.Div(id='tabs-content-props1')]),
 
     html.Section(children=[
-        html.Button('Submit', id='submit-button', n_clicks=0),
-        html.Button('Clear', id='clear-button', n_clicks=0) #aca agregar los resultados de la simulacion
+        html.Button(children='Submit', id='submit-button', n_clicks=0),
+        html.Button(children='Clear', id='clear-button', n_clicks=0), #aca agregar los resultados de la simulacion
+        html.Div(id='output-state')
     ]),
 
     html.Section(children=[
@@ -292,7 +293,7 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
                 html.Td(id='rocket-name', children='Falcon 9'),
             ]),
         html.H1(children='Trajectory Overview'),
-        dcc.Graph(figure=fig_map),
+        dcc.Graph(figure=fig_map, id='trajectory-graph'),
         
         html.H1(children='Risk Map'),
         
@@ -309,32 +310,32 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
         dcc.Tabs(id="tabs-outputs", value='tab-1', children=[
             dcc.Tab(label='Bodyframe Velocities vs Time', value='tab-4', children=[
                 html.Div(children=[
-                    dcc.Graph(figure=fig),
+                    dcc.Graph(figure=fig, id='bodyframe-velocities-graph'),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Altitude vs Range', value='tab-5', children=[
                 html.Div(children=[
-                dcc.Graph(figure=fig),
+                dcc.Graph(figure=fig, id='altitude-range-graph'),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Lift vs Time', value='tab-6', children=[
                 html.Div(children=[
-                dcc.Graph(figure=fig),
+                dcc.Graph(figure=fig, id='lift-graph'),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Pitch, Altitude vs Time', value='tab-7', children=[
                 html.Div(children=[
-                dcc.Graph(figure=fig),
+                dcc.Graph(figure=fig, id='pitch-altitude-graph'),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Pitch vs Time', value='tab-8', children=[
                 html.Div(children=[
-                dcc.Graph(figure=fig),
+                dcc.Graph(figure=fig, id='pitch-graph'),
         ], className='figure-placeholder')
             ]),
             dcc.Tab(label='Alpha vs Time', value='tab-9', children=[
                 html.Div(children=[
-                dcc.Graph(figure=fig),
+                dcc.Graph(figure=fig, id='alpha-graph'),
         ], className='figure-placeholder')
             ]),
         ], colors={
@@ -348,43 +349,69 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
 
 @callback(
         Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Output("div-loading", "children"),
-        #Input('sim-runtime', component_property='value'),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
-        #Input(),
+        Output("div-loading", "children"),
+        Output('projection-map', "Map"),
+	    Output('trajectory-graph', 'Figure'),
+        Output('risk-map', 'Map'),
+        Output('bodyframe-velocities-graph', 'Figure'),
+        Output('altitude-range-graph', 'Figure'),
+        Output('lift-graph', 'Figure'),
+        Output('pitch-altitude-graph', 'Figure'),
+        Output('pitch-graph', 'Figure'),
+        Output('alpha-graph', 'Figure'),
+
+        # Simulation Parameters
+        
+        Input('submit-button', 'n_clicks'),
+        Input('clear-button', 'n_clicks'),
         Input("div-app", "loading_state"),
-        [
-            State("div-loading", "children"),
-        ]
+        State('sim-runtime', 'value'),
+       	State('step-size', 'value'),
+	    State('sim-date', 'value'),
+        State('sim-time', 'value'),
+        State('timezone', 'value'),
+        
+        # Location Conditions & Orientation}
+	    State('location-radio', 'value'),
+        State('location-dropdown', 'value'),
+        State('launch-site-lat', 'value'),
+        State('launch-site-lon', 'value'),
+        State('avg-temp', 'value'),
+        State('launch-angle', 'value'),
+        State('launch-site-orientation', 'value'),
+
+
+        # Rocket Parameters
+        State('preselected-radio', 'value'),
+        State('rocket-dropdown', 'value'),
+        State('burn-time'),
+        State('initial-mass'),
+        State('cross-section-area'),
+        State('inertia-initial'),
+        State('com_initial'),
+        State('inertia-final', 'value'),
+        State('com-final', 'value'),
+
+        State('len-warhead', 'value'),
+        State('len-nosecone-fins', 'value'),
+        State('len-nosecone-rear', 'value'),
+        State('len_bodytube-wo-rear', 'value'),
+        State('fins-chord-root', 'value'),
+        State('fins-mid-chord', 'value'),
+        State('len-rear', 'value'),
+        State('fins-span', 'value'),
+        State('diam-warhead-base', 'value'),
+        State('diam-bodytube', 'value'),
+        State('diam-bodytube-fins', 'value'),
+        State('diam-rear-bodytube', 'value'),
+        State('end-diameter-rear', 'value'),
+        State('normal-force-coef-warhead', 'value'),
+        State('n-fins', 'value'),
+        
+        State("div-loading", "children"),
     )
 
-def hide_loading_after_startup(
-    loading_state, 
-    children
-    ):
+def hide_loading_after_startup(loading_state, children):
     if children:
         print("remove loading spinner!")
         return None
