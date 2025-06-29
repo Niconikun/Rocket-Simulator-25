@@ -1,8 +1,9 @@
 import streamlit as st
 
-create_page = st.Page("create.py", title="Create entry", icon=":material/add_circle:")
-delete_page = st.Page("delete.py", title="Delete entry", icon=":material/delete:")
+rocket_page = st.Page("Simulation Settings/create.py", title="Rocket", icon=":material/add_circle:")
+sim_page = st.Page("Simulation Settings/sim_settings.py", title="Simulation", icon=":material/settings:")
+dashboard_page = st.Page("delete.py", title="Dashboard", icon=":material/delete:")
 
-pg = st.navigation([create_page, delete_page])
+pg = st.navigation([rocket_page, sim_page, dashboard_page])
 st.set_page_config(page_title="Data manager", page_icon=":material/edit:")
 pg.run()
