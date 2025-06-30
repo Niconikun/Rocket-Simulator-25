@@ -1,4 +1,6 @@
 import streamlit as st
+from streamlit_keplergl import keplergl_static
+from keplergl import KeplerGl
 
 # Create and edit rockets properties for the simulator
 with st.form("Simulation Settings"):
