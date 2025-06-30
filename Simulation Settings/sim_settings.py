@@ -1,14 +1,14 @@
 import streamlit as st
 
+# Create and edit rockets properties for the simulator
 with st.form("Simulation Settings"):
     st.write("Rocket Settings")
 
     left_column, right_column = st.columns(2)
-
+    sim_runtime = st.slider('Simulation runtime [s]', min_value=0.0, max_value=10000.0, value=500.0, step=1.0)
     with left_column:
         #info
         st.subheader("Simulation Properties")
-        sim_runtime = st.slider('Simulation runtime [s]', min_value=0.0, max_value=10000.0, value=500.0, step=1.0)
         sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.1, step=0.01)
         sim_date = st.date_input('Simulation date', value=None, min_value=None, max_value=None, key=None)
         sim_time = st.time_input('Simulation time', value=None, key=None)
