@@ -25,4 +25,6 @@ with st.form("Simulation Settings"):
         average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=100000.0, value=101325.0, step=1.0)
         average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0)
     # Add a submit button
-    submitted = st.form_submit_button("Run Simulation")
+    run = st.form_submit_button("Run Simulation")
+    if run:
+        st.success("Running!")
