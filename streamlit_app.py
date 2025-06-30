@@ -1,4 +1,6 @@
 import streamlit as st
+from streamlit_keplergl import keplergl_static
+from keplergl import KeplerGl
 
 rocket_page = st.Page("Simulation Settings/rocket_settings.py", title="Rocket", icon=":material/add_circle:")
 sim_page = st.Page("Simulation Settings/sim_settings.py", title="Simulation", icon=":material/settings:")
