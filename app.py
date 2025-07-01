@@ -347,69 +347,7 @@ app.layout = html.Div(children=[ #fix this layout. Focus on creating the divs fi
 
     ], className='dashboard-container')
 
-@callback(
-        Output("div-loading", "children"),
-        Output("div-loading", "children"),
-        Output('projection-map', "Map"),
-	    Output('trajectory-graph', 'Figure'),
-        Output('risk-map', 'Map'),
-        Output('bodyframe-velocities-graph', 'Figure'),
-        Output('altitude-range-graph', 'Figure'),
-        Output('lift-graph', 'Figure'),
-        Output('pitch-altitude-graph', 'Figure'),
-        Output('pitch-graph', 'Figure'),
-        Output('alpha-graph', 'Figure'),
 
-        # Simulation Parameters
-        
-        Input('submit-button', 'n_clicks'),
-        Input('clear-button', 'n_clicks'),
-        Input("div-app", "loading_state"),
-        State('sim-runtime', 'value'),
-       	State('step-size', 'value'),
-	    State('sim-date', 'value'),
-        State('sim-time', 'value'),
-        State('timezone', 'value'),
-        
-        # Location Conditions & Orientation}
-	    State('location-radio', 'value'),
-        State('location-dropdown', 'value'),
-        State('launch-site-lat', 'value'),
-        State('launch-site-lon', 'value'),
-        State('avg-temp', 'value'),
-        State('launch-angle', 'value'),
-        State('launch-site-orientation', 'value'),
-
-
-        # Rocket Parameters
-        State('preselected-radio', 'value'),
-        State('rocket-dropdown', 'value'),
-        State('burn-time'),
-        State('initial-mass'),
-        State('cross-section-area'),
-        State('inertia-initial'),
-        State('com_initial'),
-        State('inertia-final', 'value'),
-        State('com-final', 'value'),
-
-        State('len-warhead', 'value'),
-        State('len-nosecone-fins', 'value'),
-        State('len-nosecone-rear', 'value'),
-        State('len_bodytube-wo-rear', 'value'),
-        State('fins-chord-root', 'value'),
-        State('fins-mid-chord', 'value'),
-        State('len-rear', 'value'),
-        State('fins-span', 'value'),
-        State('diam-warhead-base', 'value'),
-        State('diam-bodytube', 'value'),
-        State('diam-bodytube-fins', 'value'),
-        State('diam-rear-bodytube', 'value'),
-        State('end-diameter-rear', 'value'),
-        State('normal-force-coef-warhead', 'value'),
-        State('n-fins', 'value'),
-        
-        State("div-loading", "children"),
-    )
 
 def hide_loading_after_startup(loading_state, children):
     if children:
