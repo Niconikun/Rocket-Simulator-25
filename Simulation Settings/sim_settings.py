@@ -1,4 +1,11 @@
 import streamlit as st
+from Clock import Clock
+from Planet import Planet
+from Atmosphere import Atmosphere
+from Rocket import Rocket
+from cmath import pi
+from pickle import FALSE, TRUE
+import numpy as np
 
 
 # Create and edit rockets properties for the simulator
@@ -31,3 +38,80 @@ with st.form("Simulation Settings"):
     run = st.form_submit_button("Run Simulation")
     if run:
         st.success("Running!")
+        # Auxiliary functions
+        deg2rad=pi/180
+        rad2deg=180/pi
+
+        # ------ Configuration of time simulation related data ------ #
+        Start=0                     # [s]  # Starting time of simulation
+        Steps_num=int(sim_runtime/sim_time_step)                 
+        Steps=np.linspace(Start,sim_runtime,Steps_num)
+
+        # ___________________ Initial data to be INPUT ________________ #  # (All of this should to be obtained from external file!!!)
+        East=0        # [m]   # X axis initial location of rocket from platform
+        North=0       # [m]   # Y axis initial location of rocket from platform
+        Up=0.1        # [m]   # Z axis initial location of rocket from platform  (do not set at 0...this is in order to used a conditional later on for max. alt and range)
+
+        # ___________________ Initialization of data ________________ #
+        date=[Year, Month, Day, Hour, Minute, Second]                # List containing date
+        julian_date=Clock().julian_day(date)                         # Obtaining Julian Date
+        gmst_0=Clock().gmst(julian_date,1)                           # Initial Greenwich Mean Sidereal Time [rad]
+
+        r_enu_0=np.array([East,North,Up])                            # [m]   # Initial East-North-Up location from platform
+        v_enu_0=np.array([Vel_east,Vel_north,Vel_up])                # [m/s] # Initial East-North-Up velocity from platform
+
+        q_yaw=np.array([0,0,np.sin(Yaw*0.5*deg2rad),np.cos(Yaw*0.5*deg2rad)])         # Quaternion single yaw rotation
+        q_pitch=np.array([0,np.sin(-Pitch*0.5*deg2rad),0,np.cos(-Pitch*0.5*deg2rad)]) # Quaternion single pitch rotation
+        q_roll=np.array([np.sin(Roll*0.5*deg2rad),0,0,np.cos(Roll*0.5*deg2rad)])      # Quaternion single roll rotation
+        q_enu2b_0=Mat.hamilton(q_pitch,q_yaw)                                         # Initial quaternion from East-North-Up to bodyframe
+
+        w_enu_0=np.array([W_yaw,W_pitch,W_roll])                     # [rad/s] # Initial rotational velocity in East-North-Up
+
+        coordinates=np.array([Latitude, Longitude, Altitude])  # [rad, rad, m] # Initial coordinates of the platform
+
+        # _________________ Objects creation ___________________ #
+        Earth=Planet(gmst_0)                                       # Planet module object creation
+        Environment=Atmosphere(average_temperature)                        # Atmosphere module object creation
+        Sistema=Rocket(r_enu_0,v_enu_0,q_enu2b_0,w_enu_0)          # Rocket module object creation
+
+        # Auxiliary timer for conditionals loop break
+        Time=[]       
+        t=Start
+
+        # ________________ Simulation sequence _________________#
+        for i in range(len(Steps)):
+
+            # Planet Greenwich Mean Sidereal Time updating
+            Earth.update(sim_time_step)
+            # Rocket's sequence of simulation
+            Sistema.update_gmst(Earth.gmst)
+            Sistema.update_mass_related()
+            Sistema.update_pos_vel(coordinates)
+            Sistema.update_atmosphere(Environment.give_dens(Sistema.r_enu[2]),Environment.give_press(Sistema.r_enu[2]),Environment.give_v_sonic(Sistema.r_enu[2]))    
+            Sistema.update_aerodynamics()
+            Sistema.update_engine()
+            Sistema.update_forces_aero()
+            Sistema.update_forces_engine()
+            Sistema.update_forces_torques()
+            Sistema.update_g_accel(coordinates)
+            Sistema.RK4_update(sim_time_step)
+            Sistema.save_data()
+
+            if Sistema.time>=1:
+                if Sistema.r_enu[2]<Sistema.hist_up[-2] and Sistema.r_enu[2]<Detonate_altitude and Detonate==TRUE:
+                    break
+    
+            # Conditional to stop when reached
+            if Sistema.r_enu[2]<=0 or Sistema.r_enu[2]>=Max_altitude or Sistema.range>= Max_range:
+                break
+
+            Time.append(t)
+            t+=sim_time_step
+
+            # Rocket's updating of simulation time
+            Sistema.update_time(sim_time_step)
+
+
+
+
+

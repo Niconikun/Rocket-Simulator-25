@@ -2,3 +2,10 @@ streamlit
 keplergl
 streamlit_keplergl
 streamlit_globe
+scipy
+numpy
+pandas
+fluids
+os
+cmath
+pickle
