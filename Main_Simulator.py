@@ -46,7 +46,6 @@ from Planet import Planet
 from Atmosphere import Atmosphere
 from Rocket import Rocket
 import pandas as pd
-from flask import Flask, render_template, request
 
 # Auxiliary functions
 deg2rad=pi/180

@@ -6,6 +6,8 @@ from Rocket import Rocket
 from cmath import pi
 from pickle import FALSE, TRUE
 import numpy as np
+import datetime
+import MatTools as Mat
 
 
 # Create and edit rockets properties for the simulator
@@ -20,7 +22,8 @@ with st.form("Simulation Settings"):
         sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.1, step=0.01)
         sim_date = st.date_input('Simulation date', value=None, min_value=None, max_value=None, key=None)
         sim_time = st.time_input('Simulation time', value=None, key=None)
-        sim_timezone = st.selectbox('Simulation timezone', options=['UTC', 'Local'], index=0)   
+        sim_timezone = st.selectbox('Simulation timezone', options=['UTC', 'Local'], index=0)
+        
 
     with right_column:
         #info
@@ -29,7 +32,7 @@ with st.form("Simulation Settings"):
         sim_location = st.selectbox('Location Selection', options=['UTC', 'Local'], index=0)
         average_temperature = st.number_input('Average temperature [C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0)
         launch_elevation = st.number_input('Launch elevation [m]', min_value=0.0, max_value=10000.0, value=0.0, step=1.0)
-        launch_site_orientation = st.number_input('Launch site orientation', min_value=-50.0, max_value=50.0, value=20.0, step=1.0)
+        launch_site_orientation = st.number_input('Launch site orientation (from the East)', min_value=-180.0, max_value=180.0, value=20.0, step=1.0)
         average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=1000000.0, value=101325.0, step=1.0)
         average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0)
     # Add a submit button
@@ -52,16 +55,32 @@ with st.form("Simulation Settings"):
         North=0       # [m]   # Y axis initial location of rocket from platform
         Up=0.1        # [m]   # Z axis initial location of rocket from platform  (do not set at 0...this is in order to used a conditional later on for max. alt and range)
 
+        Vel_east=0    # [m/s]   # X axis initial velocity of rocket from platform
+        Vel_north=0   # [m/s]   # Y axis initial velocity of rocket from platform
+        Vel_up=0      # [m/s]   # Z axis initial velocity of rocket from platform
+
+        Roll=0        # [deg]   # From initial position (between -180 and 180). Assumed to be always zero
+
+        W_yaw=0       # [rad/s]   # X axis initial rotational velocity of rocket from platform
+        W_pitch=0     # [rad/s]   # Y axis initial rotational velocity of rocket from platform
+        W_roll=0      # [rad/s]   # Z axis initial rotational velocity of rocket from platform
+
+        Max_altitude=10000     # [m] # Max. altitude
+        Max_range=12500        # [m] # Max. range
+
+        Detonate=TRUE          # Statement for detonation or not
+        Detonate_altitude=900  # [m] # Altitude for detonation
+
         # ___________________ Initialization of data ________________ #
-        date=[Year, Month, Day, Hour, Minute, Second]                # List containing date
+        date=[sim_date.year, sim_date.month, sim_date.day, sim_time.hour, sim_time.minute, sim_time.second]                # List containing date
         julian_date=Clock().julian_day(date)                         # Obtaining Julian Date
         gmst_0=Clock().gmst(julian_date,1)                           # Initial Greenwich Mean Sidereal Time [rad]
 
         r_enu_0=np.array([East,North,Up])                            # [m]   # Initial East-North-Up location from platform
         v_enu_0=np.array([Vel_east,Vel_north,Vel_up])                # [m/s] # Initial East-North-Up velocity from platform
 
-        q_yaw=np.array([0,0,np.sin(Yaw*0.5*deg2rad),np.cos(Yaw*0.5*deg2rad)])         # Quaternion single yaw rotation
-        q_pitch=np.array([0,np.sin(-Pitch*0.5*deg2rad),0,np.cos(-Pitch*0.5*deg2rad)]) # Quaternion single pitch rotation
+        q_yaw=np.array([0,0,np.sin(launch_site_orientation*0.5*deg2rad),np.cos(launch_site_orientation*0.5*deg2rad)])         # Quaternion single yaw rotation
+        q_pitch=np.array([0,np.sin(-launch_elevation*0.5*deg2rad),0,np.cos(-launch_elevation*0.5*deg2rad)]) # Quaternion single pitch rotation
         q_roll=np.array([np.sin(Roll*0.5*deg2rad),0,0,np.cos(Roll*0.5*deg2rad)])      # Quaternion single roll rotation
         q_enu2b_0=Mat.hamilton(q_pitch,q_yaw)                                         # Initial quaternion from East-North-Up to bodyframe
 

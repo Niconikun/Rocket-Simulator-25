@@ -33,3 +33,5 @@ map_1 = KeplerGl()
 map_1.config = config
 
 keplergl_static(map_1)
+
+#que te guarde aca los datos de la localizacion en un nested dictionary

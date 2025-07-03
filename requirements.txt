@@ -9,3 +9,6 @@ fluids
 os
 cmath
 pickle
+matplotlib
+datetime
+flask

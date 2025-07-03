@@ -43,3 +43,5 @@ with st.form("Rocket Settings"):
     submitted = st.form_submit_button("Save Settings")
     if submitted:
         st.success("Rocket settings saved!")
+        
+        #aca poner que se guarden los datos en un nested dictionary

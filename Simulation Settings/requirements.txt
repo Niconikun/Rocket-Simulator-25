@@ -1,4 +1,0 @@
-streamlit
-keplergl
-streamlit_keplergl
-streamlit_globe
