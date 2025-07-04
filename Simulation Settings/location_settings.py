@@ -52,5 +52,10 @@ if submitted:
         st.session_state["locations"] = {}
     
     st.session_state["locations"][launch_site_name] = new_location
+    # Save the location data in a JSON file
+    with open("locations.json", "w") as f:
+        json.dump(st.session_state["locations"], f, indent=4)
+
+    
 
 #que te guarde aca los datos de la localizacion en un nested dictionary
