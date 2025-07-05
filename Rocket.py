@@ -46,10 +46,11 @@ from Aerodynamics import Aerodynamics
 from Engine import Engine
 from cmath import pi
 import GeoTools as Geo
+import json
 
 class Rocket(object):
     "Calculates all data during simulation. It's the main module of simulation"
-    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass):
+    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass, rocket_name):
         
         #______Initial data_______#
         self.r_enu=r_enu_0        # [m]       # East-North-Up location from launching platform
@@ -172,7 +173,7 @@ class Rocket(object):
         self.press_amb=press_amb  # [Pa]      # Atmospheric pressure
         self.v_sonic=v_sonic      # [m/s]     # Speed of sound 
 
-    def update_aerodynamics(self):
+    def update_aerodynamics(self,rocket_name):
         "Updates aerodynamic characteristics from Aerodynamics Module"
         # Conditional to avoid Runtime Warning for division by zero
        
@@ -181,6 +182,26 @@ class Rocket(object):
         else:
             self.mach=self.v_norm/self.v_sonic    # [-]    # Mach number
         
+        with open('rocket_settings.json', 'r') as file:
+            rocket_settings = json.load(file)
+
+        len_warhead = rocket_settings[rocket_name]['geometry']["len_warhead"] 
+        len_nosecone_fins = rocket_settings[rocket_name]['geometry']["len_nosecone_fins"]
+        len_nosecone_rear = rocket_settings[rocket_name]['geometry']["len_nosecone_rear"]
+        len_bodytube_wo_rear = rocket_settings[rocket_name]['geometry']["len_bodytube_wo_rear"]
+        fins_chord_root = rocket_settings[rocket_name]['geometry']["fins_chord_root"]
+        fins_mid_chord = rocket_settings[rocket_name]['geometry']["fins_mid_chord"]
+        len_rear = rocket_settings[rocket_name]['geometry']["len_rear"]
+        fins_span = rocket_settings[rocket_name]['geometry']["fins_span"]
+        diameter_warhead_base = rocket_settings[rocket_name]['geometry']["diameter_warhead_base"]
+        diameter_bodytube = rocket_settings[rocket_name]['geometry']["diameter_bodytube"]
+        diameter_bodytube_fins = rocket_settings[rocket_name]['geometry']["diameter_bodytube_fins"]
+        diameter_rear_bodytube = rocket_settings[rocket_name]['geometry']["diameter_rear_bodytube"]
+        end_diam_rear = rocket_settings[rocket_name]['geometry']["end_diam_rear"]
+        normal_f_coef_warhead = rocket_settings[rocket_name]['geometry']["normal_f_coef_warhead"]
+        N_fins = rocket_settings[rocket_name]['geometry']["N_fins"]
+        
+
         Aero=Aerodynamics(self.mach,self.alpha, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, normal_f_coef_warhead, N_fins)   # Aerodynamics instance 
         self.drag_coeff=Aero.cd                   # [-]    # Drag coefficient
         self.lift_coeff=Aero.cl                   # [-]    # Lift coefficient
