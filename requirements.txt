@@ -12,3 +12,5 @@ pickle
 matplotlib
 datetime
 flask
+json
+navpy

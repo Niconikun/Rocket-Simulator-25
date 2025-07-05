@@ -35,6 +35,8 @@ ___ _       _________ _                 ___ _
 [Oroz22]    Orozco,2022                 Estimación de trayectoria y actitud para un cohete chaff
 [Barro67]   Barrowman,1967              The Practical Calculation of the Aerodynamic Characteristic of Slender Finned Vehicles
 [Yang19]    Yang,2019                   Spacecraft Modeling, Attitude Determination, and Control. Quaternion-based Approach
+
+
 """
 # Imports
 import numpy as np
@@ -47,7 +49,7 @@ import GeoTools as Geo
 
 class Rocket(object):
     "Calculates all data during simulation. It's the main module of simulation"
-    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0):
+    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass):
         
         #______Initial data_______#
         self.r_enu=r_enu_0        # [m]       # East-North-Up location from launching platform
@@ -55,7 +57,7 @@ class Rocket(object):
         self.q_enu2b=q_enu2b_0    # [-]       # Quaternion that rotates from launching platform in East-North-Up to bodyframe
         self.w_enu=w_enu_0        # [rad/s]   # East-North-Up rotational velocity from launching platform
 
-        self.mass=9.48            # [kg]      # Initial total mass
+        self.mass= initial_mass           # [kg]      # Initial total mass
 
         self.time=0               # [s]       # Initial time of simulation
 
@@ -179,7 +181,7 @@ class Rocket(object):
         else:
             self.mach=self.v_norm/self.v_sonic    # [-]    # Mach number
         
-        Aero=Aerodynamics(self.mach,self.alpha)   # Aerodynamics instance 
+        Aero=Aerodynamics(self.mach,self.alpha, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, normal_f_coef_warhead, N_fins)   # Aerodynamics instance 
         self.drag_coeff=Aero.cd                   # [-]    # Drag coefficient
         self.lift_coeff=Aero.cl                   # [-]    # Lift coefficient
         self.cp_b=Aero.xcp                        # [m]    # Location of centre of pressure from nose (ogive) tip

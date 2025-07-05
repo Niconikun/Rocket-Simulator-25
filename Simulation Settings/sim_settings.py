@@ -91,7 +91,7 @@ with st.form("Simulation Settings"):
         # _________________ Objects creation ___________________ #
         Earth=Planet(gmst_0)                                       # Planet module object creation
         Environment=Atmosphere(average_temperature)                        # Atmosphere module object creation
-        Sistema=Rocket(r_enu_0,v_enu_0,q_enu2b_0,w_enu_0)          # Rocket module object creation
+        Sistema=Rocket(r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass)          # Rocket module object creation
 
         # Auxiliary timer for conditionals loop break
         Time=[]       

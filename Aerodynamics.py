@@ -33,6 +33,27 @@ ___ _       _________ _               ___ _
 [Ketch92]   Ketchledge,1992           Active Guidance and Dynamic Flight Mechanics for Model Rockets
 [Fleem01]   Fleeman,2001              Tactical Missile Design
 
+        X_b=205.35            # [mm]     # Length of warhead or distance from tip of nose to base of nose
+        X_f=856               # [mm]     # Length between nose cone tip and the point where the fin leading edge meets the body tube
+        X_c=936               # [mm]     # Length between nose tip to rear
+        
+        l_n=205.35            # [mm]     # Length of warhead or distance from tip of nose to base of nose
+        l_b=730               # [mm]     # Length of body tube (not considering rear)
+        l_r=76.32             # [mm]     # Fins aerodynamic chord at root
+        l_t=33.6722           # [mm]     # Fins aerodynamic chord at tip
+        l_m=46.6440           # [mm]     # Fins aerodynamic mid-chord
+        l_c=62                # [mm]     # Length of rear
+        l_s=41.75             # [mm]     # Fins span
+
+        d_n=88.9              # [mm]     # Diameter of base of warhead
+        d_b=88.9              # [mm]     # Diameter of body tube
+        d_f=88.9              # [mm]     # Diameter of body tube where fins are met
+        d_u=88.9              # [mm]     # Diameter of rear where it meets body tube
+        d_d=93                # [mm]     # Diameter of rear at the end
+        
+        fins=4                # [-]      # Number of fins
+
+
 """
 # Imports
 from os import path
@@ -48,7 +69,7 @@ deg2rad=pi/180
 rad2deg=180/pi
 
 class Aerodynamics(object):
-    def __init__(self,mach,a):                          
+    def __init__(self,mach,a, X_b, X_f, X_c, l_n, l_b, l_r, l_t, l_m, l_c, l_s, d_n, d_b, d_f, d_u, d_d, fins):                          
 
         #______________________Drag Coefficient____________________________#
         
@@ -78,27 +99,6 @@ class Aerodynamics(object):
             angle=a
     
         alpha=angle*deg2rad  # [rad]
-
-        # Coefficient of normal force approximation for subsonic regime, [Box09] and [Barro67]   
-        X_b=205.35            # [mm]     # Length of warhead or distance from tip of nose to base of nose
-        X_f=856               # [mm]     # Length between nose cone tip and the point where the fin leading edge meets the body tube
-        X_c=936               # [mm]     # Length between nose tip to rear
-        
-        l_n=205.35            # [mm]     # Length of warhead or distance from tip of nose to base of nose
-        l_b=730               # [mm]     # Length of body tube (not considering rear)
-        l_r=76.32             # [mm]     # Fins aerodynamic chord at root
-        l_t=33.6722           # [mm]     # Fins aerodynamic chord at tip
-        l_m=46.6440           # [mm]     # Fins aerodynamic mid-chord
-        l_c=62                # [mm]     # Length of rear
-        l_s=41.75             # [mm]     # Fins span
-
-        d_n=88.9              # [mm]     # Diameter of base of warhead
-        d_b=88.9              # [mm]     # Diameter of body tube
-        d_f=88.9              # [mm]     # Diameter of body tube where fins are met
-        d_u=88.9              # [mm]     # Diameter of rear where it meets body tube
-        d_d=93                # [mm]     # Diameter of rear at the end
-        
-        fins=4                # [-]      # Number of fins
 
         # Cone [Box09]:
         Cn_alpha_cone=2       # [-]      # Normal force coefficient gradient for cone (warhead)
