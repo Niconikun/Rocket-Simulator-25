@@ -36,6 +36,7 @@ with st.form("Rocket Settings"):
         len_bodytube_wo_rear = st.number_input('Length of body tube (not considering rear)', min_value=0.0, value=500.0)
         fins_chord_root = st.number_input('Fins aerodynamic chord at root', min_value=0.0, value=500.0)
         fins_mid_chord = st.number_input('Fins aerodynamic mid-chord', min_value=0.0, value=500.0)
+        fins_chord_tip = st.number_input('Fins aerodynamic mid-chord', min_value=0.0, value=500.0)
         len_rear = st.number_input('Length of rear', min_value=0.0, value=500.0)
         fins_span = st.number_input('Fins span', min_value=0.0, value=500.0)
         diameter_warhead_base = st.number_input('Diameter of base of warhead', min_value=0.0, value=500.0)
@@ -72,6 +73,7 @@ with st.form("Rocket Settings"):
                 "len_nosecone_rear": len_nosecone_rear,
                 "len_bodytube_wo_rear": len_bodytube_wo_rear,
                 "fins_chord_root": fins_chord_root,
+                "fins_chord_tip": fins_chord_tip,
                 "fins_mid_chord": fins_mid_chord,
                 "len_rear": len_rear,
                 "fins_span": fins_span,

@@ -190,6 +190,7 @@ class Rocket(object):
         len_nosecone_rear = rocket_settings[rocket_name]['geometry']["len_nosecone_rear"]
         len_bodytube_wo_rear = rocket_settings[rocket_name]['geometry']["len_bodytube_wo_rear"]
         fins_chord_root = rocket_settings[rocket_name]['geometry']["fins_chord_root"]
+        fins_chord_tip = rocket_settings[rocket_name]['geometry']["fins_chord_tip"]
         fins_mid_chord = rocket_settings[rocket_name]['geometry']["fins_mid_chord"]
         len_rear = rocket_settings[rocket_name]['geometry']["len_rear"]
         fins_span = rocket_settings[rocket_name]['geometry']["fins_span"]
@@ -202,7 +203,7 @@ class Rocket(object):
         N_fins = rocket_settings[rocket_name]['geometry']["N_fins"]
         
 
-        Aero=Aerodynamics(self.mach,self.alpha, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, normal_f_coef_warhead, N_fins)   # Aerodynamics instance 
+        Aero=Aerodynamics(self.mach,self.alpha, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_chord_tip, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, normal_f_coef_warhead, N_fins)   # Aerodynamics instance 
         self.drag_coeff=Aero.cd                   # [-]    # Drag coefficient
         self.lift_coeff=Aero.cl                   # [-]    # Lift coefficient
         self.cp_b=Aero.xcp                        # [m]    # Location of centre of pressure from nose (ogive) tip

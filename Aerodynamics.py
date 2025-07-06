@@ -37,7 +37,6 @@ ___ _       _________ _               ___ _
         X_f=856               # [mm]     # Length between nose cone tip and the point where the fin leading edge meets the body tube
         X_c=936               # [mm]     # Length between nose tip to rear
         
-        l_n=205.35            # [mm]     # Length of warhead or distance from tip of nose to base of nose
         l_b=730               # [mm]     # Length of body tube (not considering rear)
         l_r=76.32             # [mm]     # Fins aerodynamic chord at root
         l_t=33.6722           # [mm]     # Fins aerodynamic chord at tip
@@ -69,7 +68,7 @@ deg2rad=pi/180
 rad2deg=180/pi
 
 class Aerodynamics(object):
-    def __init__(self,mach,a, X_b, X_f, X_c, l_n, l_b, l_r, l_t, l_m, l_c, l_s, d_n, d_b, d_f, d_u, d_d, fins):                          
+    def __init__(self,mach,a, X_b, X_f, X_c, l_b, l_r, l_t, l_m, l_c, l_s, d_n, d_b, d_f, d_u, d_d, fins):                          
 
         #______________________Drag Coefficient____________________________#
         
