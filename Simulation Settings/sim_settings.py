@@ -9,6 +9,7 @@ import numpy as np
 import datetime
 import MatTools as Mat
 import json
+import pandas as pd
 
 with open('rockets.json', 'r') as file:
     rocket_settings = json.load(file)
@@ -146,6 +147,23 @@ with st.form("Simulation Settings"):
             Sistema.update_time(sim_time_step)
 
         st.success("Finished!")
+        df = pd.DataFrame({'range': Sistema.hist_range,
+                   'up': Sistema.hist_up,
+                   'time': Sistema.hist_time,
+                   'lift': Sistema.hist_lift,
+                   'pitch': Sistema.hist_pitch,
+                   'alpha': Sistema.hist_alpha,
+                   'east': Sistema.hist_east,
+                   'north': Sistema.hist_north,
+                   'vel_x': Sistema.hist_v_bx,
+                   'vel_y': Sistema.hist_v_by,
+                   'vel_z': Sistema.hist_v_bz})
+        df.to_pickle("my_data.pkl")
+
+        #add save button
+        #if st.button("Save Simulation Data"):
+          #  df.to_csv("simulation_data.csv", index=False)
+           # st.success("Simulation data saved successfully!")
 
 
 

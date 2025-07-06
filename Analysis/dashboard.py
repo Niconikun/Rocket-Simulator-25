@@ -38,26 +38,27 @@ map_1.config = config
 
 keplergl_static(map_1)
 
-chart_data = pd.DataFrame(np.random.randn(20, 3), columns=["a", "b", "c"])
+#chart_data = pd.DataFrame(np.random.randn(20, 3), columns=["a", "b", "c"])
 
 left_up, middle_up, right_up = st.columns(3)
 left_down, middle_down, right_down = st.columns(3)
 
+chart_data= pd.read_pickle("my_data.pkl")
 
 left_up.write('Bodyframe Velocities vs Time')
-left_up.line_chart(chart_data)
+left_up.line_chart(chart_data,x="time",y=["vel_x","vel_y","vel_z"], x_label="Tiempo de vuelo [s]", y_label="Velocidad Bodyframe [m/s]")
 
 middle_up.write('Altitude vs Range')
-middle_up.line_chart(chart_data)
+middle_up.line_chart(chart_data, x="range", y="up", x_label="Distancia [m]", y_label="Altitud [m]")
 
 right_up.write('Lift vs Time')
-right_up.line_chart(chart_data)
+right_up.line_chart(chart_data, x="time", y="lift", x_label="Tiempo de vuelo [s]", y_label="Fuerza de sustentación [N]")
 
 left_down.write('Pitch, Altitude vs Time')
-left_down.line_chart(chart_data)
+left_down.line_chart(chart_data, x="time", y=["pitch", "up"], x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad] / Altitud [m]")
 
 middle_down.write('Pitch vs Time')
-middle_down.line_chart(chart_data)
+middle_down.line_chart(chart_data, x="time", y="pitch", x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad]")
 
 right_down.write('Alpha vs Time')
-right_down.line_chart(chart_data)
+right_down.line_chart(chart_data, x="time", y="alpha", x_label="Tiempo de vuelo [s]", y_label="Ángulo de ataque [rad]")
