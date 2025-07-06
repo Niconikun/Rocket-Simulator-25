@@ -33,24 +33,24 @@ ___ _       _________ _               ___ _
 [Ketch92]   Ketchledge,1992           Active Guidance and Dynamic Flight Mechanics for Model Rockets
 [Fleem01]   Fleeman,2001              Tactical Missile Design
 
-        X_b=205.35            # [mm]     # Length of warhead or distance from tip of nose to base of nose
-        X_f=856               # [mm]     # Length between nose cone tip and the point where the fin leading edge meets the body tube
-        X_c=936               # [mm]     # Length between nose tip to rear
+        len_warhead=205.35            # [mm]     # Length of warhead or distance from tip of nose to base of nose
+        len_nosecone_fins=856               # [mm]     # Length between nose cone tip and the point where the fin leading edge meets the body tube
+        len_nosecone_rear=936               # [mm]     # Length between nose tip to rear
         
-        l_b=730               # [mm]     # Length of body tube (not considering rear)
-        l_r=76.32             # [mm]     # Fins aerodynamic chord at root
-        l_t=33.6722           # [mm]     # Fins aerodynamic chord at tip
-        l_m=46.6440           # [mm]     # Fins aerodynamic mid-chord
-        l_c=62                # [mm]     # Length of rear
-        l_s=41.75             # [mm]     # Fins span
+        len_bodytube_wo_rear=730               # [mm]     # Length of body tube (not considering rear)
+        fins_chord_root=76.32             # [mm]     # Fins aerodynamic chord at root
+        fins_chord_tip=33.6722           # [mm]     # Fins aerodynamic chord at tip
+        fins_mid_chord=46.6440           # [mm]     # Fins aerodynamic mid-chord
+        len_rear=62                # [mm]     # Length of rear
+        fins_span=41.75             # [mm]     # Fins span
 
-        d_n=88.9              # [mm]     # Diameter of base of warhead
-        d_b=88.9              # [mm]     # Diameter of body tube
-        d_f=88.9              # [mm]     # Diameter of body tube where fins are met
-        d_u=88.9              # [mm]     # Diameter of rear where it meets body tube
-        d_d=93                # [mm]     # Diameter of rear at the end
+        diameter_warhead_base=88.9              # [mm]     # Diameter of base of warhead
+        diameter_bodytube=88.9              # [mm]     # Diameter of body tube
+        diameter_bodytube_fins=88.9              # [mm]     # Diameter of body tube where fins are met
+        diameter_rear_bodytube=88.9              # [mm]     # Diameter of rear where it meets body tube
+        end_diam_rear=93                # [mm]     # Diameter of rear at the end
         
-        fins=4                # [-]      # Number of fins
+        N_fins=4                # [-]      # Number of fins
 
 
 """
@@ -68,7 +68,7 @@ deg2rad=pi/180
 rad2deg=180/pi
 
 class Aerodynamics(object):
-    def __init__(self,mach,a, X_b, X_f, X_c, l_b, l_r, l_t, l_m, l_c, l_s, d_n, d_b, d_f, d_u, d_d, fins):                          
+    def __init__(self,mach,a, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_chord_tip, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, normal_f_coef_warhead, N_fins):                          
 
         #______________________Drag Coefficient____________________________#
         
@@ -100,26 +100,26 @@ class Aerodynamics(object):
         alpha=angle*deg2rad  # [rad]
 
         # Cone [Box09]:
-        Cn_alpha_cone=2       # [-]      # Normal force coefficient gradient for cone (warhead)
-        Xcp_cone=0.466*l_n    # [mm]     # Centre of pressure of cone
+        Cn_alpha_cone=normal_f_coef_warhead       # [-]      # Normal force coefficient gradient for cone (warhead)
+        Xcp_cone=0.466*len_warhead    # [mm]     # Centre of pressure of cone
 
         # Body, [Box09]:
-        Cn_alpha_body=(l_b/(pi*0.25*d_b))*alpha            # [-]        # Normal force coefficient gradient for body tube
-        Xcp_body=X_b + 0.5*l_b                             # [mm]       # Centre of pressure of body tube
+        Cn_alpha_body=(len_bodytube_wo_rear/(pi*0.25*diameter_bodytube))*alpha            # [-]        # Normal force coefficient gradient for body tube
+        Xcp_body=len_warhead + 0.5*len_bodytube_wo_rear                             # [mm]       # Centre of pressure of body tube
         
         # Cn_alpha_body=2*alpha     # Fleeman's method for Rocket's body [Fleem01]
-        # Xcp_body=X_b + 0.5*l_b    
+        # Xcp_body=len_warhead + 0.5*len_bodytube_wo_rear    
         
         # Cn_alpha_body=0           # Box cites a previous version that doesn't consider body's effect on lift or normal force coefficient
         # Xcp_body=0
         
         # Tail, [Box09]:
-        Cn_alpha_tail=2*(((d_d/d_n)**2) - ((d_u/d_n)**2))  # [-]        # Normal force coefficient gradient for rear 
-        Xcp_tail= X_c + (l_c/3)* (1 + 1/(1+(d_u/d_n)))     # [mm]       # Centre of pressure of rear
+        Cn_alpha_tail=2*(((end_diam_rear/diameter_warhead_base)**2) - ((diameter_rear_bodytube/diameter_warhead_base)**2))  # [-]        # Normal force coefficient gradient for rear 
+        Xcp_tail= len_nosecone_rear + (len_rear/3)* (1 + 1/(1+(diameter_rear_bodytube/diameter_warhead_base)))     # [mm]       # Centre of pressure of rear
         # Fins [Box09]:
-        Kfb=1 + ((0.5*d_f)/(l_s + 0.5*d_f))                                                           # [-]     # Coefficient for interference effects between the fin and the body
-        Cn_alpha_fins=(Kfb*4*fins)*(((l_s/d_n)**2)/(1 + (np.sqrt(1+(2*l_m/(l_r+l_t))**2))))           # [-]     # Normal force coefficient gradient for fins
-        Xcp_fins= X_f+((l_m/3)*((l_r + 2*l_t)/(l_r+l_t)))+((1/6)*(l_r + l_t-((l_r*l_t)/(l_r+l_t))))   # [mm]    # Centre of pressure of fins
+        Kfb=1 + ((0.5*diameter_bodytube_fins)/(fins_span + 0.5*diameter_bodytube_fins))                                                           # [-]     # Coefficient for interference effects between the fin and the body
+        Cn_alpha_fins=(Kfb*4*N_fins)*(((fins_span/diameter_warhead_base)**2)/(1 + (np.sqrt(1+(2*fins_mid_chord/(fins_chord_root+fins_chord_tip))**2))))           # [-]     # Normal force coefficient gradient for fins
+        Xcp_fins= len_nosecone_fins+((fins_mid_chord/3)*((fins_chord_root + 2*fins_chord_tip)/(fins_chord_root+fins_chord_tip)))+((1/6)*(fins_chord_root + fins_chord_tip-((fins_chord_root*fins_chord_tip)/(fins_chord_root+fins_chord_tip))))   # [mm]    # Centre of pressure of fins
  
         # Results, [Box09]:
         Cn_sum=Cn_alpha_cone + Cn_alpha_body + Cn_alpha_tail + Cn_alpha_fins # [-]      # Sum of all coefficients gradients

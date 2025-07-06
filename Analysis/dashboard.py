@@ -40,20 +40,24 @@ keplergl_static(map_1)
 
 chart_data = pd.DataFrame(np.random.randn(20, 3), columns=["a", "b", "c"])
 
-st.write('Bodyframe Velocities vs Time')
-st.line_chart(chart_data)
+left_up, middle_up, right_up = st.columns(3)
+left_down, middle_down, right_down = st.columns(3)
 
-st.write('Altitude vs Range')
-st.line_chart(chart_data)
 
-st.write('Lift vs Time')
-st.line_chart(chart_data)
+left_up.write('Bodyframe Velocities vs Time')
+left_up.line_chart(chart_data)
 
-st.write('Pitch, Altitude vs Time')
-st.line_chart(chart_data)
+middle_up.write('Altitude vs Range')
+middle_up.line_chart(chart_data)
 
-st.write('Pitch vs Time')
-st.line_chart(chart_data)
+right_up.write('Lift vs Time')
+right_up.line_chart(chart_data)
 
-st.write('Alpha vs Time')
-st.line_chart(chart_data)
+left_down.write('Pitch, Altitude vs Time')
+left_down.line_chart(chart_data)
+
+middle_down.write('Pitch vs Time')
+middle_down.line_chart(chart_data)
+
+right_down.write('Alpha vs Time')
+right_down.line_chart(chart_data)

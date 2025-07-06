@@ -44,7 +44,8 @@ with st.form("Simulation Settings"):
     
     run = st.form_submit_button("Run Simulation")
     if run:
-        st.success("Running!")
+
+        st.info("Running!")
         # loading json file for location and rocket settings
         # (This part should be replaced with actual loading of the JSON file)
 
@@ -143,6 +144,8 @@ with st.form("Simulation Settings"):
 
             # Rocket's updating of simulation time
             Sistema.update_time(sim_time_step)
+
+        st.success("Finished!")
 
 
 
