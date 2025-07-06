@@ -50,7 +50,7 @@ import json
 
 class Rocket(object):
     "Calculates all data during simulation. It's the main module of simulation"
-    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass, rocket_name):
+    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass, burn_time):
         
         #______Initial data_______#
         self.r_enu=r_enu_0        # [m]       # East-North-Up location from launching platform
@@ -127,9 +127,9 @@ class Rocket(object):
         "Updates Greenwich Mean Sidereal Time from Planet Module"
         self.gmst=gmst  # [rad]    # Greenwich Mean Sidereal Time (rotation of Earth Centered-Earth Fixed from Earth Centered Inertial systems)
 
-    def update_mass_related(self):
+    def update_mass_related(self, burn_time):
         "Updates mass related data: Centre of Mass and Inertia"
-        self.burn_time=3.15    # [s]    # Propellant total burning time                                                  
+        self.burn_time=burn_time    # [s]    # Propellant total burning time                                                  
         if self.time<=self.burn_time:
             self.cm_b=np.array([0.5109,0,0])                                 # [m]        # Centre of Mass before burning obtained via Autodesk Inventor
             self.inertia_b=np.array([0.009057381,0.784037556,0.784037556])   # [kg m2]    # Inertia before burning obtained via Autodesk Inventor
@@ -182,7 +182,7 @@ class Rocket(object):
         else:
             self.mach=self.v_norm/self.v_sonic    # [-]    # Mach number
         
-        with open('rocket_settings.json', 'r') as file:
+        with open('rockets.json', 'r') as file:
             rocket_settings = json.load(file)
 
         len_warhead = rocket_settings[rocket_name]['geometry']["len_warhead"] 
@@ -207,16 +207,26 @@ class Rocket(object):
         self.lift_coeff=Aero.cl                   # [-]    # Lift coefficient
         self.cp_b=Aero.xcp                        # [m]    # Location of centre of pressure from nose (ogive) tip
 
-    def update_engine(self):
+    def update_engine(self, rocket_name):
+        
+        with open('rockets.json', 'r') as file:
+            rocket_settings = json.load(file)
+
+        burn_time = rocket_settings[rocket_name]['engine']["burn_time"]
+        nozzle_exit_diameter = rocket_settings[rocket_name]['engine']["nozzle_exit_diameter"]
+        mass_flux = rocket_settings[rocket_name]['engine']["mass_flux"]
+        gas_speed = rocket_settings[rocket_name]['engine']["gas_speed"]
+        exit_pressure = rocket_settings[rocket_name]['engine']["exit_pressure"]
+
         "Updates engine performance characteristics from Engine Module"
-        Eng=Engine(self.time,self.press_amb)      # Engine instance
+        Eng=Engine(self.time,self.press_amb, burn_time, nozzle_exit_diameter, mass_flux, gas_speed, exit_pressure)      # Engine instance
         self.mass_flux=Eng.mass_flux              # [kg/s] # Engine mass flux
         self.thrust=Eng.thrust                    # [N]    # Engine thrust
 
-    def update_forces_aero(self):
+    def update_forces_aero(self, reference_area):
         "Calculates all aerodynamics related data"
         
-        ref_area=(0.0889**2)*pi*0.25  # [m2]     # Reference area for drag and lift calculation [Valle22]
+        ref_area= reference_area  # [m2]     # Reference area for drag and lift calculation [Valle22]
 
         # Conditional to avoid Runtime Warning for double zero multiplication
         if self.drag_coeff==0:                          

@@ -10,14 +10,13 @@ import datetime
 import MatTools as Mat
 import json
 
-with open('rocket_settings.json', 'r') as file:
+with open('rockets.json', 'r') as file:
     rocket_settings = json.load(file)
-with open('location_settings.json', 'r') as file:
+with open('locations.json', 'r') as file:
     location_settings = json.load(file)
 
 # Create and edit rockets properties for the simulator
 with st.form("Simulation Settings"):
-    st.write("Rocket Settings")
 
     left_column, right_column = st.columns(2)
     sim_runtime = st.slider('Simulation runtime [s]', min_value=0.0, max_value=10000.0, value=500.0, step=1.0)
@@ -119,12 +118,12 @@ with st.form("Simulation Settings"):
             Earth.update(sim_time_step)
             # Rocket's sequence of simulation
             Sistema.update_gmst(Earth.gmst)
-            Sistema.update_mass_related()
+            Sistema.update_mass_related(rocket_settings[sim_rocket]['engine']['burn_time'])  # [s]    # Propellant total burning time
             Sistema.update_pos_vel(coordinates)
             Sistema.update_atmosphere(Environment.give_dens(Sistema.r_enu[2]),Environment.give_press(Sistema.r_enu[2]),Environment.give_v_sonic(Sistema.r_enu[2]))    
             Sistema.update_aerodynamics(sim_rocket)
-            Sistema.update_engine()
-            Sistema.update_forces_aero()
+            Sistema.update_engine(sim_rocket)
+            Sistema.update_forces_aero(reference_area=rocket_settings[sim_rocket]['reference_area'])
             Sistema.update_forces_engine()
             Sistema.update_forces_torques()
             Sistema.update_g_accel(coordinates)

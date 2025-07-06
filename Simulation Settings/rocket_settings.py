@@ -11,14 +11,21 @@ with st.form("Rocket Settings"):
     with left_column:
         st.subheader("Rocket Properties")
         # Add input fields for rocket properties
-        st.text_input("Rocket Name", "My Rocket")
-        st.number_input("Initial Mass (kg)", min_value=0.0, value=100.0)
-        st.number_input("Burn Time [s]", min_value=0.0, value=500.0)
-        st.number_input("Reference area (Lift & Drag)", min_value=0.0, value=0.1)
-        st.number_input("Inertia before burning", min_value=0.0, value=0.1)
-        st.number_input("Centre of Mass (CoM) before burning", min_value=0.0, value=0.1)
-        st.number_input("Inertia after burning", min_value=0.0, value=0.1)
-        st.number_input("Centre of Mass (CoM) after burning", min_value=0.0, value=0.1)
+        rocket_name = st.text_input("Rocket Name", "My Rocket")
+        initial_mass = st.number_input("Initial Mass (kg)", min_value=0.0, value=100.0)
+        burn_time = st.number_input("Burn Time [s]", min_value=0.0, value=500.0)
+        reference_area = st.number_input("Reference area (Lift & Drag)", min_value=0.0, value=0.1)
+        I_before_burn = st.number_input("Inertia before burning", min_value=0.0, value=0.1)
+        CoM_before_burn = st.number_input("Centre of Mass (CoM) before burning", min_value=0.0, value=0.1)
+        I_after_burn = st.number_input("Inertia after burning", min_value=0.0, value=0.1)
+        CoM_after_burn = st.number_input("Centre of Mass (CoM) after burning", min_value=0.0, value=0.1)
+
+        st.subheader("Engine Properties")
+        nozzle_exit_diameter= st.number_input("Nozzle Exit Diameter", min_value=0.0, value=100.0)
+        mass_flux = st.number_input("Mass Flux", min_value=0.0, value=100.0)
+        gas_speed = st.number_input("Gas Speed", min_value=0.0, value=100.0)
+        exit_pressure = st.number_input("Exit Pressure", min_value=0.0, value=100.0)
+
 
     with right_column:
         st.subheader("Rocket Geometry")
@@ -45,14 +52,20 @@ with st.form("Rocket Settings"):
     if submitted:
         st.success("Rocket settings saved!")
         new_rocket = {
-            "name": st.session_state["Rocket Name"],
-            "initial_mass": st.session_state["Initial Mass (kg)"],
-            "burn_time": st.session_state["Burn Time [s]"],
-            "reference_area": st.session_state["Reference area (Lift & Drag)"],
-            "inertia_before_burning": st.session_state["Inertia before burning"],
-            "com_before_burning": st.session_state["Centre of Mass (CoM) before burning"],
-            "inertia_after_burning": st.session_state["Inertia after burning"],
-            "com_after_burning": st.session_state["Centre of Mass (CoM) after burning"],
+            "name": rocket_name,
+            "initial_mass": initial_mass,
+            "reference_area": reference_area,
+            "inertia_before_burning": I_before_burn,
+            "com_before_burning": CoM_before_burn,
+            "inertia_after_burning": I_after_burn,
+            "com_after_burning": CoM_after_burn,
+            'engine': {
+                "burn_time": burn_time,
+                "nozzle_exit_diameter": nozzle_exit_diameter,
+                "mass_flux": mass_flux,
+                "gas_speed": gas_speed,
+                "exit_pressure": exit_pressure
+            },
             "geometry": {
                 "len_warhead": len_warhead,
                 "len_nosecone_fins": len_nosecone_fins,

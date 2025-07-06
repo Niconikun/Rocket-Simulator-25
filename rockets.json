@@ -1,0 +1,35 @@
+{
+    "My Rocket_test": {
+        "name": "My Rocket_test",
+        "initial_mass": 100.0,
+        "reference_area": 0.1,
+        "inertia_before_burning": 0.1,
+        "com_before_burning": 0.1,
+        "inertia_after_burning": 0.1,
+        "com_after_burning": 0.1,
+        "engine": {
+            "burn_time": 500.0,
+            "nozzle_exit_diameter": 100.0,
+            "mass_flux": 100.0,
+            "gas_speed": 100.0,
+            "exit_pressure": 100.0
+        },
+        "geometry": {
+            "len_warhead": 500.0,
+            "len_nosecone_fins": 500.0,
+            "len_nosecone_rear": 500.0,
+            "len_bodytube_wo_rear": 500.0,
+            "fins_chord_root": 500.0,
+            "fins_mid_chord": 500.0,
+            "len_rear": 500.0,
+            "fins_span": 500.0,
+            "diameter_warhead_base": 500.0,
+            "diameter_bodytube": 500.0,
+            "diameter_bodytube_fins": 500.0,
+            "diameter_rear_bodytube": 500.0,
+            "end_diam_rear": 500.0,
+            "normal_f_coef_warhead": 500.0,
+            "N_fins": 500.0
+        }
+    }
+}

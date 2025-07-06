@@ -47,14 +47,15 @@ if submitted:
         "altitude": launch_site_alt,
     }
     
-    # Save the location data in a nested dictionary
-    if "locations" not in st.session_state:
-        st.session_state["locations"] = {}
-    
-    st.session_state["locations"][launch_site_name] = new_location
+    try:
+        with open("locations.json", "r") as file:
+            locations = json.load(file)
+    except FileNotFoundError:
+        locations = {}# Save the location data in a nested dictionary
+    locations[new_location["name"]] = new_location
     # Save the location data in a JSON file
     with open("locations.json", "w") as f:
-        json.dump(st.session_state["locations"], f, indent=4)
+        json.dump(locations, f, indent=4)
 
     
 

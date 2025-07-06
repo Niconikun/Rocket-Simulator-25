@@ -1,0 +1,26 @@
+{
+    "Test Location": {
+        "name": "Test Location",
+        "latitude": 0,
+        "longitude": 0,
+        "altitude": 0
+    },
+    "My Locationv2": {
+        "name": "My Locationv2",
+        "latitude": 0.0,
+        "longitude": 0.0,
+        "altitude": 0.0
+    },
+    "Club de Aeromodelos de Hualpen": {
+        "name": "Club de Aeromodelos de Hualpen",
+        "latitude": -36.79572205984051,
+        "longitude": -73.1422885358,
+        "altitude": 15.0
+    },
+    "El \u00c1lamo": {
+        "name": "El \u00c1lamo",
+        "latitude": -36.67177283344408,
+        "longitude": -73.09756887618757,
+        "altitude": 5.0
+    }
+}
