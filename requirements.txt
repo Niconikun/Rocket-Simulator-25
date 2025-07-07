@@ -9,7 +9,7 @@ fluids
 os
 cmath
 pickle
-matplotlib
+matplotlib.pyplot
 datetime
 flask
 json

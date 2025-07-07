@@ -20,11 +20,11 @@ with open('locations.json', 'r') as file:
 with st.form("Simulation Settings"):
 
     left_column, right_column = st.columns(2)
-    sim_runtime = st.slider('Simulation runtime [s]', min_value=0.0, max_value=10000.0, value=500.0, step=1.0)
+    sim_runtime = st.slider('Simulation runtime [s]', min_value=0, max_value=1000, value=200, step=10)
     with left_column:
         #info
         st.subheader("Simulation Properties")
-        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.1, step=0.01)
+        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.001, step=0.001)
         sim_date = st.date_input('Simulation date', value=None, min_value=None, max_value=None, key=None)
         sim_time = st.time_input('Simulation time', value=None, key=None)
         sim_timezone = st.selectbox('Simulation timezone', options=['UTC', 'Local'], index=0)
@@ -36,7 +36,7 @@ with st.form("Simulation Settings"):
         sim_rocket = st.selectbox('Rocket Selection', options=list(rocket_settings.keys()), index=0)
         sim_location = st.selectbox('Location Selection', options=list(location_settings.keys()), index=0)
         average_temperature = st.number_input('Average temperature [C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0)
-        launch_elevation = st.number_input('Launch elevation [m]', min_value=0.0, max_value=10000.0, value=0.0, step=1.0)
+        launch_elevation = st.number_input('Launch elevation [m]', min_value=0.0, max_value=10000.0, value=60.0, step=1.0)
         launch_site_orientation = st.number_input('Launch site orientation (from the East)', min_value=-180.0, max_value=180.0, value=20.0, step=1.0)
         average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=1000000.0, value=101325.0, step=1.0)
         average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0)
@@ -65,6 +65,7 @@ with st.form("Simulation Settings"):
         Start=0                     # [s]  # Starting time of simulation
         Steps_num=int(sim_runtime/sim_time_step)                 
         Steps=np.linspace(Start,sim_runtime,Steps_num)
+        st.write(f"Simulation steps: {Steps_num} with time step: {sim_time_step:.3f} s. {Steps}")
 
         # ___________________ Initial data to be INPUT ________________ #  # (All of this should to be obtained from external file!!!)
         East=0        # [m]   # X axis initial location of rocket from platform
@@ -81,8 +82,8 @@ with st.form("Simulation Settings"):
         W_pitch=0     # [rad/s]   # Y axis initial rotational velocity of rocket from platform
         W_roll=0      # [rad/s]   # Z axis initial rotational velocity of rocket from platform
 
-        Max_altitude=10000     # [m] # Max. altitude
-        Max_range=12500        # [m] # Max. range
+        Max_altitude=1000000     # [m] # Max. altitude
+        Max_range=1250000        # [m] # Max. range
 
         Detonate=TRUE          # Statement for detonation or not
         Detonate_altitude=900  # [m] # Altitude for detonation
@@ -115,6 +116,7 @@ with st.form("Simulation Settings"):
 
         # ________________ Simulation sequence _________________#
         for i in range(len(Steps)):
+            #st.write(f"Simulation time: {t:.4f} s")
 
             # Planet Greenwich Mean Sidereal Time updating
             Earth.update(sim_time_step)
@@ -132,13 +134,15 @@ with st.form("Simulation Settings"):
             Sistema.RK4_update(sim_time_step)
             Sistema.save_data()
 
-            if Sistema.time>=1:
-                if Sistema.r_enu[2]<Sistema.hist_up[-2] and Sistema.r_enu[2]<Detonate_altitude and Detonate==TRUE:
-                    break
+            #if Sistema.time>=1:
+             #   if Sistema.r_enu[2]<Sistema.hist_up[-2] and Sistema.r_enu[2]<Detonate_altitude and Detonate==TRUE:
+              #      st.warning(f"Rocket has reached the detonation altitude of {Detonate_altitude} m at time {Sistema.time:.2f} s. Simulation will stop.")
+               #     break
     
             # Conditional to stop when reached
-            if Sistema.r_enu[2]<=0 or Sistema.r_enu[2]>=Max_altitude or Sistema.range>= Max_range:
-                break
+            #if Sistema.r_enu[2]<=0 or Sistema.r_enu[2]>=Max_altitude or Sistema.range>= Max_range:
+             #   st.warning(f"Rocket has reached the maximum altitude of {Max_altitude} m or maximum range of {Max_range} m at time {Sistema.time:.2f} s. Simulation will stop.")
+              #  break
 
             Time.append(t)
             t+=sim_time_step
@@ -147,17 +151,60 @@ with st.form("Simulation Settings"):
             Sistema.update_time(sim_time_step)
 
         st.success("Finished!")
-        df = pd.DataFrame({'range': Sistema.hist_range,
-                   'up': Sistema.hist_up,
-                   'time': Sistema.hist_time,
-                   'lift': Sistema.hist_lift,
-                   'pitch': Sistema.hist_pitch,
-                   'alpha': Sistema.hist_alpha,
-                   'east': Sistema.hist_east,
-                   'north': Sistema.hist_north,
-                   'vel_x': Sistema.hist_v_bx,
-                   'vel_y': Sistema.hist_v_by,
-                   'vel_z': Sistema.hist_v_bz})
+        df = pd.DataFrame({
+                   "East-North-Up location from platform": Sistema.hist_r_enu,
+                   "East-North-Up velocity from platform": Sistema.hist_v_enu,
+                    "Quaternion that rotates from East-North-Up to bodyframe": Sistema.hist_q_enu2b,
+                    "Quaternion components": {
+                        "q_enu2b_1": Sistema.hist_q_enu2b_1,
+                        "q_enu2b_2": Sistema.hist_q_enu2b_2,
+                        "q_enu2b_3": Sistema.hist_q_enu2b_3,
+                        "q_enu2b_4": Sistema.hist_q_enu2b_4
+                    },
+                    "Rotational velocity in East-North-Up": Sistema.hist_w_enu,
+                    "Greenwich Mean Sidereal Time": Sistema.hist_gmst,
+                    "Simulation time": Sistema.hist_time,
+                    "Inertia matrix in bodyframe": Sistema.hist_inertia_b,
+                    "Mass of the rocket": Sistema.hist_mass,
+                    "Center of mass in bodyframe": Sistema.hist_cm_b,
+                    "Yaw angle": Sistema.hist_yaw,
+                    "Pitch angle": Sistema.hist_pitch,
+                    "Roll angle": Sistema.hist_roll,
+                    "Velocity in bodyframe": Sistema.hist_v_b,
+                    "Velocity components in bodyframe": {
+                        "v_bx": Sistema.hist_v_bx,
+                        "v_by": Sistema.hist_v_by,
+                        "v_bz": Sistema.hist_v_bz
+                    },
+                    "Angle of attack": Sistema.hist_alpha,
+                    "Density of the atmosphere": Sistema.hist_density,
+                    "Ambient pressure": Sistema.hist_press_amb,
+                    "Speed of sound": Sistema.hist_v_sonic,
+                    "Mach number": Sistema.hist_mach,
+                    "Drag coefficient": Sistema.hist_drag_coeff,
+                    "Lift coefficient": Sistema.hist_lift_coeff,
+                    "Center of pressure in bodyframe": Sistema.hist_cp_b,
+                    "Mass flux": Sistema.hist_mass_flux,
+                    "Thrust": Sistema.hist_thrust,
+                    "Drag force in bodyframe": Sistema.hist_drag,
+                    "Lift force in bodyframe": Sistema.hist_lift,
+                    "Center of mass to center of pressure in bodyframe": Sistema.hist_cm2cp_b,
+                    "Aerodynamic forces in bodyframe": Sistema.hist_forces_aero_b,
+                    "Aerodynamic torques in bodyframe": Sistema.hist_torques_aero_b,
+                    "Engine forces in bodyframe": Sistema.hist_forces_engine_b,
+                    "Engine torques in bodyframe": Sistema.hist_torques_engine_b,
+                    "Range": Sistema.hist_range,
+                    "East coordinate": Sistema.hist_east,
+                    "North coordinate": Sistema.hist_north,
+                    "Up coordinate": Sistema.hist_up,
+                    "Velocity norm": Sistema.hist_v_norm,
+                    "Geographic coordinates": Sistema.hist_coord,
+                    "Latitude": Sistema.hist_lat,
+                    "Longitude": Sistema.hist_long,
+                    "Altitude": Sistema.hist_alt
+                    })
+        
+        st.write(df)
         df.to_pickle("my_data.pkl")
 
         #add save button
