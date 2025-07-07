@@ -46,19 +46,19 @@ left_down, middle_down, right_down = st.columns(3)
 chart_data= pd.read_pickle("my_data.pkl")
 
 left_up.write('Bodyframe Velocities vs Time')
-left_up.line_chart(chart_data,x="time",y=["vel_x","vel_y","vel_z"], x_label="Tiempo de vuelo [s]", y_label="Velocidad Bodyframe [m/s]")
+left_up.line_chart(chart_data, x="Simulation time", y=["v_bx","v_by","v_bz"], x_label="Tiempo de vuelo [s]", y_label="Velocidad Bodyframe [m/s]")
 
 middle_up.write('Altitude vs Range')
-middle_up.line_chart(chart_data, x="range", y="up", x_label="Distancia [m]", y_label="Altitud [m]")
+middle_up.line_chart(chart_data, x="Range", y="Up coordinate", x_label="Distancia [m]", y_label="Altitud [m]")
 
 right_up.write('Lift vs Time')
-right_up.line_chart(chart_data, x="time", y="lift", x_label="Tiempo de vuelo [s]", y_label="Fuerza de sustentación [N]")
+right_up.line_chart(chart_data, x="Simulation time", y="Lift force in bodyframe", x_label="Tiempo de vuelo [s]", y_label="Fuerza de sustentación [N]")
 
 left_down.write('Pitch, Altitude vs Time')
-left_down.line_chart(chart_data, x="time", y=["pitch", "up"], x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad] / Altitud [m]")
+left_down.line_chart(chart_data, x="Simulation time", y=["Pitch angle", "Up coordinate"], x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad] / Altitud [m]")
 
 middle_down.write('Pitch vs Time')
-middle_down.line_chart(chart_data, x="time", y="pitch", x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad]")
+middle_down.line_chart(chart_data, x="Simulation time", y="Pitch angle", x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad]")
 
 right_down.write('Alpha vs Time')
-right_down.line_chart(chart_data, x="time", y="alpha", x_label="Tiempo de vuelo [s]", y_label="Ángulo de ataque [rad]")
+right_down.line_chart(chart_data, x="Simulation time", y="Angle of attack", x_label="Tiempo de vuelo [s]", y_label="Ángulo de ataque [rad]")

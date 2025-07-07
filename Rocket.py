@@ -50,7 +50,7 @@ import json
 
 class Rocket(object):
     "Calculates all data during simulation. It's the main module of simulation"
-    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass, burn_time):
+    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass):
         
         #______Initial data_______#
         self.r_enu=r_enu_0        # [m]       # East-North-Up location from launching platform

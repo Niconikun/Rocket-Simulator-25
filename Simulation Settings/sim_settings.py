@@ -20,26 +20,26 @@ with open('locations.json', 'r') as file:
 with st.form("Simulation Settings"):
 
     left_column, right_column = st.columns(2)
-    sim_runtime = st.slider('Simulation runtime [s]', min_value=0, max_value=1000, value=200, step=10)
+    sim_runtime = st.slider('Simulation runtime [s]', min_value=0, max_value=1000, value=200, step=10, key="sim_runtime")
     with left_column:
         #info
         st.subheader("Simulation Properties")
-        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.001, step=0.001)
-        sim_date = st.date_input('Simulation date', value=None, min_value=None, max_value=None, key=None)
-        sim_time = st.time_input('Simulation time', value=None, key=None)
-        sim_timezone = st.selectbox('Simulation timezone', options=['UTC', 'Local'], index=0)
+        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.001, step=0.001, key="sim_time_step")
+        sim_date = st.date_input('Simulation date', value=None, min_value=None, max_value=None, key="sim_date")
+        sim_time = st.time_input('Simulation time', value=None, key="sim_time")
+        sim_timezone = st.selectbox('Simulation timezone', options=['UTC', 'Local'], index=0, key="sim_timezone")
         
 
     with right_column:
         #info
         st.subheader("Simulation Settings")
-        sim_rocket = st.selectbox('Rocket Selection', options=list(rocket_settings.keys()), index=0)
-        sim_location = st.selectbox('Location Selection', options=list(location_settings.keys()), index=0)
-        average_temperature = st.number_input('Average temperature [C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0)
-        launch_elevation = st.number_input('Launch elevation [m]', min_value=0.0, max_value=10000.0, value=60.0, step=1.0)
-        launch_site_orientation = st.number_input('Launch site orientation (from the East)', min_value=-180.0, max_value=180.0, value=20.0, step=1.0)
-        average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=1000000.0, value=101325.0, step=1.0)
-        average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0)
+        sim_rocket = st.selectbox('Rocket Selection', options=list(rocket_settings.keys()), index=0, key="sim_rocket")
+        sim_location = st.selectbox('Location Selection', options=list(location_settings.keys()), index=0, key="sim_location")
+        average_temperature = st.number_input('Average temperature [C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0, key="average_temperature")
+        launch_elevation = st.number_input('Launch elevation [m]', min_value=0.0, max_value=10000.0, value=60.0, step=1.0, key="launch_elevation")
+        launch_site_orientation = st.number_input('Launch site orientation (from the East)', min_value=-180.0, max_value=180.0, value=20.0, step=1.0, key="launch_site_orientation")
+        average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=1000000.0, value=101325.0, step=1.0, key="average_pressure")
+        average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0, key="average_humidity")
     # Add a submit button
     
     
@@ -108,7 +108,7 @@ with st.form("Simulation Settings"):
         # _________________ Objects creation ___________________ #
         Earth=Planet(gmst_0)                                       # Planet module object creation
         Environment=Atmosphere(average_temperature)                        # Atmosphere module object creation
-        Sistema=Rocket(r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass, sim_rocket)          # Rocket module object creation
+        Sistema=Rocket(r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass)          # Rocket module object creation
 
         # Auxiliary timer for conditionals loop break
         Time=[]       
@@ -134,15 +134,15 @@ with st.form("Simulation Settings"):
             Sistema.RK4_update(sim_time_step)
             Sistema.save_data()
 
-            #if Sistema.time>=1:
-             #   if Sistema.r_enu[2]<Sistema.hist_up[-2] and Sistema.r_enu[2]<Detonate_altitude and Detonate==TRUE:
-              #      st.warning(f"Rocket has reached the detonation altitude of {Detonate_altitude} m at time {Sistema.time:.2f} s. Simulation will stop.")
-               #     break
+            if Sistema.time>=1:
+                if Sistema.r_enu[2]<Sistema.hist_up[-2] and Sistema.r_enu[2]<Detonate_altitude and Detonate==TRUE:
+                    st.warning(f"Rocket has reached the detonation altitude of {Detonate_altitude} m at time {Sistema.time:.2f} s. Simulation will stop.")
+                    break
     
             # Conditional to stop when reached
-            #if Sistema.r_enu[2]<=0 or Sistema.r_enu[2]>=Max_altitude or Sistema.range>= Max_range:
-             #   st.warning(f"Rocket has reached the maximum altitude of {Max_altitude} m or maximum range of {Max_range} m at time {Sistema.time:.2f} s. Simulation will stop.")
-              #  break
+            if Sistema.r_enu[2]<=0 or Sistema.r_enu[2]>=Max_altitude or Sistema.range>= Max_range:
+                st.warning(f"Rocket has reached the maximum altitude of {Max_altitude} m or maximum range of {Max_range} m at time {Sistema.time:.2f} s. Simulation will stop.")
+                break
 
             Time.append(t)
             t+=sim_time_step
@@ -152,15 +152,13 @@ with st.form("Simulation Settings"):
 
         st.success("Finished!")
         df = pd.DataFrame({
-                   "East-North-Up location from platform": Sistema.hist_r_enu,
-                   "East-North-Up velocity from platform": Sistema.hist_v_enu,
+                    "East-North-Up location from platform": Sistema.hist_r_enu,
+                    "East-North-Up velocity from platform": Sistema.hist_v_enu,
                     "Quaternion that rotates from East-North-Up to bodyframe": Sistema.hist_q_enu2b,
-                    "Quaternion components": {
-                        "q_enu2b_1": Sistema.hist_q_enu2b_1,
-                        "q_enu2b_2": Sistema.hist_q_enu2b_2,
-                        "q_enu2b_3": Sistema.hist_q_enu2b_3,
-                        "q_enu2b_4": Sistema.hist_q_enu2b_4
-                    },
+                    "q_enu2b_1": Sistema.hist_q_enu2b_1,
+                    "q_enu2b_2": Sistema.hist_q_enu2b_2,
+                    "q_enu2b_3": Sistema.hist_q_enu2b_3,
+                    "q_enu2b_4": Sistema.hist_q_enu2b_4,
                     "Rotational velocity in East-North-Up": Sistema.hist_w_enu,
                     "Greenwich Mean Sidereal Time": Sistema.hist_gmst,
                     "Simulation time": Sistema.hist_time,
@@ -171,11 +169,9 @@ with st.form("Simulation Settings"):
                     "Pitch angle": Sistema.hist_pitch,
                     "Roll angle": Sistema.hist_roll,
                     "Velocity in bodyframe": Sistema.hist_v_b,
-                    "Velocity components in bodyframe": {
-                        "v_bx": Sistema.hist_v_bx,
-                        "v_by": Sistema.hist_v_by,
-                        "v_bz": Sistema.hist_v_bz
-                    },
+                    "v_bx": Sistema.hist_v_bx,
+                    "v_by": Sistema.hist_v_by,
+                    "v_bz": Sistema.hist_v_bz,
                     "Angle of attack": Sistema.hist_alpha,
                     "Density of the atmosphere": Sistema.hist_density,
                     "Ambient pressure": Sistema.hist_press_amb,
