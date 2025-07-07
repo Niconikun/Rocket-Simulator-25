@@ -24,7 +24,7 @@ with st.form("Simulation Settings"):
     with left_column:
         #info
         st.subheader("Simulation Properties")
-        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.001, step=0.001, key="sim_time_step")
+        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.1, step=0.001, key="sim_time_step")
         sim_date = st.date_input('Simulation date', value=None, min_value=None, max_value=None, key="sim_date")
         sim_time = st.time_input('Simulation time', value=None, key="sim_time")
         sim_timezone = st.selectbox('Simulation timezone', options=['UTC', 'Local'], index=0, key="sim_timezone")
@@ -65,7 +65,7 @@ with st.form("Simulation Settings"):
         Start=0                     # [s]  # Starting time of simulation
         Steps_num=int(sim_runtime/sim_time_step)                 
         Steps=np.linspace(Start,sim_runtime,Steps_num)
-        st.write(f"Simulation steps: {Steps_num} with time step: {sim_time_step:.3f} s. {Steps}")
+        #st.write(f"Simulation steps: {Steps_num} with time step: {sim_time_step:.3f} s. {Steps}")
 
         # ___________________ Initial data to be INPUT ________________ #  # (All of this should to be obtained from external file!!!)
         East=0        # [m]   # X axis initial location of rocket from platform
@@ -201,7 +201,7 @@ with st.form("Simulation Settings"):
                     })
         
         st.write(df)
-        df.to_pickle("my_data.pkl")
+        df.to_pickle("sim_data.pkl")
 
         #add save button
         #if st.button("Save Simulation Data"):

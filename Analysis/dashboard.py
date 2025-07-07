@@ -43,7 +43,7 @@ keplergl_static(map_1)
 left_up, middle_up, right_up = st.columns(3)
 left_down, middle_down, right_down = st.columns(3)
 
-chart_data= pd.read_pickle("my_data.pkl")
+chart_data= pd.read_pickle("sim_data.pkl")
 
 left_up.write('Bodyframe Velocities vs Time')
 left_up.line_chart(chart_data, x="Simulation time", y=["v_bx","v_by","v_bz"], x_label="Tiempo de vuelo [s]", y_label="Velocidad Bodyframe [m/s]")
