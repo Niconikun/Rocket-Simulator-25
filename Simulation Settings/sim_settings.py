@@ -24,7 +24,7 @@ with st.form("Simulation Settings"):
     with left_column:
         #info
         st.subheader("Simulation Properties")
-        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.1, step=0.001, key="sim_time_step")
+        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.001, step=0.001, key="sim_time_step")
         sim_date = st.date_input('Simulation date', value=None, min_value=None, max_value=None, key="sim_date")
         sim_time = st.time_input('Simulation time', value=None, key="sim_time")
         sim_timezone = st.selectbox('Simulation timezone', options=['UTC', 'Local'], index=0, key="sim_timezone")
@@ -47,6 +47,7 @@ with st.form("Simulation Settings"):
     if run:
 
         st.info("Running!")
+        open("sim_data.pkl", "w").close() # Clear previous simulation data
         # loading json file for location and rocket settings
         # (This part should be replaced with actual loading of the JSON file)
 
@@ -85,7 +86,7 @@ with st.form("Simulation Settings"):
         Max_altitude=1000000     # [m] # Max. altitude
         Max_range=1250000        # [m] # Max. range
 
-        Detonate=TRUE          # Statement for detonation or not
+        Detonate=FALSE          # Statement for detonation or not
         Detonate_altitude=900  # [m] # Altitude for detonation
 
         # ___________________ Initialization of data ________________ #
@@ -152,6 +153,8 @@ with st.form("Simulation Settings"):
 
         st.success("Finished!")
         df = pd.DataFrame({
+                    "Rocket name": sim_rocket,
+                    "Location name": sim_location,
                     "East-North-Up location from platform": Sistema.hist_r_enu,
                     "East-North-Up velocity from platform": Sistema.hist_v_enu,
                     "Quaternion that rotates from East-North-Up to bodyframe": Sistema.hist_q_enu2b,

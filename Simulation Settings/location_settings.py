@@ -34,7 +34,7 @@ with right_column:
     map_1 = KeplerGl()
     map_1.config = config
 
-    keplergl_static(map_1)
+    keplergl_static(map_1, center_map=True)
 
 # Add a submit button
 submitted = st.button("Save Location Settings")
