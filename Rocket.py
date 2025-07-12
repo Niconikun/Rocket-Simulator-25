@@ -127,15 +127,15 @@ class Rocket(object):
         "Updates Greenwich Mean Sidereal Time from Planet Module"
         self.gmst=gmst  # [rad]    # Greenwich Mean Sidereal Time (rotation of Earth Centered-Earth Fixed from Earth Centered Inertial systems)
 
-    def update_mass_related(self, burn_time):
+    def update_mass_related(self, burn_time, cm_before_x, cm_before_y, cm_before_z, I_before_x, I_before_y, I_before_z, cm_after_x, cm_after_y, cm_after_z, I_after_x, I_after_y, I_after_z):
         "Updates mass related data: Centre of Mass and Inertia"
         self.burn_time=burn_time    # [s]    # Propellant total burning time                                                  
         if self.time<=self.burn_time:
-            self.cm_b=np.array([0.5109,0,0])                                 # [m]        # Centre of Mass before burning obtained via Autodesk Inventor
-            self.inertia_b=np.array([0.009057381,0.784037556,0.784037556])   # [kg m2]    # Inertia before burning obtained via Autodesk Inventor
+            self.cm_b=np.array([cm_before_x,cm_before_y,cm_before_z])                                 # [m]        # Centre of Mass before burning obtained via Autodesk Inventor
+            self.inertia_b=np.array([I_before_x, I_before_y, I_before_z])   # [kg m2]    # Inertia before burning obtained via Autodesk Inventor
         else: 
-            self.cm_b=np.array([0.40215,0,0])                                # [m]        # Centre of Mass after burning obtained via Autodesk Inventor
-            self.inertia_b=np.array([0.0062581,0.522648762,0.522648762])     # [kg m2]    # Inertia after burning obtained via Autodesk Inventor 
+            self.cm_b=np.array([cm_after_x, cm_after_y, cm_after_z])                                # [m]        # Centre of Mass after burning obtained via Autodesk Inventor
+            self.inertia_b=np.array([I_after_x, I_after_y, I_after_z])     # [kg m2]    # Inertia after burning obtained via Autodesk Inventor 
 
     def update_pos_vel(self,coordinates):
         "Updates all data related to location and velocity"

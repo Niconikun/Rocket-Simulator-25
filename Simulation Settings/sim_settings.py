@@ -123,7 +123,7 @@ with st.form("Simulation Settings"):
             Earth.update(sim_time_step)
             # Rocket's sequence of simulation
             Sistema.update_gmst(Earth.gmst)
-            Sistema.update_mass_related(rocket_settings[sim_rocket]['engine']['burn_time'])  # [s]    # Propellant total burning time
+            Sistema.update_mass_related(rocket_settings[sim_rocket]['engine']['burn_time'], rocket_settings[sim_rocket]["CoM_before_burn"]["x"], rocket_settings[sim_rocket]["CoM_before_burn"]["y"], rocket_settings[sim_rocket]["CoM_before_burn"]["z"], rocket_settings[sim_rocket]["I_before_burn"]["x"], rocket_settings[sim_rocket]["I_before_burn"]["y"], rocket_settings[sim_rocket]["I_before_burn"]["z"], rocket_settings[sim_rocket]["CoM_after_burn"]["x"], rocket_settings[sim_rocket]["CoM_after_burn"]["y"], rocket_settings[sim_rocket]["CoM_after_burn"]["z"], rocket_settings[sim_rocket]["I_after_burn"]["x"], rocket_settings[sim_rocket]["I_after_burn"]["y"], rocket_settings[sim_rocket]["I_after_burn"]["z"])  # [s]    # Propellant total burning time
             Sistema.update_pos_vel(coordinates)
             Sistema.update_atmosphere(Environment.give_dens(Sistema.r_enu[2]),Environment.give_press(Sistema.r_enu[2]),Environment.give_v_sonic(Sistema.r_enu[2]))    
             Sistema.update_aerodynamics(sim_rocket)

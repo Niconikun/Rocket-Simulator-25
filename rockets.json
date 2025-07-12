@@ -3,10 +3,26 @@
         "name": "Rayo",
         "initial_mass": 9.48,
         "reference_area": 0.006204,
-        "inertia_before_burning": 0.1,
-        "com_before_burning": 0.1,
-        "inertia_after_burning": 0.1,
-        "com_after_burning": 0.1,
+        "I_before_burn": {
+                "x": 0.009057381,
+                "y": 0.784037556,
+                "z": 0.784037556
+            },
+            "CoM_before_burn": {
+                "x": 0.5109,
+                "y": 0,
+                "z": 0
+            },
+            "I_after_burn": {
+                "x": 0.0062581,
+                "y": 0.522648762,
+                "z": 0.522648762
+            },
+            "CoM_after_burn": {
+                "x": 0.40215,
+                "y": 0,
+                "z": 0
+            },
         "engine": {
             "burn_time": 3.15,
             "nozzle_exit_diameter": 0.0425,
@@ -37,10 +53,26 @@
         "name": "Rayo dim",
         "initial_mass": 9.48,
         "reference_area": 0.006204,
-        "inertia_before_burning": 0.1,
-        "com_before_burning": 0.1,
-        "inertia_after_burning": 0.1,
-        "com_after_burning": 0.1,
+        "I_before_burn": {
+                "x": 0.009057381,
+                "y": 0.784037556,
+                "z": 0.784037556
+            },
+            "CoM_before_burn": {
+                "x": 0.5109,
+                "y": 0,
+                "z": 0
+            },
+            "I_after_burn": {
+                "x": 0.0062581,
+                "y": 0.522648762,
+                "z": 0.522648762
+            },
+            "CoM_after_burn": {
+                "x": 0.40215,
+                "y": 0,
+                "z": 0
+            },
         "engine": {
             "burn_time": 1,
             "nozzle_exit_diameter": 0.0425,

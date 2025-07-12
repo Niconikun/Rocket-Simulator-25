@@ -7,6 +7,10 @@ with st.form("Rocket Settings"):
     st.write("Rocket Settings")
     
     left_column, right_column = st.columns(2)
+    a, b, c = st.columns(3)
+    d, e, f = st.columns(3)
+    g, h, i = st.columns(3)
+    j, k, l = st.columns(3)
 
     with left_column:
         st.subheader("Rocket Properties")
@@ -15,10 +19,35 @@ with st.form("Rocket Settings"):
         initial_mass = st.number_input("Initial Mass (kg)", min_value=0.0, value=100.0, step=0.1,key="initial_mass")
         burn_time = st.number_input("Burn Time [s]", min_value=0.0, value=500.0, step=0.1, key="burn_time")
         reference_area = st.number_input("Reference area (Lift & Drag)", min_value=0.0, value=0.1, step=0.01, key="reference_area")
-        I_before_burn = st.number_input("Inertia before burning", min_value=0.0, value=0.1, step=0.01, key="I_before_burn")
-        CoM_before_burn = st.number_input("Centre of Mass (CoM) before burning", min_value=0.0, value=0.1, step=0.01, key="CoM_before_burn")
-        I_after_burn = st.number_input("Inertia after burning", min_value=0.0, value=0.1, step=0.01, key="I_after_burn")
-        CoM_after_burn = st.number_input("Centre of Mass (CoM) after burning", min_value=0.0, value=0.1, step=0.01, key="CoM_after_burn")
+        st.subheader("Inertia and Centre of Mass (CoM) Settings")
+        st.write("Inertia Before burning")
+        with a:
+            I_before_burn_x = st.number_input("X", min_value=0.0, value=0.1, step=0.01, key="I_before_burn_x")
+        with b:
+            I_before_burn_y = st.number_input("Y", min_value=0.0, value=0.1, step=0.01, key="I_before_burn_y")
+        with c:
+            I_before_burn_z = st.number_input("Z", min_value=0.0, value=0.1, step=0.01, key="I_before_burn_z")
+        st.write("Centre of Mass (CoM) Before burning")
+        with d:
+            CoM_before_burn_x = st.number_input("X", min_value=0.0, value=0.1, step=0.01, key="CoM_before_burn_x")
+        with e:
+            CoM_before_burn_y = st.number_input("Y", min_value=0.0, value=0.1, step=0.01, key="CoM_before_burn_y")
+        with f:
+            CoM_before_burn_z = st.number_input("Z", min_value=0.0, value=0.1, step=0.01, key="CoM_before_burn_z")
+        st.write("Inertia After burning")
+        with g:    
+            I_after_burn_x = st.number_input("X", min_value=0.0, value=0.1, step=0.01, key="I_after_burn_x")
+        with h:
+            I_after_burn_y = st.number_input("Y", min_value=0.0, value=0.1, step=0.01, key="I_after_burn_y")
+        with i:
+            I_after_burn_z = st.number_input("Z", min_value=0.0, value=0.1, step=0.01, key="I_after_burn_z")
+        st.write("Centre of Mass (CoM) After burning")
+        with j:    
+            CoM_after_burn_x = st.number_input("X", min_value=0.0, value=0.1, step=0.01, key="CoM_after_burn_x")
+        with k:
+            CoM_after_burn_y = st.number_input("Y", min_value=0.0, value=0.1, step=0.01, key="CoM_after_burn_y")
+        with l:
+            CoM_after_burn_z = st.number_input("Z", min_value=0.0, value=0.1, step=0.01, key="CoM_after_burn_z")
 
         st.subheader("Engine Properties")
         nozzle_exit_diameter= st.number_input("Nozzle Exit Diameter", min_value=0.0, value=100.0, step=0.1, key="nozzle_exit_diameter")
@@ -47,6 +76,8 @@ with st.form("Rocket Settings"):
         normal_f_coef_warhead = st.number_input('Normal force coefficient gradient for warhead', min_value=0.0, value=500.0, step=0.1, key="normal_f_coef_warhead")
         N_fins = st.number_input('Number of fins', min_value=0.0, value=500.0, step=1, key="N_fins")
    
+   
+
     
     # Add a submit button
     submitted = st.form_submit_button("Save Settings")
@@ -56,10 +87,26 @@ with st.form("Rocket Settings"):
             "name": rocket_name,
             "initial_mass": initial_mass,
             "reference_area": reference_area,
-            "inertia_before_burning": I_before_burn,
-            "com_before_burning": CoM_before_burn,
-            "inertia_after_burning": I_after_burn,
-            "com_after_burning": CoM_after_burn,
+            "I_before_burn": {
+                "x": I_before_burn_x,
+                "y": I_before_burn_y,
+                "z": I_before_burn_z
+            },
+            "CoM_before_burn": {
+                "x": CoM_before_burn_x,
+                "y": CoM_before_burn_y,
+                "z": CoM_before_burn_z
+            },
+            "I_after_burn": {
+                "x": I_after_burn_x,
+                "y": I_after_burn_y,
+                "z": I_after_burn_z
+            },
+            "CoM_after_burn": {
+                "x": CoM_after_burn_x,
+                "y": CoM_after_burn_y,
+                "z": CoM_after_burn_z
+            },
             'engine': {
                 "burn_time": burn_time,
                 "nozzle_exit_diameter": nozzle_exit_diameter,
