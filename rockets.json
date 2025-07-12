@@ -32,5 +32,39 @@
             "normal_f_coef_warhead": 2,
             "N_fins": 4
         }
+    },
+    "Rayo dim": {
+        "name": "Rayo dim",
+        "initial_mass": 9.48,
+        "reference_area": 0.006204,
+        "inertia_before_burning": 0.1,
+        "com_before_burning": 0.1,
+        "inertia_after_burning": 0.1,
+        "com_after_burning": 0.1,
+        "engine": {
+            "burn_time": 1,
+            "nozzle_exit_diameter": 0.0425,
+            "mass_flux": 1.057,
+            "gas_speed": 2187,
+            "exit_pressure": 186037
+        },
+        "geometry": {
+            "len_warhead": 205.35,
+            "len_nosecone_fins": 856,
+            "len_nosecone_rear": 936,
+            "len_bodytube_wo_rear": 730,
+            "fins_chord_root": 76.32,
+	        "fins_chord_tip": 33.6722,
+            "fins_mid_chord": 46.6440,
+            "len_rear": 62,
+            "fins_span": 41.65,
+            "diameter_warhead_base": 88.9,
+            "diameter_bodytube": 88.9,
+            "diameter_bodytube_fins": 88.9,
+            "diameter_rear_bodytube": 88.9,
+            "end_diam_rear": 88.9,
+            "normal_f_coef_warhead": 2,
+            "N_fins": 4
+        }
     }
 }

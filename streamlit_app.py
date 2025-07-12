@@ -4,12 +4,12 @@ rocket_page = st.Page("Simulation Settings/rocket_settings.py", title="Rocket", 
 sim_page = st.Page("Simulation Settings/sim_settings.py", title="Simulation", icon=":material/settings:",default=True)
 location_page = st.Page("Simulation Settings/location_settings.py", title="Location", icon=":material/location_on:")
 dashboard_page = st.Page("Analysis/dashboard.py", title="Dashboard", icon=":material/delete:")
-risk_page = st.Page("Analysis/risk_analysis.py", title="Risk Analysis", icon=":material/analytics:")
+#risk_page = st.Page("Analysis/risk_analysis.py", title="Risk Analysis", icon=":material/analytics:")
 
 pg = st.navigation(
         {
             "Simulation Settings": [rocket_page, location_page, sim_page],
-            "Analysis": [dashboard_page, risk_page],
+            "Analysis": [dashboard_page],
         }
     )
 

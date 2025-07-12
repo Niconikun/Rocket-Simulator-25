@@ -155,6 +155,8 @@ with st.form("Simulation Settings"):
         df = pd.DataFrame({
                     "Rocket name": sim_rocket,
                     "Location name": sim_location,
+                    "Location Latitude": Latitude,
+                    "Location Longitude": Longitude,
                     "East-North-Up location from platform": Sistema.hist_r_enu,
                     "East-North-Up velocity from platform": Sistema.hist_v_enu,
                     "Quaternion that rotates from East-North-Up to bodyframe": Sistema.hist_q_enu2b,
