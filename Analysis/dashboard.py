@@ -10,7 +10,7 @@ st.title("Rocket Simulator Dashboard")
 
 chart_data= pd.read_pickle("sim_data.pkl")
 
-chart_data_compressed = chart_data.iloc[::10, :]
+chart_data_compressed = chart_data.iloc[::20, :]
 
 #with open('rockets.json', 'r') as file:
  #   rocket_settings = json.load(file)
