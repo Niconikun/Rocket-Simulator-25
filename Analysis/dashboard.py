@@ -41,7 +41,7 @@ g.metric("Max Speed", str(round((max(chart_data.loc[:,"Velocity norm"])),2)) + '
 h.metric("Max Mach", str(round((max(chart_data.loc[:,"Mach number"])),2)), str(round((chart_data.loc[chart_data.loc[:,"Mach number"].idxmax(),"Simulation time"]),3)) + 's', border=True)
 i.metric("Simulation Date", "2023-10-01", border=True)
 
-j[0].metric("Launch Coordinates", str(abs(round((chart_data.iloc[-1]["Latitude"]),1)))+ "° S, " + str(abs(round((chart_data.iloc[-1]["Longitude"]),1)))+ "° W", border=True)
+j[0].metric("Landing Coordinates", str(abs(round((chart_data.iloc[-1]["Latitude"]),1)))+ "° S, " + str(abs(round((chart_data.iloc[-1]["Longitude"]),1)))+ "° W", border=True)
 
 st.subheader("Trajectory Overview")
 
