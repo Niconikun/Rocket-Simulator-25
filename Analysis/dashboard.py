@@ -30,8 +30,8 @@ j = st.columns(1)
 st.subheader("Rocket Performance Metrics")
 
 a.metric("Total Flight Time", str(round((chart_data.iloc[-1]["Simulation time"]), 2)) + "s", border=True)
-b.metric("Max Range", str(round((chart_data.iloc[-1]["Range"]),2)) + 'm', border=True)
-c.metric("Max Alt", str(round((max(chart_data.loc[:,"Up coordinate"])),3)) + "m", str(round((chart_data.loc[chart_data.loc[:,"Up coordinate"].idxmax(), "Simulation time"]),2))+ "s", border=True)
+b.metric("Max Range", str(round((chart_data.iloc[-1]["Range"]) / 1000,2)) + 'km', border=True)
+c.metric("Max Alt", str(round((max(chart_data.loc[:,"Up coordinate"])) / 1000,3)) + "km", str(round((chart_data.loc[chart_data.loc[:,"Up coordinate"].idxmax(), "Simulation time"]),2))+ "s", border=True)
 
 d.metric("Pitch at Max Alt", str(round((chart_data.loc[chart_data.loc[:,"Up coordinate"].idxmax(),"Pitch angle"]),2)) + '°', border=True)
 e.metric("Initial Mass", str(round(chart_data.iloc[0]["Mass of the rocket"],3)) + 'kg', border=True)
@@ -39,7 +39,7 @@ f.metric("Final Mass", str(round(chart_data.iloc[-1]["Mass of the rocket"],3)) +
 
 g.metric("Max Speed", str(round((max(chart_data.loc[:,"Velocity norm"])),2)) + 'm/s', str(round((chart_data.loc[chart_data.loc[:,"Velocity norm"].idxmax(),"Simulation time"]),3)) + 's', border=True)
 h.metric("Max Mach", str(round((max(chart_data.loc[:,"Mach number"])),2)), str(round((chart_data.loc[chart_data.loc[:,"Mach number"].idxmax(),"Simulation time"]),3)) + 's', border=True)
-i.metric("Simulation Date", "2023-10-01", border=True)
+i.metric("Max Acceleration", "2023-10-01", border=True)
 
 j[0].metric("Landing Coordinates", str(abs(round((chart_data.iloc[-1]["Latitude"]),1)))+ "° S, " + str(abs(round((chart_data.iloc[-1]["Longitude"]),1)))+ "° W", border=True)
 
@@ -81,7 +81,7 @@ left_down, middle_down, right_down = st.columns(3)
 st.subheader("Rocket Performance Charts")
 
 left_up.write('Bodyframe Velocities vs Time')
-left_up.line_chart(chart_data_compressed, x="Simulation time", y=["v_bx","v_by","v_bz"], x_label="Tiempo de vuelo [s]", y_label="Velocidad Bodyframe [m/s]")
+left_up.line_chart(chart_data_compressed, x="Simulation time", y=["v_bx","v_by","v_bz"], x_label="Flight time [s]", y_label="Velocidad Bodyframe [m/s]")
 
 middle_up.write('Altitude vs Range')
 middle_up.line_chart(chart_data_compressed, x="Range", y="Up coordinate", x_label="Distancia [m]", y_label="Altitud [m]")

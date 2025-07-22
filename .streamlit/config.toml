@@ -1,0 +1,52 @@
+[[theme.fontFaces]]
+family = "SpaceGrotesk"
+url = "app/static/SpaceGrotesk-VariableFont_wght.ttf"
+
+[[theme.fontFaces]]
+family = "SpaceMono"
+url = "static/SpaceMono-Bold.ttf"
+style = "normal"
+weight = 700
+
+[[theme.fontFaces]]
+family = "SpaceMono"
+url = "static/SpaceMono-BoldItalic.ttf"
+style = "italic"
+weight = 700
+
+[[theme.fontFaces]]
+family = "SpaceMono"
+url = "static/SpaceMono-Italic.ttf"
+style = "italic"
+weight = 400
+
+[[theme.fontFaces]]
+family = "SpaceMono"
+url = "static/SpaceMono-Regular.ttf"
+style = "normal"
+weight = 400
+
+[theme]
+# Primary color for interactive elements
+primaryColor = "#c30a0aff"  # Neon teal
+
+# Background color for the main app area
+backgroundColor = "#111111ff"  # Dark gray
+
+# Background color for secondary elements (e.g., sidebar)
+secondaryBackgroundColor = "#2a2a2a"  # Slightly lighter dark gray
+
+# Text color for the main content
+textColor = "#ffffff"  # White
+
+# Text color for secondary content
+secondaryTextColor = "#cccccc"  # Light gray
+
+# Font family for the app
+font = "monospace"  # Monospace font for a techy feel
+
+# Optional: Customize the sidebar
+
+[sidebar]
+backgroundColor = "#2a2a2a"  # Match secondary background
+textColor = "#ffffff"  # White text in sidebar

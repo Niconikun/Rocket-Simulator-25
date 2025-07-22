@@ -10,11 +10,76 @@ import datetime
 import MatTools as Mat
 import json
 import pandas as pd
+import pytz
 
 with open('rockets.json', 'r') as file:
     rocket_settings = json.load(file)
 with open('locations.json', 'r') as file:
     location_settings = json.load(file)
+
+timezone_dict = {
+        "United States": "America/New_York",
+        "Canada": "America/Toronto",
+        "Mexico": "America/Mexico_City",
+        "Jamaica": "America/Jamaica",
+        "Costa Rica": "America/Costa_Rica",
+        "Bahamas": "America/Nassau",
+        "Honduras": "America/Tegucigalpa",
+        "Cuba": "America/Havana",
+        "Dominican Republic": "America/Santo_Domingo",
+        "Brazil": "America/Sao_Paulo",
+        "Argentina": "America/Argentina/Buenos_Aires",
+        "Chile": "America/Santiago",
+        "Colombia": "America/Bogota",
+        "Peru": "America/Lima",
+        "Uruguay": "America/Montevideo",
+        "Ecuador": "America/Guayaquil",
+        "Bolivia": "America/La_Paz",
+        "Paraguay": "America/Asuncion",
+        "Venezuela": "America/Caracas",
+        "United Kingdom": "Europe/London",
+        "France": "Europe/Paris",
+        "Germany": "Europe/Berlin",
+        "Italy": "Europe/Rome",
+        "Spain": "Europe/Madrid",
+        "Russia": "Europe/Moscow",
+        "Turkey": "Europe/Istanbul",
+        "Greece": "Europe/Athens",
+        "Poland": "Europe/Warsaw",
+        "Ukraine": "Europe/Kiev",
+        "India": "Asia/Kolkata",
+        "Japan": "Asia/Tokyo",
+        "China": "Asia/Shanghai",
+        "Saudi Arabia": "Asia/Riyadh",
+        "South Korea": "Asia/Seoul",
+        "Indonesia": "Asia/Jakarta",
+        "Malaysia": "Asia/Kuala_Lumpur",
+        "Vietnam": "Asia/Ho_Chi_Minh",
+        "Philippines": "Asia/Manila",
+        "Thailand": "Asia/Bangkok",
+        "Australia": "Australia/Sydney",
+        "New Zealand": "Pacific/Auckland",
+        "Fiji": "Pacific/Fiji",
+        "Papua New Guinea": "Pacific/Port_Moresby",
+        "Samoa": "Pacific/Apia",
+        "Tonga": "Pacific/Tongatapu",
+        "Solomon Islands": "Pacific/Guadalcanal",
+        "Vanuatu": "Pacific/Efate",
+        "Kiribati": "Pacific/Tarawa",
+        "New Caledonia": "Pacific/Noumea"
+}
+options = list(timezone_dict.keys())
+default_index = options.index("Chile")
+
+# Main header
+st.header('Rocket Simulation Settings')
+st.write("Configure the simulation settings for your rocket launch. You can select the rocket, location, and various simulation parameters."
+         " Once you have set the parameters, click 'Run Simulation' to start the simulation."
+         " The simulation will run based on the provided settings and will display the results in a table format.")
+st.write("Code written by Orozco 2022. GUI done by Sepúlveda 2025.")
+
+# Add some blank space
+st.markdown("##")
 
 # Create and edit rockets properties for the simulator
 with st.form("Simulation Settings"):
@@ -24,22 +89,24 @@ with st.form("Simulation Settings"):
     with left_column:
         #info
         st.subheader("Simulation Properties")
-        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.0, max_value=10.0, value=0.001, step=0.001, key="sim_time_step")
-        sim_date = st.date_input('Simulation date', value=None, min_value=None, max_value=None, key="sim_date")
-        sim_time = st.time_input('Simulation time', value=None, key="sim_time")
-        sim_timezone = st.selectbox('Simulation timezone', options=['UTC', 'Local'], index=0, key="sim_timezone")
+        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.000, max_value=10.000, value=0.001, step=0.001, key="sim_time_step")
+        sim_date = st.date_input('Simulation date', min_value=None, max_value=None, key="sim_date")
+        sim_time = st.time_input('Simulation time', key="sim_time")
+        sim_timezone = st.selectbox('Simulation timezone', options=options, index=default_index, key="sim_timezone")
+        conditions = st.pills("Conditions for simulation", ["Detonation","Parachute [Coming soon]", "Second Stage [Coming Soon]"], key="conditions")
         
 
     with right_column:
         #info
         st.subheader("Simulation Settings")
         sim_rocket = st.selectbox('Rocket Selection', options=list(rocket_settings.keys()), index=0, key="sim_rocket")
-        sim_location = st.selectbox('Location Selection', options=list(location_settings.keys()), index=0, key="sim_location")
+        sim_location = st.selectbox('Location Selection', options=list(location_settings.keys()), index=1, key="sim_location")
         average_temperature = st.number_input('Average temperature [C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0, key="average_temperature")
         launch_elevation = st.number_input('Launch elevation [m]', min_value=0.0, max_value=10000.0, value=60.0, step=1.0, key="launch_elevation")
         launch_site_orientation = st.number_input('Launch site orientation (from the East)', min_value=-180.0, max_value=180.0, value=20.0, step=1.0, key="launch_site_orientation")
         average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=1000000.0, value=101325.0, step=1.0, key="average_pressure")
-        average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0, key="average_humidity")
+        
+        #average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0, key="average_humidity")
     # Add a submit button
     
     
@@ -61,6 +128,11 @@ with st.form("Simulation Settings"):
         # Auxiliary functions
         deg2rad=pi/180
         rad2deg=180/pi
+
+        # Convert the simulation date and time to a timezone-aware datetime object
+        sim_datetime = datetime.datetime.combine(sim_date, sim_time)
+        sim_datetime = sim_datetime.replace(tzinfo=pytz.timezone(timezone_dict[sim_timezone]))
+
 
         # ------ Configuration of time simulation related data ------ #
         Start=0                     # [s]  # Starting time of simulation
@@ -85,12 +157,16 @@ with st.form("Simulation Settings"):
 
         Max_altitude=1000000     # [m] # Max. altitude
         Max_range=1250000        # [m] # Max. range
-
-        Detonate=FALSE          # Statement for detonation or not
-        Detonate_altitude=900  # [m] # Altitude for detonation
+        
+        if "Detonation" in conditions:
+            Detonate=TRUE
+            Detonate_altitude=900
+        else:           # Statement for detonation or not
+            Detonate=FALSE          # Statement for detonation or not
+         # [m] # Altitude for detonation
 
         # ___________________ Initialization of data ________________ #
-        date=[sim_date.year, sim_date.month, sim_date.day, sim_time.hour, sim_time.minute, sim_time.second]                # List containing date
+        date=[sim_datetime.year, sim_datetime.month, sim_datetime.day, sim_datetime.hour, sim_datetime.minute, sim_datetime.second]                # List containing date
         julian_date=Clock().julian_day(date)                         # Obtaining Julian Date
         gmst_0=Clock().gmst(julian_date,1)                           # Initial Greenwich Mean Sidereal Time [rad]
 
