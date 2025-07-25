@@ -2,8 +2,8 @@
 import streamlit as st
 import json
 import numpy as np
-import pyvista as pv
-from stpyvista import stpyvista
+import pyvista as pv # type: ignore
+from stpyvista import stpyvista # type: ignore
 
 try:
     with open("rockets.json", "r") as file:
@@ -98,7 +98,7 @@ bodytube = {
     
 st.set_page_config(page_title="Rocket Settings", page_icon=":material/rocket:", layout="wide")
 rock_set = st.form("Rocket Settings")
-rock_set.write("Rocket Settings")
+rock_set.title("Rocket Settings")
     
 left_column, middle_column, right_column = rock_set.columns([2, 2, 4])
     

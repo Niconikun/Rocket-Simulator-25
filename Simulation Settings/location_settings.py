@@ -2,8 +2,10 @@ import streamlit as st
 from streamlit_keplergl import keplergl_static
 from keplergl import KeplerGl
 import json
+import pandas as pd
 
-st.write("Location Settings")
+st.set_page_config(page_title="Location Settings", page_icon=":material/rocket:", layout="wide")
+st.title("Location Settings")
 
 
 st.subheader("Location Properties")
@@ -30,10 +32,16 @@ with right_column:
             }
         },
     }
-        
+
+    position_data = pd.DataFrame({
+    'Latitude': [launch_site_lat],
+    'Longitude': [launch_site_lon]
+    })
+
+
     map_1 = KeplerGl()
     map_1.config = config
-
+    map_1.add_data(data=position_data, name="position")
     keplergl_static(map_1, center_map=True)
 
 # Add a submit button

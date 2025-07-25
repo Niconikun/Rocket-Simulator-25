@@ -4,6 +4,7 @@ import numpy as np
 from streamlit_keplergl import keplergl_static
 from keplergl import KeplerGl
 import json
+import geopy as geo
 
 st.set_page_config(page_title="Rocket Simulator Dashboard", page_icon=":rocket:", layout="wide")
 st.title("Rocket Simulator Dashboard")
@@ -72,7 +73,7 @@ map_1.config = config
 #map_1.add_data(data=trajectory_data, name="Rayon's Trajectory")
 
 #st.write(map_1)
-keplergl_static(map_1)
+keplergl_static(map_1, height=600, width=1000, center_map=True)
 #chart_data = pd.DataFrame(np.random.randn(20, 3), columns=["a", "b", "c"])
 
 left_up, middle_up, right_up = st.columns(3)
@@ -81,21 +82,83 @@ left_down, middle_down, right_down = st.columns(3)
 st.subheader("Rocket Performance Charts")
 
 left_up.write('Bodyframe Velocities vs Time')
-left_up.line_chart(chart_data_compressed, x="Simulation time", y=["v_bx","v_by","v_bz"], x_label="Flight time [s]", y_label="Velocidad Bodyframe [m/s]")
+left_up.line_chart(chart_data_compressed, x="Simulation time", y=["v_bx","v_by","v_bz"], x_label="Flight time [s]", y_label="Velocidad Bodyframe [m/s]", color=["#ffffff", "#cccccc", "#aaaaaa"])
 
 middle_up.write('Altitude vs Range')
-middle_up.line_chart(chart_data_compressed, x="Range", y="Up coordinate", x_label="Distancia [m]", y_label="Altitud [m]")
+middle_up.line_chart(chart_data_compressed, x="Range", y="Up coordinate", x_label="Distancia [m]", y_label="Altitud [m]", color="#ffffff")
 
 right_up.write('Lift vs Time')
-right_up.line_chart(chart_data_compressed, x="Simulation time", y="Lift force in bodyframe", x_label="Tiempo de vuelo [s]", y_label="Fuerza de sustentación [N]")
+right_up.line_chart(chart_data_compressed, x="Simulation time", y="Lift force in bodyframe", x_label="Tiempo de vuelo [s]", y_label="Fuerza de sustentación [N]", color="#ffffff")
 
 left_down.write('Pitch, Altitude vs Time')
-left_down.line_chart(chart_data_compressed, x="Simulation time", y=["Pitch angle", "Up coordinate"], x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad] / Altitud [m]")
+left_down.line_chart(chart_data_compressed, x="Simulation time", y=["Pitch angle", "Up coordinate"], x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad] / Altitud [m]", color=["#ffffff", "#888888"])
 
 middle_down.write('Pitch vs Time')
-middle_down.line_chart(chart_data_compressed, x="Simulation time", y="Pitch angle", x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad]")
+middle_down.line_chart(chart_data_compressed, x="Simulation time", y="Pitch angle", x_label="Tiempo de vuelo [s]", y_label="Ángulo de cabeceo [rad]", color="#ffffff")
 
 right_down.write('Alpha vs Time')
-right_down.line_chart(chart_data_compressed, x="Simulation time", y="Angle of attack", x_label="Tiempo de vuelo [s]", y_label="Ángulo de ataque [rad]")
+right_down.line_chart(chart_data_compressed, x="Simulation time", y="Angle of attack", x_label="Tiempo de vuelo [s]", y_label="Ángulo de ataque [rad]", color="#ffffff")
 
 st.subheader("Risk Analysis")
+
+geojson_dict = {
+       "type": "FeatureCollection",
+       "features": [{
+           "type": "Feature",
+           "geometry": {
+               "type": "Point",
+               "coordinates": [102.0, 0.5]
+           },
+           "properties": {
+               "prop0": "value0"
+           }
+       }, {
+           "type": "Feature",
+           "geometry": {
+               "type": "LineString",
+               "coordinates": [
+                   [102.0, 0.0],
+                   [103.0, 1.0],
+               ]
+           },
+           "properties": {
+               "prop0": "value0",
+               "prop1": 0.0
+           }
+       }, {
+           "type": "Feature",
+           "geometry": {
+               "type": "Polygon",
+               "coordinates": [
+                   [
+                       [100.0, 0.0],
+                       [101.0, 0.0],
+                       [101.0, 1.0],
+                       [100.0, 1.0],
+                       [100.0, 0.0]
+                   ]
+               ]
+           },
+           "properties": {
+               "prop0": "value0",
+               "prop1": {
+                   "this": "that"
+               }
+           }
+       }]
+   }
+
+risk_map = KeplerGl(height=600, data={"risk_layer": geojson_dict})
+risk_map.config = {
+    "version": "v1",
+    "config": {
+        "mapState": {
+            "bearing": 0,
+            "latitude": chart_data.iloc[0]["Location Latitude"],
+            "longitude": chart_data.iloc[0]["Location Longitude"],
+            "pitch": 60,
+            "zoom": 2,
+        }
+    },
+}
+keplergl_static(risk_map, height=600, width=1000, center_map=True)
