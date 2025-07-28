@@ -4,7 +4,7 @@ import numpy as np
 from streamlit_keplergl import keplergl_static
 from keplergl import KeplerGl
 import json
-import geopy as geo
+import geopy as geo #type: ignore
 
 st.set_page_config(page_title="Rocket Simulator Dashboard", page_icon=":rocket:", layout="wide")
 st.title("Rocket Simulator Dashboard")

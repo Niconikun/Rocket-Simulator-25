@@ -11,6 +11,11 @@ import MatTools as Mat
 import json
 import pandas as pd
 import pytz
+from operator import add
+
+
+
+st.set_page_config(page_title="Rocket Simulator Settings", layout="wide")
 
 with open('rockets.json', 'r') as file:
     rocket_settings = json.load(file)
