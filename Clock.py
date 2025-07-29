@@ -41,29 +41,21 @@ rad2deg=180/pi
 class Clock(object):
     "julian day, GMST..."
     def __init__(self):
-                
-        Delta_UT1=-0.11  # Delta UT1 from [Schl17]
-       
-        # Obtains current date and time from library datetime using Delta_UT1                                        
-        self.current_time_utc=datetime.now(timezone.utc)    
-        self.current_year_ut1=self.current_time_utc.year                  # Year
-        self.current_month_ut1=self.current_time_utc.month                # Month
-        self.current_day_ut1=self.current_time_utc.day                    # Day
-        self.current_hour_ut1=self.current_time_utc.hour                  # Hour
-        self.current_minute_ut1=self.current_time_utc.minute              # Minute
-        self.current_second_ut1=self.current_time_utc.second + Delta_UT1  # Second
-        
-        # Arranges date as an array (could be a list as well)
-        self.time_vector=np.array([self.current_year_ut1,self.current_month_ut1,
-                                  self.current_day_ut1, self.current_hour_ut1,
-                                  self.current_minute_ut1,self.current_second_ut1])
-      
-        # Julian day calculation, [Vall13]
-        self.j_day=(367*self.time_vector[0] - 
-            int((7*(self.time_vector[0]+int((self.time_vector[1]+9)/(12))))/(4)) + 
-            int((275*self.time_vector[1])/9) + self.time_vector[2] + 1721013.5 + 
-            ((((self.time_vector[5]/60)+self.time_vector[4])/60)+self.time_vector[3])/24)
-    
+        # Usar dataclasses para simplificar la inicialización
+        self.Delta_UT1 = -0.11
+        # Obtener tiempo una sola vez y reutilizar
+        current_time = datetime.now(timezone.utc)
+        self.time_vector = np.array([
+            current_time.year,
+            current_time.month,
+            current_time.day,
+            current_time.hour,
+            current_time.minute,
+            current_time.second + self.Delta_UT1
+        ])
+        # Calcular j_day directamente
+        self._calculate_julian_day()
+
     # List of date and time
     def time_utc(self):                        
         'Obtain current ut1 time in Greenwich in a vector automatically'
@@ -109,3 +101,10 @@ class Clock(object):
             self.GMST=(self.GMST_degrees)*deg2rad
         
         return self.GMST
+
+    def _calculate_julian_day(self):
+        # Julian day calculation, [Vall13]
+        self.j_day=(367*self.time_vector[0] - 
+            int((7*(self.time_vector[0]+int((self.time_vector[1]+9)/(12))))/(4)) + 
+            int((275*self.time_vector[1])/9) + self.time_vector[2] + 1721013.5 + 
+            ((((self.time_vector[5]/60)+self.time_vector[4])/60)+self.time_vector[3])/24)

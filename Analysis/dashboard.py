@@ -9,18 +9,27 @@ import geopy as geo #type: ignore
 st.set_page_config(page_title="Rocket Simulator Dashboard", page_icon=":rocket:", layout="wide")
 st.title("Rocket Simulator Dashboard")
 
-chart_data= pd.read_pickle("sim_data.pkl")
+@st.cache_data
+def load_simulation_data():
+    return pd.read_pickle("sim_data.pkl")
 
-chart_data_compressed = chart_data.iloc[::20, :]
+chart_data = load_simulation_data()
 
-#with open('rockets.json', 'r') as file:
- #   rocket_settings = json.load(file)
+# Usar menos puntos para el mapa
+COMPRESSION_FACTOR = 50  # Ajustar según necesidad
+chart_data_compressed = chart_data.iloc[::COMPRESSION_FACTOR, :]
 
-#with open('locations.json', 'r') as file:
- #   location_settings = json.load(file)
+# Precalcular métricas comunes
+@st.cache_data
+def calculate_metrics(data):
+    return {
+        "total_time": round(data.iloc[-1]["Simulation time"], 2),
+        "max_range": round(data.iloc[-1]["Range"] / 1000, 2),
+        "max_alt": round(max(data.loc[:,"Up coordinate"]) / 1000, 3),
+        # ... otras métricas
+    }
 
-#Latitude = location_settings[location_name]['latitude']
-#Longitude = location_settings[location_name]['longitude']
+metrics = calculate_metrics(chart_data)
 
 a, b, c = st.columns(3)
 d, e, f = st.columns(3)
@@ -30,9 +39,9 @@ j = st.columns(1)
 
 st.subheader("Rocket Performance Metrics")
 
-a.metric("Total Flight Time", str(round((chart_data.iloc[-1]["Simulation time"]), 2)) + "s", border=True)
-b.metric("Max Range", str(round((chart_data.iloc[-1]["Range"]) / 1000,2)) + 'km', border=True)
-c.metric("Max Alt", str(round((max(chart_data.loc[:,"Up coordinate"])) / 1000,3)) + "km", str(round((chart_data.loc[chart_data.loc[:,"Up coordinate"].idxmax(), "Simulation time"]),2))+ "s", border=True)
+a.metric("Total Flight Time", str(metrics["total_time"]) + "s", border=True)
+b.metric("Max Range", str(metrics["max_range"]) + 'km', border=True)
+c.metric("Max Alt", str(metrics["max_alt"]) + "km", str(round((chart_data.loc[chart_data.loc[:,"Up coordinate"].idxmax(), "Simulation time"]),2))+ "s", border=True)
 
 d.metric("Pitch at Max Alt", str(round((chart_data.loc[chart_data.loc[:,"Up coordinate"].idxmax(),"Pitch angle"]),2)) + '°', border=True)
 e.metric("Initial Mass", str(round(chart_data.iloc[0]["Mass of the rocket"],3)) + 'kg', border=True)

@@ -1,4 +1,4 @@
-streamlit
+streamlit>=1.24.0
 keplergl
 streamlit_keplergl
 streamlit_globe
@@ -6,13 +6,10 @@ scipy
 numpy
 pandas
 fluids
-os
 cmath
-pickle
-matplotlib.pyplot
+matplotlib
 datetime
 flask
-json
 navpy
 pyvista
 stpyvista

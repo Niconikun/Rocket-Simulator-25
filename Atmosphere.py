@@ -28,6 +28,7 @@ ___ _     _________ _     ___ _
 """
 # Imports
 from fluids import ATMOSPHERE_1976 as atmos76
+from functools import lru_cache
 
 # Define class for atmosphere
 class Atmosphere(object):
@@ -41,11 +42,16 @@ class Atmosphere(object):
         self.temp_sensed=temp_sensed+273.15                 # [K]   # Transforms [°C] to [K]
         self.offset=self.temp_sensed -self.sea_level_temp   # [K]   # Temperature offset 
 
+    @staticmethod
+    @lru_cache(maxsize=128)  # Agregar caché para cálculos repetidos
+    def _get_atmosphere_data(height, offset):
+        return atmos76(height, offset)
+    
     def give_temp(self,height):
         'Gets temperature [K]'
 
-        self.atmosphere=atmos76(height,self.offset) 
-        return self.atmosphere.T
+        atm = self._get_atmosphere_data(height, self.offset)
+        return atm.T
 
     def give_press(self,height):
         'Gets atmospheric pressure [Pa]'

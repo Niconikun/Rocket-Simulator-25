@@ -3,24 +3,31 @@ from Clock import Clock
 from Planet import Planet
 from Atmosphere import Atmosphere
 from Rocket import Rocket
-from cmath import pi
-from pickle import FALSE, TRUE
+from math import pi
 import numpy as np
 import datetime
 import MatTools as Mat
 import json
 import pandas as pd
 import pytz
-from operator import add
 
 
 
 st.set_page_config(page_title="Rocket Simulator Settings", layout="wide")
 
-with open('rockets.json', 'r') as file:
-    rocket_settings = json.load(file)
-with open('locations.json', 'r') as file:
-    location_settings = json.load(file)
+def load_json_file(filename):
+    try:
+        with open(filename, 'r') as file:
+            return json.load(file)
+    except FileNotFoundError:
+        st.error(f"Error: {filename} no encontrado")
+        return {}
+    except json.JSONDecodeError:
+        st.error(f"Error: {filename} tiene un formato inválido")
+        return {}
+
+rocket_settings = load_json_file('rockets.json')
+location_settings = load_json_file('locations.json')
 
 timezone_dict = {
         "United States": "America/New_York",
@@ -90,7 +97,7 @@ st.markdown("##")
 with st.form("Simulation Settings"):
 
     left_column, right_column = st.columns(2)
-    sim_runtime = st.slider('Simulation runtime [s]', min_value=0, max_value=1000, value=200, step=10, key="sim_runtime")
+    sim_runtime = st.slider('Simulation runtime [s]', min_value=0, max_value=1000, value=600, step=10, key="sim_runtime")
     with left_column:
         #info
         st.subheader("Simulation Properties")
@@ -162,12 +169,13 @@ with st.form("Simulation Settings"):
 
         Max_altitude=1000000     # [m] # Max. altitude
         Max_range=1250000        # [m] # Max. range
+        Detonate_altitude=900
         
-        if "Detonation" in conditions:
-            Detonate=TRUE
-            Detonate_altitude=900
+        if conditions and "Detonation" in conditions:
+            Detonate=True
+            
         else:           # Statement for detonation or not
-            Detonate=FALSE          # Statement for detonation or not
+            Detonate=False          # Statement for detonation or not
          # [m] # Altitude for detonation
 
         # ___________________ Initialization of data ________________ #
@@ -217,7 +225,7 @@ with st.form("Simulation Settings"):
             Sistema.save_data()
 
             if Sistema.time>=1:
-                if Sistema.r_enu[2]<Sistema.hist_up[-2] and Sistema.r_enu[2]<Detonate_altitude and Detonate==TRUE:
+                if Sistema.r_enu[2]<Sistema.hist_up[-2] and Sistema.r_enu[2]<Detonate_altitude and Detonate==True:
                     st.warning(f"Rocket has reached the detonation altitude of {Detonate_altitude} m at time {Sistema.time:.2f} s. Simulation will stop.")
                     break
     

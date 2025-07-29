@@ -98,5 +98,55 @@
             "normal_f_coef_warhead": 2,
             "N_fins": 4
         }
+    },
+    "Campanil 1-A": {
+        "name": "Campanil 1-A",
+        "initial_mass": 7.2,
+        "reference_area": 0.006204,
+        "I_before_burn": {
+                "x": 0.009565202,
+                "y": 0.514492586,
+                "z": 0.51463046
+            },
+            "CoM_before_burn": {
+                "x": 0.110605, 
+                "y": 0.01413, 
+                "z": 0.036199 
+            },
+            "I_after_burn": {
+                "x": 0.008879229,
+                "y": 0.486941936,
+                "z": 0.487079846
+            },
+            "CoM_after_burn": {
+                "x": 0.131443,
+                "y": 0.014128,
+                "z": 0.036167
+            },
+        "engine": {
+            "burn_time": 2.39,
+            "nozzle_exit_diameter": 0.032,
+            "mass_flux": 0.629,
+            "gas_speed": 1225.98, 
+            "exit_pressure": 178480
+        },
+        "geometry": {
+            "len_warhead": 200,
+            "len_nosecone_fins": 1000,
+            "len_nosecone_rear": 1199.47,
+            "len_bodytube_wo_rear": 930,
+            "fins_chord_root": 130,
+	        "fins_chord_tip": 0, 
+            "fins_mid_chord": 86.96,
+            "len_rear": 69.334,
+            "fins_span": 136, 
+            "diameter_warhead_base": 103,
+            "diameter_bodytube": 103, 
+            "diameter_bodytube_fins": 103,
+            "diameter_rear_bodytube": 71.7,
+            "end_diam_rear": 36.8, 
+            "normal_f_coef_warhead": 2,
+            "N_fins": 4
+        }
     }
 }

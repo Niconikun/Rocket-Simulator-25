@@ -123,6 +123,15 @@ class Rocket(object):
         self.hist_long=[]
         self.hist_alt=[]
 
+        # Preallocate historical arrays
+        self._initialize_history_arrays()
+    
+    def _initialize_history_arrays(self):
+        # Preasignar memoria para arrays históricos
+        estimated_size = 10000  # Ajustar según necesidades
+        self.hist_r_enu = np.zeros((estimated_size, 3))
+        self.hist_v_enu = np.zeros((estimated_size, 3))
+
     def update_gmst(self,gmst):
         "Updates Greenwich Mean Sidereal Time from Planet Module"
         self.gmst=gmst  # [rad]    # Greenwich Mean Sidereal Time (rotation of Earth Centered-Earth Fixed from Earth Centered Inertial systems)
