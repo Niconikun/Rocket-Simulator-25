@@ -9,5 +9,3 @@ How to run:
 - clone repository
 - write in terminal "streamlit run streamlit-app.py"
 - A website will open, that is the simulator.
-
-
