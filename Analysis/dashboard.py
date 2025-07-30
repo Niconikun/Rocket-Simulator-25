@@ -205,8 +205,8 @@ geojson_dict = {
            "geometry": {
                "type": "LineString",
                "coordinates": [
-                   [102.0, 0.0],
-                   [103.0, 1.0],
+                   [chart_data['Location Latitude'].iloc[0], chart_data['Location Longitude'].iloc[0]],
+                   [chart_data['Location Latitude'].iloc[-1], chart_data['Location Longitude'].iloc[-1]],
                ]
            },
            "properties": {
