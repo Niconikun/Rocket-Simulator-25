@@ -10,6 +10,7 @@ import MatTools as Mat
 import json
 import pandas as pd
 import pytz
+import logging
 
 
 
@@ -114,7 +115,7 @@ with st.form("Simulation Settings"):
         sim_rocket = st.selectbox('Rocket Selection', options=list(rocket_settings.keys()), index=0, key="sim_rocket")
         sim_location = st.selectbox('Location Selection', options=list(location_settings.keys()), index=1, key="sim_location")
         average_temperature = st.number_input('Average temperature [C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0, key="average_temperature")
-        launch_elevation = st.number_input('Launch elevation [m]', min_value=0.0, max_value=10000.0, value=60.0, step=1.0, key="launch_elevation")
+        launch_elevation = st.number_input('Launch elevation [°]', min_value=0.0, max_value=10000.0, value=60.0, step=1.0, key="launch_elevation")
         launch_site_orientation = st.number_input('Launch site orientation (from the East)', min_value=-180.0, max_value=180.0, value=20.0, step=1.0, key="launch_site_orientation")
         average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=1000000.0, value=101325.0, step=1.0, key="average_pressure")
         
@@ -126,7 +127,6 @@ with st.form("Simulation Settings"):
     if run:
 
         st.info("Running!")
-        open("sim_data.pkl", "w").close() # Clear previous simulation data
         # loading json file for location and rocket settings
         # (This part should be replaced with actual loading of the JSON file)
 
@@ -155,7 +155,7 @@ with st.form("Simulation Settings"):
         # ___________________ Initial data to be INPUT ________________ #  # (All of this should to be obtained from external file!!!)
         East=0        # [m]   # X axis initial location of rocket from platform
         North=0       # [m]   # Y axis initial location of rocket from platform
-        Up=0.1        # [m]   # Z axis initial location of rocket from platform  (do not set at 0...this is in order to used a conditional later on for max. alt and range)
+        Up=1.0        # [m]   # Z axis initial location of rocket from platform  (do not set at 0...this is in order to used a conditional later on for max. alt and range)
 
         Vel_east=0    # [m/s]   # X axis initial velocity of rocket from platform
         Vel_north=0   # [m/s]   # Y axis initial velocity of rocket from platform
@@ -216,8 +216,8 @@ with st.form("Simulation Settings"):
             Sistema.update_pos_vel(coordinates)
             Sistema.update_atmosphere(Environment.give_dens(Sistema.r_enu[2]),Environment.give_press(Sistema.r_enu[2]),Environment.give_v_sonic(Sistema.r_enu[2]))    
             Sistema.update_aerodynamics(sim_rocket)
-            Sistema.update_engine(sim_rocket)
             Sistema.update_forces_aero(reference_area=rocket_settings[sim_rocket]['reference_area'])
+            Sistema.update_engine(sim_rocket)
             Sistema.update_forces_engine()
             Sistema.update_forces_torques()
             Sistema.update_g_accel(coordinates)
@@ -230,8 +230,12 @@ with st.form("Simulation Settings"):
                     break
     
             # Conditional to stop when reached
-            if Sistema.r_enu[2]<=0 or Sistema.r_enu[2]>=Max_altitude or Sistema.range>= Max_range:
-                st.warning(f"Rocket has reached the maximum altitude of {Max_altitude} m or maximum range of {Max_range} m at time {Sistema.time:.2f} s. Simulation will stop.")
+            if (Sistema.r_enu[2]<=0 or 
+                Sistema.r_enu[2]>=Max_altitude or 
+                Sistema.range>= Max_range or
+                np.isnan(Sistema.r_enu[2]) or  # Detectar valores NaN
+                abs(Sistema.v_enu[2]) > 1e4):  # Detectar velocidades irreales
+                st.warning("Simulation stopped due to physical limits or numerical instability")
                 break
 
             Time.append(t)
@@ -240,67 +244,201 @@ with st.form("Simulation Settings"):
             # Rocket's updating of simulation time
             Sistema.update_time(sim_time_step)
 
-        st.success("Finished!")
-        df = pd.DataFrame({
-                    "Rocket name": sim_rocket,
-                    "Location name": sim_location,
-                    "Location Latitude": Latitude,
-                    "Location Longitude": Longitude,
-                    "East-North-Up location from platform": Sistema.hist_r_enu,
-                    "East-North-Up velocity from platform": Sistema.hist_v_enu,
-                    "Quaternion that rotates from East-North-Up to bodyframe": Sistema.hist_q_enu2b,
-                    "q_enu2b_1": Sistema.hist_q_enu2b_1,
-                    "q_enu2b_2": Sistema.hist_q_enu2b_2,
-                    "q_enu2b_3": Sistema.hist_q_enu2b_3,
-                    "q_enu2b_4": Sistema.hist_q_enu2b_4,
-                    "Rotational velocity in East-North-Up": Sistema.hist_w_enu,
-                    "Greenwich Mean Sidereal Time": Sistema.hist_gmst,
-                    "Simulation time": Sistema.hist_time,
-                    "Inertia matrix in bodyframe": Sistema.hist_inertia_b,
-                    "Mass of the rocket": Sistema.hist_mass,
-                    "Center of mass in bodyframe": Sistema.hist_cm_b,
-                    "Yaw angle": Sistema.hist_yaw,
-                    "Pitch angle": Sistema.hist_pitch,
-                    "Roll angle": Sistema.hist_roll,
-                    "Velocity in bodyframe": Sistema.hist_v_b,
-                    "v_bx": Sistema.hist_v_bx,
-                    "v_by": Sistema.hist_v_by,
-                    "v_bz": Sistema.hist_v_bz,
-                    "Angle of attack": Sistema.hist_alpha,
-                    "Density of the atmosphere": Sistema.hist_density,
-                    "Ambient pressure": Sistema.hist_press_amb,
-                    "Speed of sound": Sistema.hist_v_sonic,
-                    "Mach number": Sistema.hist_mach,
-                    "Drag coefficient": Sistema.hist_drag_coeff,
-                    "Lift coefficient": Sistema.hist_lift_coeff,
-                    "Center of pressure in bodyframe": Sistema.hist_cp_b,
-                    "Mass flux": Sistema.hist_mass_flux,
-                    "Thrust": Sistema.hist_thrust,
-                    "Drag force in bodyframe": Sistema.hist_drag,
-                    "Lift force in bodyframe": Sistema.hist_lift,
-                    "Center of mass to center of pressure in bodyframe": Sistema.hist_cm2cp_b,
-                    "Aerodynamic forces in bodyframe": Sistema.hist_forces_aero_b,
-                    "Aerodynamic torques in bodyframe": Sistema.hist_torques_aero_b,
-                    "Engine forces in bodyframe": Sistema.hist_forces_engine_b,
-                    "Engine torques in bodyframe": Sistema.hist_torques_engine_b,
-                    "Range": Sistema.hist_range,
-                    "East coordinate": Sistema.hist_east,
-                    "North coordinate": Sistema.hist_north,
-                    "Up coordinate": Sistema.hist_up,
-                    "Velocity norm": Sistema.hist_v_norm,
-                    "Geographic coordinates": Sistema.hist_coord,
-                    "Latitude": Sistema.hist_lat,
-                    "Longitude": Sistema.hist_long,
-                    "Altitude": Sistema.hist_alt
-                    })
+            if i % 100 == 0:  # Log cada 100 pasos
+                logging.debug(f"t={t:.3f}s, h={Sistema.r_enu[2]:.2f}m, v={Sistema.v_norm:.2f}m/s")
         
-        st.write(df)
-        df.to_pickle("sim_data.pkl")
+            # Verificar estabilidad numérica
+            if np.any(np.isnan(Sistema.r_enu)) or np.any(np.isnan(Sistema.v_enu)):
+                raise RuntimeError("Numerical instability detected")
+            
 
-        #add save button
-        #if st.button("Save Simulation Data"):
-          #  df.to_csv("simulation_data.csv", index=False)
-           # st.success("Simulation data saved successfully!")
+        st.success("Finished!")
+        
+        # Primero, definimos una función auxiliar mejorada para preparar los datos
+        def prepare_data_for_storage(data):
+            """
+            Prepara los datos para almacenamiento, convirtiendo arrays y objetos complejos a formato serializable
+            """
+            if isinstance(data, np.ndarray):
+                if data.ndim == 0:  # Si es un array escalar
+                    return float(data)  # Convertir a float
+                if data.ndim > 1:
+                    return [prepare_data_for_storage(row) for row in data]
+                return list(data)
+            if isinstance(data, list):
+                if len(data) > 0 and isinstance(data[0], np.ndarray):
+                    return [prepare_data_for_storage(item) for item in data]
+                return data
+            return data
+
+        try:
+            # Obtener la longitud de los datos de simulación
+            sim_length = len(Sistema.hist_time)
+            
+            # Modificar cómo se manejan los componentes del cuaternión
+            df_data = {
+                # Replicar valores escalares
+                "Rocket name": [sim_rocket] * sim_length,
+                "Location name": [sim_location] * sim_length,
+                "Location Latitude": [float(Latitude)] * sim_length,
+                "Location Longitude": [float(Longitude)] * sim_length,
+                
+                # Datos de la simulación, coordenadas y velocidad
+                "Simulation time": prepare_data_for_storage(np.array(Sistema.hist_time)),
+                "Greenwich Mean Sidereal Time": prepare_data_for_storage(np.array(Sistema.hist_gmst)),
+                "Range": prepare_data_for_storage(np.array(Sistema.hist_range)),
+                "East coordinate": prepare_data_for_storage(np.array(Sistema.hist_east)),
+                "North coordinate": prepare_data_for_storage(np.array(Sistema.hist_north)),
+                "Up coordinate": prepare_data_for_storage(np.array(Sistema.hist_up)),
+                "Velocity norm": prepare_data_for_storage(np.array(Sistema.hist_v_norm)),
+                "Latitude": prepare_data_for_storage(np.array(Sistema.hist_lat)),
+                "Longitude": prepare_data_for_storage(np.array(Sistema.hist_long)),
+                "Altitude": prepare_data_for_storage(np.array(Sistema.hist_alt)),
+                "East-North-Up location from platform": prepare_data_for_storage(Sistema.hist_r_enu),
+                "East-North-Up velocity from platform": prepare_data_for_storage(Sistema.hist_v_enu),
+                "Pitch Angle": prepare_data_for_storage(np.array(Sistema.hist_pitch)),
+                "Yaw Angle": prepare_data_for_storage(np.array(Sistema.hist_yaw)),
+                "Roll Angle": prepare_data_for_storage(np.array(Sistema.hist_roll)),
+                "Angle of attack": prepare_data_for_storage(np.array(Sistema.hist_alpha)),
+                "v_bx": prepare_data_for_storage(np.array(Sistema.hist_v_bx)),
+                "v_by": prepare_data_for_storage(np.array(Sistema.hist_v_by)),
+                "v_bz": prepare_data_for_storage(np.array(Sistema.hist_v_bz)),
+                "Rotational velocity in East-North-Up": prepare_data_for_storage(np.array(Sistema.hist_w_enu)),
+                
+                # Atmosfera
+                "Density of the atmosphere": prepare_data_for_storage(np.array(Sistema.hist_density)),
+                "Ambient pressure": prepare_data_for_storage(np.array(Sistema.hist_press_amb)),
+                "Speed of sound": prepare_data_for_storage(np.array(Sistema.hist_v_sonic)),
+                "Mach number": prepare_data_for_storage(np.array(Sistema.hist_mach)),
+
+                # Fuerzas y torques
+                "Mass of the rocket": prepare_data_for_storage(np.array(Sistema.hist_mass)),
+                "Drag coefficient": prepare_data_for_storage(np.array(Sistema.hist_drag_coeff)),
+                "Lift coefficient": prepare_data_for_storage(np.array(Sistema.hist_lift_coeff)),
+                "Thrust": prepare_data_for_storage(np.array(Sistema.hist_thrust)),
+                "Inertia matrix in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_inertia_b)),
+                "Center of mass in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm_b)),
+                "Center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cp_b)),
+                "Mass flux": prepare_data_for_storage(np.array(Sistema.hist_mass_flux)),
+                "Drag force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_drag)),
+                "Lift force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_lift)),
+                "Center of mass to center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm2cp_b)),
+                "Aerodynamic forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_aero_b)),
+                "Aerodynamic torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_aero_b)),
+                "Engine forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_engine_b)),
+                "Engine torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_engine_b)),
+                "Acceleration in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_accel_b)),
+                
+                
+                # Separar los componentes del cuaternión en columnas individuales
+                "Quaternion_1": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_1)),
+                "Quaternion_2": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_2)),
+                "Quaternion_3": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_3)),
+                "Quaternion_4": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_4)),
+            }
+
+            # Asegurarse de que todas las listas tengan la misma longitud
+            min_length = min(len(Sistema.hist_time), len(Sistema.hist_range), len(Sistema.hist_east),
+                            len(Sistema.hist_north), len(Sistema.hist_up), len(Sistema.hist_v_norm),
+                            len(Sistema.hist_lat), len(Sistema.hist_long), len(Sistema.hist_alt),
+                            len(Sistema.hist_cm2cp_b), len(Sistema.hist_forces_aero_b),
+                            len(Sistema.hist_torques_aero_b), len(Sistema.hist_forces_engine_b),
+                            len(Sistema.hist_torques_engine_b))
+
+            # Truncar todas las listas a la longitud mínima
+            df_data = {
+                "Rocket name": [sim_rocket] * min_length,
+                "Location name": [sim_location] * min_length,
+                "Location Latitude": [float(Latitude)] * min_length,
+                "Location Longitude": [float(Longitude)] * min_length,
+                # Datos de la simulación, coordenadas y velocidad
+                "Simulation time": prepare_data_for_storage(np.array(Sistema.hist_time[:min_length])),
+                "Greenwich Mean Sidereal Time": prepare_data_for_storage(np.array(Sistema.hist_gmst[:min_length])),
+                "Range": prepare_data_for_storage(np.array(Sistema.hist_range[:min_length])),
+                "East coordinate": prepare_data_for_storage(np.array(Sistema.hist_east[:min_length])),
+                "North coordinate": prepare_data_for_storage(np.array(Sistema.hist_north[:min_length])),
+                "Up coordinate": prepare_data_for_storage(np.array(Sistema.hist_up[:min_length])),
+                "Velocity norm": prepare_data_for_storage(np.array(Sistema.hist_v_norm[:min_length])),
+                "Latitude": prepare_data_for_storage(np.array(Sistema.hist_lat[:min_length])),
+                "Longitude": prepare_data_for_storage(np.array(Sistema.hist_long[:min_length])),
+                "Altitude": prepare_data_for_storage(np.array(Sistema.hist_alt[:min_length])),
+                "East-North-Up location from platform": prepare_data_for_storage(Sistema.hist_r_enu[:min_length]),
+                "East-North-Up velocity from platform": prepare_data_for_storage(Sistema.hist_v_enu[:min_length]),
+                "Pitch Angle": prepare_data_for_storage(np.array(Sistema.hist_pitch[:min_length])),
+                "Yaw Angle": prepare_data_for_storage(np.array(Sistema.hist_yaw[:min_length])),
+                "Roll Angle": prepare_data_for_storage(np.array(Sistema.hist_roll[:min_length])),
+                "Angle of attack": prepare_data_for_storage(np.array(Sistema.hist_alpha[:min_length])),
+                "v_bx": prepare_data_for_storage(np.array(Sistema.hist_v_bx[:min_length])),
+                "v_by": prepare_data_for_storage(np.array(Sistema.hist_v_by[:min_length])),
+                "v_bz": prepare_data_for_storage(np.array(Sistema.hist_v_bz[:min_length])),
+                "Rotational velocity in East-North-Up": prepare_data_for_storage(np.array(Sistema.hist_w_enu[:min_length])),
+                
+                # Atmosfera
+                "Density of the atmosphere": prepare_data_for_storage(np.array(Sistema.hist_density[:min_length])),
+                "Ambient pressure": prepare_data_for_storage(np.array(Sistema.hist_press_amb[:min_length])),
+                "Speed of sound": prepare_data_for_storage(np.array(Sistema.hist_v_sonic[:min_length])),
+                "Mach number": prepare_data_for_storage(np.array(Sistema.hist_mach[:min_length])),
+
+                # Fuerzas y torques
+                "Mass of the rocket": prepare_data_for_storage(np.array(Sistema.hist_mass[:min_length])),
+                "Drag coefficient": prepare_data_for_storage(np.array(Sistema.hist_drag_coeff[:min_length])),
+                "Lift coefficient": prepare_data_for_storage(np.array(Sistema.hist_lift_coeff[:min_length])),
+                "Thrust": prepare_data_for_storage(np.array(Sistema.hist_thrust[:min_length])),
+                "Inertia matrix in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_inertia_b[:min_length])),
+                "Center of mass in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm_b[:min_length])),
+                "Center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cp_b[:min_length])),
+                "Mass flux": prepare_data_for_storage(np.array(Sistema.hist_mass_flux[:min_length])),
+                "Drag force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_drag[:min_length])),
+                "Lift force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_lift[:min_length])),
+                "Center of mass to center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm2cp_b[:min_length])),
+                "Aerodynamic forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_aero_b[:min_length])),
+                "Aerodynamic torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_aero_b[:min_length])),
+                "Engine forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_engine_b[:min_length])),
+                "Engine torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_engine_b[:min_length])),
+                "Acceleration in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_accel_b[:min_length])),
+                
+                # Separar los componentes del cuaternión en columnas individuales
+                "Quaternion_1": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_1[:min_length])),
+                "Quaternion_2": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_2[:min_length])),
+                "Quaternion_3": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_3[:min_length])),
+                "Quaternion_4": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_4[:min_length])),
+            }
+
+            # Verificación de longitudes
+            for key, value in df_data.items():
+                if len(value) != min_length:
+                    st.write(f"Advertencia: {key} tiene longitud {len(value)}, esperada {min_length}")
+            
+            # Crear DataFrame y guardar
+            df = pd.DataFrame(df_data)
+            df.to_parquet("sim_data.parquet", engine='pyarrow')
+            st.success("Datos guardados exitosamente!")
+
+        except Exception as e:
+            st.error(f"Error al guardar los datos: {str(e)}")
+            if df_data:
+                st.write("Debugging info:")
+                for key, value in df_data.items():
+                    try:
+                        if isinstance(value, (list, np.ndarray)):
+                            shape = np.array(value).shape if isinstance(value, np.ndarray) else len(value)
+                            st.write(f"{key}: tipo {type(value)}, forma {shape}")
+                            if len(value) > 0:
+                                st.write(f"Primer elemento: {type(value[0])}")
+                    except Exception as debug_e:
+                        st.write(f"{key}: Error al analizar - {str(debug_e)}")
+            # Dentro del bucle de simulación
+            if abs(t - 11.3) < 0.1:  # Cerca del tiempo crítico
+                st.write(f"""
+                    Estado del cohete en t={t:.2f}s:
+                    Altura: {Sistema.r_enu[2]:.2f}m
+                    Pitch: {Sistema.pitch:.2f}°
+                    Velocidad: {Sistema.v_norm:.2f}m/s
+                    Lift: {Sistema.lift:.2f}N
+                    Ángulo de ataque: {Sistema.alpha:.2f}°
+                    Coef. sustentación: {Sistema.lift_coeff:.4f}
+                    Densidad: {Sistema.density:.4f}kg/m³
+                """)
 
 
 
