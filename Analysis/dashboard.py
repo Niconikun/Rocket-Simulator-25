@@ -27,6 +27,8 @@ def compress_data(data, compression_factor=50):
 @st.cache_data
 def calculate_metrics(data):
     """Calcula métricas principales de la simulación"""
+    accel_magnitudes = [np.linalg.norm(np.array(acc)) for acc in data["Acceleration in bodyframe"]]
+    max_accel_gs = max(accel_magnitudes) / 9.81  # Convertir a G's
     return {
         "total_time": round(data["Simulation time"].iloc[-1], 2),
         "max_range": round(data["Range"].iloc[-1] / 1000, 2),
@@ -34,7 +36,9 @@ def calculate_metrics(data):
         "max_speed": round(data["Velocity norm"].max(), 2),
         "max_mach": round(data["Mach number"].max(), 2),
         "initial_mass": round(data["Mass of the rocket"].iloc[0], 3),
-        "final_mass": round(data["Mass of the rocket"].iloc[-1], 3)
+        "final_mass": round(data["Mass of the rocket"].iloc[-1], 3),
+        "max_accel_g": round(max_accel_gs, 2)
+        
     }
 
 # Cargar y preparar datos
@@ -42,6 +46,47 @@ try:
     chart_data = load_simulation_data()
     chart_data_compressed = compress_data(chart_data)
     metrics = calculate_metrics(chart_data)
+
+    st.subheader("Simulation Parameters")
+    
+    # Crear tres columnas para los parámetros
+    param_col1, param_col2, param_col3 = st.columns(3)
+
+    with param_col1:
+        st.write("📌 Launch Configuration")
+        st.info(f"""
+        **Rocket**: {chart_data['Rocket name'].iloc[0]}
+        **Location**: {chart_data['Location name'].iloc[0]}
+        **Coordinates**: {chart_data['Location Latitude'].iloc[0]:.3f}°S, {chart_data['Location Longitude'].iloc[0]:.3f}°W
+        """)
+
+    with param_col2:
+        st.write("🎯 Initial Conditions")
+        # Crear un DataFrame con los datos iniciales
+        initial_data = pd.DataFrame({
+            "Parameter": ["Launch Elevation", "Initial Mass", "Initial Velocity"],
+            "Value": [
+                f"{chart_data['Pitch Angle'].iloc[0]:.1f}°",
+                f"{chart_data['Mass of the rocket'].iloc[0]:.2f} kg",
+                f"{chart_data['Velocity norm'].iloc[0]:.1f} m/s"
+            ]
+        })
+        st.dataframe(initial_data, hide_index=True)
+
+    with param_col3:
+        st.write("🌡️ Environmental Conditions")
+        env_data = pd.DataFrame({
+            "Parameter": ["Density", "Pressure", "Speed of Sound"],
+            "Value": [
+                f"{chart_data['Density of the atmosphere'].iloc[0]:.3f} kg/m³",
+                f"{chart_data['Ambient pressure'].iloc[0]/1000:.1f} kPa",
+                f"{chart_data['Speed of sound'].iloc[0]:.1f} m/s"
+            ]
+        })
+        st.dataframe(env_data, hide_index=True)
+
+    # Línea divisoria
+    st.markdown("---")
 
     # Layout de métricas
     st.subheader("Rocket Performance Metrics")
@@ -63,7 +108,7 @@ try:
     # Tercera fila de métricas
     col7.metric("Max Speed", f"{metrics['max_speed']}m/s", border=True)
     col8.metric("Max Mach", f"{metrics['max_mach']}", border=True)
-    col9.metric("Max G-Force", "N/A", border=True)
+    col9.metric("Max G-Force", f"{metrics['max_accel_g']}G", border=True)
 
     # Coordenadas de aterrizaje
     col_landing[0].metric("Landing Coordinates", 
@@ -91,9 +136,9 @@ try:
         }
     }
 
-    map_1 = KeplerGl(height=600, data={"trajectory": trajectory_data})
+    map_1 = KeplerGl(data={"trajectory": trajectory_data})
     map_1.config = map_config
-    keplergl_static(map_1, height=600, width=1000, center_map=True)
+    keplergl_static(map_1, height=800, width=1400, center_map=True)
 
     # Gráficos de rendimiento
     st.subheader("Performance Charts")

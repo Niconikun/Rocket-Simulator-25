@@ -47,6 +47,8 @@ from Engine import Engine
 from cmath import pi
 import GeoTools as Geo
 import json
+import streamlit as st
+import logging
 
 class Rocket(object):
     "Calculates all data during simulation. It's the main module of simulation"
@@ -105,8 +107,9 @@ class Rocket(object):
         self.hist_drag=[]               # Drag
         self.hist_lift=[]               # Lift
         self.hist_cm2cp_b=[]            # Centre of pressure's distance from centre of mass
-        self.hist_forces_aero_b=[]      # Aerodynamic forces in bodyframe
+        self.hist_forces_aero_b = []     # Aerodynamic forces in bodyframe
         self.hist_torques_aero_b=[]     # Aerodynamic torques in bodyframe
+        self.hist_accel_b = []
 
         self.hist_forces_engine_b=[]    # Forces produced by engine in bodyframe
         self.hist_torques_engine_b=[]   # Torques produced by engine in bodyframe
@@ -123,14 +126,65 @@ class Rocket(object):
         self.hist_long=[]
         self.hist_alt=[]
 
+        self.forces_aero_b = np.array([0.0, 0.0, 0.0])
+        self.torques_aero_b = np.array([0.0, 0.0, 0.0])
+        self.cm2cp_b = np.array([0.0, 0.0, 0.0])
+        self.accel_b = np.zeros(3)   # Inicializar forces_aero_b
+
         # Preallocate historical arrays
         self._initialize_history_arrays()
     
     def _initialize_history_arrays(self):
-        # Preasignar memoria para arrays históricos
-        estimated_size = 10000  # Ajustar según necesidades
-        self.hist_r_enu = np.zeros((estimated_size, 3))
-        self.hist_v_enu = np.zeros((estimated_size, 3))
+        """Inicializa los arrays históricos como listas Python"""
+        # Inicializar como listas vacías en lugar de numpy arrays
+        self.hist_r_enu = []
+        self.hist_v_enu = []
+        self.hist_q_enu2b = []
+        self.hist_q_enu2b_1 = []
+        self.hist_q_enu2b_2 = []
+        self.hist_q_enu2b_3 = []
+        self.hist_q_enu2b_4 = []
+        self.hist_w_enu = []
+        self.hist_gmst = []
+        self.hist_time = []
+        self.hist_mass = []
+        self.hist_inertia_b = []
+        self.hist_cm_b = []
+        self.hist_yaw = []
+        self.hist_pitch = []
+        self.hist_roll = []
+        self.hist_v_b = []
+        self.hist_v_bx = []
+        self.hist_v_by = []
+        self.hist_v_bz = []
+        self.hist_alpha = []
+        self.hist_density = []
+        self.hist_press_amb = []
+        self.hist_v_sonic = []
+        self.hist_mach = []
+        self.hist_drag_coeff = []
+        self.hist_lift_coeff = []
+        self.hist_cp_b = []
+        self.hist_mass_flux = []
+        self.hist_thrust = []
+        self.hist_drag = []
+        self.hist_lift = []
+        self.hist_cm2cp_b = []
+        self.hist_forces_aero_b = []
+        self.hist_torques_aero_b = []
+        self.hist_forces_engine_b = []
+        self.hist_torques_engine_b = []
+        self.hist_range = []
+        self.hist_east = []
+        self.hist_north = []
+        self.hist_up = []
+        self.hist_v_norm = []
+        self.hist_coord = []
+        self.hist_lat = []
+        self.hist_long = []
+        self.hist_alt = []
+
+
 
     def update_gmst(self,gmst):
         "Updates Greenwich Mean Sidereal Time from Planet Module"
@@ -237,25 +291,40 @@ class Rocket(object):
         "Calculates all aerodynamics related data"
         
         ref_area= reference_area  # [m2]     # Reference area for drag and lift calculation [Valle22]
+        raise RuntimeError(f"Mass became too low: {self.mass}kg")
 
-        # Conditional to avoid Runtime Warning for double zero multiplication
-        if self.drag_coeff==0:                          
-            self.drag=0             
-        else: 
-            self.drag=0.5*self.density*self.drag_coeff*ref_area*(self.v_norm**2)  # [N]   # Drag force  [Barro67]
+    def update_forces_aero(self, reference_area):
+        """Calcula las fuerzas aerodinámicas con mejores validaciones"""
+        try:
+            # Validar valores críticos
+            if not (-180 <= self.alpha <= 180):
+                raise ValueError(f"Ángulo de ataque inválido: {self.alpha}°")
+                
+            if self.v_norm < 1e-6:  # Velocidad casi cero
+                self.drag = 0
+                self.lift = 0
+                return
+                
+            # Cálculo de fuerzas con validación
+            dynamic_pressure = 0.5 * self.density * (self.v_norm**2)
+            
+            self.drag = dynamic_pressure * self.drag_coeff * reference_area
+            self.lift = dynamic_pressure * self.lift_coeff * reference_area
 
-        # Conditional to avoid Runtime Warning for double zero multiplication
-        if self.lift_coeff==0:                          
-            self.lift=0                                       
-        else: 
-            self.lift=0.5*self.density*self.lift_coeff*ref_area*(self.v_norm**2)  # [N]   # Lift force  [Barro67]
-
-        self.forces_drag_b=np.array([-self.drag,0,0])                 # [N]   # Drag force on bodyframe
-        self.forces_lift_b=np.array([0,0,self.lift])                  # [N]   # Lift force on bodyframe ## Assumes that roll will always be 0 [rad/s]   
-        
-        self.cm2cp_b=self.cm_b-self.cp_b                              # [m]   # Distance of centre of pressure from centre of mass
-        self.forces_aero_b=self.forces_drag_b  + self.forces_lift_b   # [N]   # Lift can be neglected if necessary for evaluation
-        self.torques_aero_b=np.cross(self.cm2cp_b,self.forces_aero_b) # [N m] # Torques produced by aerodynamic forces (lift mainly)
+            # Verificar valores razonables
+            max_force = 10000  # 10kN como límite razonable
+            if abs(self.drag) > max_force or abs(self.lift) > max_force:
+                raise ValueError(f"Fuerzas excesivas: Drag={self.drag:.2f}N, Lift={self.lift:.2f}N")
+                
+            self.forces_drag_b = np.array([-self.drag, 0, 0])
+            self.forces_lift_b = np.array([0, 0, self.lift])
+            self.cm2cp_b=self.cm_b-self.cp_b                              # [m]   # Distance of centre of pressure from centre of mass
+            self.forces_aero_b=self.forces_drag_b  + self.forces_lift_b   # [N]   # Lift can be neglected if necessary for evaluation
+            self.torques_aero_b=np.cross(self.cm2cp_b,self.forces_aero_b) # [N m] # Torques produced by aerodynamic forces (lift mainly)
+            
+        except Exception as e:
+            logging.error(f"Error en cálculo aerodinámico: {str(e)}")
+            st.error(f"Error en fuerzas aerodinámicas: {str(e)}")
 
     def update_forces_engine(self):
         "Obtains forces and torques produced by the engine"
@@ -296,9 +365,29 @@ class Rocket(object):
         if abs_force<=abs_grav:
             r_dot_enu=np.zeros(3)
             v_dot_enu=np.zeros(3)
+    def dynamics(self, x):
+        """Calcula las ecuaciones de movimiento"""
+        r_enu = x[0:3]
+        v_enu = x[3:6]
+        q_enu2b = x[6:10]
+        w_b = x[10:13]
+        mass = x[13]
+
+        # Modificar la condición de parada
+        total_force = np.linalg.norm(self.forces_b)
+        total_grav = np.linalg.norm(self.g_b)
+
+        # Solo detener si la velocidad es muy baja y las fuerzas son menores que la gravedad
+        if total_force <= total_grav and np.linalg.norm(v_enu) < 1.0:
+            r_dot_enu = np.zeros(3)
+            v_dot_enu = np.zeros(3)
         else:
-            r_dot_enu=v_enu                                  # [m/s]  # Time derivative of location in East-North-Up system
-            v_dot_enu=(1/mass)*self.forces_enu + self.g_enu  # [m/s2] # Time derivative of velocity in East-North-Up system
+            r_dot_enu = v_enu
+            v_dot_enu = (1/mass)*self.forces_enu + self.g_enu
+
+        # Calcular aceleración en bodyframe
+        forces_total_b = self.forces_b + Mat.q_rot(self.g_enu, self.q_enu2b, 0) * mass
+        self.accel_b = forces_total_b / mass  # [m/s²]
 
         #________Attitude_________#
         
@@ -309,7 +398,7 @@ class Rocket(object):
         w_enu_skew4=Mat.skew4(w_enu)     # [rad/s]     # Rotational velocity as a 4x4 skew matrix
 
         # Conditionals to avoid problems with negative values of velocity and setting and end when landing (same for consistency)
-        if abs_force<=abs_grav:
+        if total_force <= total_grav and np.linalg.norm(v_enu) < 1.0:
             q_dot_enu2b=np.zeros(4)
             w_dot_b=np.zeros(3) 
         else:
@@ -356,7 +445,12 @@ class Rocket(object):
         self.v_enu=new_x[3:6]
         
         q_enu2b=new_x[6:10]
-        self.q_enu2b=Mat.normalise(q_enu2b)  # Quaternion needs to be normalized after propagation
+        q_norm = np.linalg.norm(q_enu2b)
+        if q_norm > 0:
+            self.q_enu2b = q_enu2b / q_norm
+        else:
+            st.error("Error: Quaternion normalization failed")
+            raise RuntimeError("Quaternion became zero")
         
         w_b=new_x[10:13]
         self.w_enu=Mat.q_rot(w_b,q_enu2b,1)
@@ -364,66 +458,80 @@ class Rocket(object):
         self.mass=new_x[13]
 
     def save_data(self):
-        "Saves all obtained data before propagation"
-        self.hist_r_enu.append(self.r_enu)
-        self.hist_v_enu.append(self.v_enu)
-        self.hist_q_enu2b.append(self.q_enu2b)
-        self.hist_q_enu2b_1.append(self.q_enu2b[0])
-        self.hist_q_enu2b_2.append(self.q_enu2b[1])
-        self.hist_q_enu2b_3.append(self.q_enu2b[2])
-        self.hist_q_enu2b_4.append(self.q_enu2b[3])
-        
-        self.hist_w_enu.append(self.w_enu)
+        """Saves all obtained data before propagation"""
+        try:
+            # Datos básicos
+            self.hist_time.append(self.time)
+            self.hist_gmst.append(self.gmst)
+            
+            # Posición y velocidad
+            self.hist_r_enu.append(list(self.r_enu))
+            self.hist_v_enu.append(list(self.v_enu))
+            self.hist_range.append(float(self.range))
+            self.hist_east.append(float(self.r_enu[0]))
+            self.hist_north.append(float(self.r_enu[1]))
+            self.hist_up.append(float(self.r_enu[2]))
+            self.hist_v_norm.append(float(self.v_norm))
+            
+            # Actitud y rotación
+            self.hist_q_enu2b.append(list(self.q_enu2b))
+            self.hist_q_enu2b_1.append(float(self.q_enu2b[0]))
+            self.hist_q_enu2b_2.append(float(self.q_enu2b[1]))
+            self.hist_q_enu2b_3.append(float(self.q_enu2b[2]))
+            self.hist_q_enu2b_4.append(float(self.q_enu2b[3]))
+            self.hist_w_enu.append(list(self.w_enu))
+            
+            # Ángulos
+            self.hist_yaw.append(float(self.yaw))
+            self.hist_pitch.append(float(self.pitch))
+            self.hist_roll.append(float(self.roll))
+            self.hist_alpha.append(float(self.alpha))
+            
+            # Velocidades en bodyframe
+            self.hist_v_b.append(list(self.v_b))
+            self.hist_v_bx.append(float(self.v_b[0]))
+            self.hist_v_by.append(float(self.v_b[1]))
+            self.hist_v_bz.append(float(self.v_b[2]))
+            
+            # Datos atmosféricos
+            self.hist_density.append(float(self.density))
+            self.hist_press_amb.append(float(self.press_amb))
+            self.hist_v_sonic.append(float(self.v_sonic))
+            self.hist_mach.append(float(self.mach))
+            
+            # Coeficientes aerodinámicos
+            self.hist_drag_coeff.append(float(self.drag_coeff))
+            self.hist_lift_coeff.append(float(self.lift_coeff))
+            
+            # Masa e inercia
+            self.hist_mass.append(float(self.mass))
+            self.hist_inertia_b.append(list(self.inertia_b))
+            self.hist_cm_b.append(list(self.cm_b))
+            self.hist_cp_b.append(list(self.cp_b))
+            
+            # Fuerzas y torques
+            self.hist_drag.append(float(self.drag))
+            self.hist_lift.append(float(self.lift))
+            self.hist_thrust.append(float(self.thrust))
+            self.hist_mass_flux.append(float(self.mass_flux))
+            self.hist_accel_b.append(list(self.accel_b))
+            
+            # Vectores de fuerza y torque
+            self.hist_cm2cp_b.append(list(self.cm2cp_b))
+            self.hist_forces_aero_b.append(list(self.forces_aero_b))
+            self.hist_torques_aero_b.append(list(self.torques_aero_b))
+            self.hist_forces_engine_b.append(list(self.forces_engine_b))
+            self.hist_torques_engine_b.append(list(self.torques_engine_b))
+            
+            # Coordenadas geográficas
+            self.hist_coord.append(list(self.coord))
+            self.hist_lat.append(float(self.coord[0]))
+            self.hist_long.append(float(self.coord[1]))
+            self.hist_alt.append(float(self.coord[2]))
 
-        self.hist_gmst.append(self.gmst)
-        self.hist_time.append(self.time)
-    
-        self.hist_inertia_b.append(self.inertia_b)
-        self.hist_mass.append(self.mass)
-        self.hist_cm_b.append(self.cm_b)
-
-        self.hist_yaw.append(self.yaw)
-        self.hist_pitch.append(self.pitch)
-        self.hist_roll.append(self.roll)
-
-        self.hist_v_b.append(self.v_b)
-        self.hist_v_bx.append(self.v_b[0])
-        self.hist_v_by.append(self.v_b[1])
-        self.hist_v_bz.append(self.v_b[2])
-        self.hist_alpha.append(self.alpha)
-
-        self.hist_density.append(self.density)
-        self.hist_press_amb.append(self.press_amb)
-        self.hist_v_sonic.append(self.v_sonic)
-    
-        self.hist_mach.append(self.mach)
-        self.hist_drag_coeff.append(self.drag_coeff)
-        self.hist_lift_coeff.append(self.lift_coeff)
-        self.hist_cp_b.append(self.cp_b)
-
-        self.hist_mass_flux.append(self.mass_flux)
-        self.hist_thrust.append(self.thrust)
-
-        self.hist_drag.append(self.drag)
-        self.hist_lift.append(self.lift)
-        self.hist_cm2cp_b.append(self.cm2cp_b)
-        self.hist_forces_aero_b.append(self.forces_aero_b)
-        self.hist_torques_aero_b.append(self.torques_aero_b)
-
-        self.hist_forces_engine_b.append(self.forces_engine_b)
-        self.hist_torques_engine_b.append(self.torques_engine_b)
-
-        self.hist_range.append(self.range)
-        self.hist_east.append(self.r_enu[0])
-        self.hist_north.append(self.r_enu[1])
-        self.hist_up.append(self.r_enu[2])
-
-        self.hist_v_norm.append(self.v_norm)
-        self.hist_coord.append(self.coord)
-        self.hist_lat.append(self.coord[0])
-        self.hist_long.append(self.coord[1])
-        self.hist_alt.append(self.coord[2])
-
+        except Exception as e:
+            logging.error(f"Error en save_data: {str(e)}")
+            st.error(f"Error guardando datos históricos: {str(e)}")
 
     def update_time(self,dt):
         "Updates time of simulation after each cycle"
