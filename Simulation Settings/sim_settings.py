@@ -114,9 +114,9 @@ with st.form("Simulation Settings"):
         st.subheader("Simulation Settings")
         sim_rocket = st.selectbox('Rocket Selection', options=list(rocket_settings.keys()), index=0, key="sim_rocket")
         sim_location = st.selectbox('Location Selection', options=list(location_settings.keys()), index=1, key="sim_location")
-        average_temperature = st.number_input('Average temperature [C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0, key="average_temperature")
-        launch_elevation = st.number_input('Launch elevation [°]', min_value=0.0, max_value=10000.0, value=60.0, step=1.0, key="launch_elevation")
-        launch_site_orientation = st.number_input('Launch site orientation (from the East)', min_value=-180.0, max_value=180.0, value=20.0, step=1.0, key="launch_site_orientation")
+        average_temperature = st.number_input('Average temperature [°C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0, key="average_temperature")
+        launch_elevation = st.number_input('Launch elevation [°]', min_value=0.0, max_value=180.0, value=60.0, step=1.0, key="launch_elevation")
+        launch_site_orientation = st.number_input('Launch site orientation (from the East) [°]', min_value=-180.0, max_value=180.0, value=20.0, step=1.0, key="launch_site_orientation")
         average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=1000000.0, value=101325.0, step=1.0, key="average_pressure")
         
         #average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0, key="average_humidity")
@@ -186,10 +186,31 @@ with st.form("Simulation Settings"):
         r_enu_0=np.array([East,North,Up])                            # [m]   # Initial East-North-Up location from platform
         v_enu_0=np.array([Vel_east,Vel_north,Vel_up])                # [m/s] # Initial East-North-Up velocity from platform
 
-        q_yaw=np.array([0,0,np.sin(launch_site_orientation*0.5*deg2rad),np.cos(launch_site_orientation*0.5*deg2rad)])         # Quaternion single yaw rotation
-        q_pitch=np.array([0,np.sin(-launch_elevation*0.5*deg2rad),0,np.cos(-launch_elevation*0.5*deg2rad)]) # Quaternion single pitch rotation
-        q_roll=np.array([np.sin(Roll*0.5*deg2rad),0,0,np.cos(Roll*0.5*deg2rad)])      # Quaternion single roll rotation
-        q_enu2b_0=Mat.hamilton(q_pitch,q_yaw)                                         # Initial quaternion from East-North-Up to bodyframe
+        # Primero creamos los cuaterniones individuales para cada rotación
+        q_roll = np.array([
+            np.sin(Roll*0.5*deg2rad),
+            0,
+            0,
+            np.cos(Roll*0.5*deg2rad)
+        ])
+
+        q_pitch = np.array([
+            0,
+            np.sin(-launch_elevation*0.5*deg2rad),  # Removido el signo negativo
+            0,
+            np.cos(-launch_elevation*0.5*deg2rad)
+        ])
+
+        q_yaw = np.array([
+            0,
+            0,
+            np.sin(launch_site_orientation*0.5*deg2rad),
+            np.cos(launch_site_orientation*0.5*deg2rad)
+        ])
+
+        # Aplicamos las rotaciones en el orden correcto: roll → pitch → yaw
+        q_temp = Mat.hamilton(q_pitch, q_roll)  # Primero roll, luego pitch
+        q_enu2b_0 = Mat.hamilton(q_yaw, q_temp)  # Finalmente yaw
 
         w_enu_0=np.array([W_yaw,W_pitch,W_roll])                     # [rad/s] # Initial rotational velocity in East-North-Up
 
