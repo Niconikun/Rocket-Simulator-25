@@ -3,34 +3,55 @@
 #         E-mail: joorozco@udec.cl
 
 """
+Módulo de simulación del motor cohete.
 
-*** Engine.py ***
+Este módulo maneja el cálculo del empuje y flujo másico del motor,
+considerando los efectos de la presión atmosférica y el tiempo de quemado.
 
-Contains:
-Engine module containing performance parameters.
+Ecuaciones Principales:
+    1. Empuje:
+       T = ṁv_e + (p_e - p_a)A_e
+       
+    2. Flujo Másico:
+       ṁ = m_prop/t_burn  (asumiendo quemado constante)
 
-External dependencies:
-
-Internal dependencies:
-cmath       -cMath Python extension. https://docs.python.org/3/library/cmath.html
-
-Changelog:
-Date          Name              Change
-__ _          __ _              ____ _
-15/08/2022    Jorge Orozco      Initial release
-
-References:
-Short      Author,Year     Title
-___ _      _________ _     ___ _
-[Valle22]  Vallejos,2022   Mejora del alcance de un cohete chaff
-
+Referencias:
+    - Sutton, G. P., & Biblarz, O. (2016). Rocket propulsion elements.
+    - Hill, P., & Peterson, C. (1992). Mechanics and Thermodynamics of Propulsion.
 """
 # Imports
 from cmath import pi
 
 # Define Engine class for Engine module. Data given by [Valle22]  # All data SHOULD be obtained from external file
 class Engine(object):
-    def __init__(self,sim_time,press_amb, burn_time, nozzle_exit_diameter, mass_flux, gas_speed, exit_pressure):  
+    """
+    Clase para simular el comportamiento del motor cohete.
+
+    Esta clase calcula el empuje y flujo másico del motor basándose en:
+    - Tiempo de quemado
+    - Presión atmosférica
+    - Geometría de la tobera
+    - Características del propelente
+
+    Atributos:
+        thrust (float): Empuje actual [N]
+        mass_flux (float): Flujo másico actual [kg/s]
+        burn_time (float): Tiempo total de quemado [s]
+    """
+
+    def __init__(self,sim_time,press_amb, burn_time, nozzle_exit_diameter, mass_flux, gas_speed, exit_pressure):
+        """
+        Inicializa un nuevo objeto Engine.
+
+        Args:
+            time (float): Tiempo actual de simulación [s]
+            ambient_pressure (float): Presión atmosférica [Pa]
+            burn_time (float): Tiempo total de quemado [s]
+            nozzle_exit_diameter (float): Diámetro de salida de la tobera [m]
+            mass_flux (float): Flujo másico nominal [kg/s]
+            gas_speed (float): Velocidad de los gases de escape [m/s]
+            exit_pressure (float): Presión en la salida de la tobera [Pa]
+        """  
         self.sim_time=sim_time           # [s]    # Current simulation time
         self.area_exit=((nozzle_exit_diameter/2)**2)*pi   # [m2]   # Nozzle exit area
         self.press_amb=press_amb         # [Pa]   # Current environment pressure

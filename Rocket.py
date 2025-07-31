@@ -2,42 +2,39 @@
 #         Universidad de Concepción, Facultad de Ingeniería
 #         E-mail: joorozco@udec.cl
 
-"""
-
-*** Rocket.py ***
-
-Contains:
-Module that calculates all data to be obtained by a single rocket
-
-External dependencies:
-numpy           -Numpy Python extension. http://numpy.org/
-                 Version: Numpy 1.22.3
-navpy           -Numpy-based library for attitude determination. https://github.com/NavPy/NavPy/
-                 Version: 1.0
-MatTools        -Self-written python module containing mathematical functions
-Aerodynamics    -Self-written python module containing aerodynamics data 
-Engine          -Self-written python module containing engine performance data
-GeoTools        -Self-written python module containing functions for reference systems conversion
-
-Internal dependencies:
-cmath       -cMath Python extension. https://docs.python.org/3/library/cmath.html
-
-Changelog:
-Date          Name              Change
-__ _          __ _              ____ _
-15/08/2022    Jorge Orozco      Initial release
-
-References:
-Short       Author,Year                 Title
-___ _       _________ _                 ___ _
-[Regan93]   Regan/Anandakrishnan,1993   Dynamics of Atmospheric Re-Entry
-[Valle22]   Vallejos,2022               Mejora del alcance de un cohete chaff
-[Oroz22]    Orozco,2022                 Estimación de trayectoria y actitud para un cohete chaff
-[Barro67]   Barrowman,1967              The Practical Calculation of the Aerodynamic Characteristic of Slender Finned Vehicles
-[Yang19]    Yang,2019                   Spacecraft Modeling, Attitude Determination, and Control. Quaternion-based Approach
-
 
 """
+Módulo principal para la simulación de cohetes.
+
+Este módulo contiene la clase Rocket que maneja todos los cálculos
+relacionados con la dinámica, aerodinámica y control del cohete durante
+la simulación.
+
+Clases:
+    Rocket: Clase principal que simula el comportamiento del cohete.
+
+Referencias:
+    [Regan93] Regan/Anandakrishnan (1993) - Dynamics of Atmospheric Re-Entry
+    [Valle22] Vallejos (2022) - Mejora del alcance de un cohete chaff
+    [Oroz22] Orozco (2022) - Estimación de trayectoria y actitud para un cohete chaff
+    [Barro67] Barrowman (1967) - The Practical Calculation of the Aerodynamic Characteristic of Slender Finned Vehicles
+    [Yang19] Yang (2019) - Spacecraft Modeling, Attitude Determination, and Control
+
+Ecuaciones Principales:
+    1. Dinámica Traslacional:
+       F = ma -> m(dv/dt) = F_total + mg
+    
+    2. Dinámica Rotacional:
+       dω/dt = J⁻¹(M - ω × (Jω))
+    
+    3. Cinemática del Cuaternión:
+       dq/dt = 1/2 Ω(ω)q
+
+    4. Fuerzas Aerodinámicas:
+       F_d = 1/2 ρv²C_d A
+       F_l = 1/2 ρv²C_l A
+"""
+
 # Imports
 import numpy as np
 import navpy as nav
@@ -51,7 +48,23 @@ import streamlit as st
 import logging
 
 class Rocket(object):
-    "Calculates all data during simulation. It's the main module of simulation"
+    """
+    Clase principal para la simulación de cohetes.
+
+    Esta clase maneja todos los aspectos de la simulación, incluyendo:
+    - Dinámica traslacional y rotacional
+    - Fuerzas aerodinámicas
+    - Propulsión
+    - Integración numérica
+    - Almacenamiento de datos históricos
+
+    Atributos:
+        r_enu (np.ndarray): Posición en coordenadas ENU [m]
+        v_enu (np.ndarray): Velocidad en coordenadas ENU [m/s]
+        q_enu2b (np.ndarray): Cuaternión de rotación ENU a body [-]
+        w_enu (np.ndarray): Velocidad angular en ENU [rad/s]
+        mass (float): Masa actual del cohete [kg]
+    """
     def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass):
         
         #______Initial data_______#
@@ -187,11 +200,31 @@ class Rocket(object):
 
 
     def update_gmst(self,gmst):
-        "Updates Greenwich Mean Sidereal Time from Planet Module"
+        """
+        Actualiza el tiempo sideral medio de Greenwich.
+
+        Args:
+            gmst (float): Tiempo sideral medio de Greenwich [rad]
+
+        Notas:
+            GMST es necesario para la rotación entre sistemas ECEF y ECI.
+        """
         self.gmst=gmst  # [rad]    # Greenwich Mean Sidereal Time (rotation of Earth Centered-Earth Fixed from Earth Centered Inertial systems)
 
     def update_mass_related(self, burn_time, cm_before_x, cm_before_y, cm_before_z, I_before_x, I_before_y, I_before_z, cm_after_x, cm_after_y, cm_after_z, I_after_x, I_after_y, I_after_z):
-        "Updates mass related data: Centre of Mass and Inertia"
+        """
+        Actualiza propiedades relacionadas con la masa del cohete.
+
+        Args:
+            burn_time (float): Tiempo total de quemado [s]
+            cm_before_x/y/z (float): Posición del centro de masa antes del quemado [m]
+            I_before_x/y/z (float): Momentos de inercia antes del quemado [kg·m²]
+            cm_after_x/y/z (float): Posición del centro de masa después del quemado [m]
+            I_after_x/y/z (float): Momentos de inercia después del quemado [kg·m²]
+
+        Notas:
+            Los valores se obtienen de Autodesk Inventor.
+        """
         self.burn_time=burn_time    # [s]    # Propellant total burning time                                                  
         if self.time<=self.burn_time:
             self.cm_b=np.array([cm_before_x,cm_before_y,cm_before_z])                                 # [m]        # Centre of Mass before burning obtained via Autodesk Inventor
@@ -201,15 +234,30 @@ class Rocket(object):
             self.inertia_b=np.array([I_after_x, I_after_y, I_after_z])     # [kg m2]    # Inertia after burning obtained via Autodesk Inventor 
 
     def update_pos_vel(self,coordinates):
-        "Updates all data related to location and velocity"
+        """
+        Actualiza todas las variables relacionadas con posición y velocidad.
+
+        Args:
+            coordinates (np.ndarray): Coordenadas de la plataforma [lat, lon, alt]
+
+        Cálculos:
+            1. Actitud (ángulos de Euler desde cuaternión)
+            2. Velocidades en marco del cuerpo
+            3. Ángulo de ataque
+            4. Posiciones en diferentes marcos de referencia
+            5. Velocidades angulares
+
+        Referencias:
+            [Oroz22] Para convenciones de ángulos
+        """
         
         #_____Attitude calculation______#
         q0=self.q_enu2b[3]       # Quaternion first three elements (vectorial or imaginary part)
         qvec=self.q_enu2b[0:3]   # Quaternion last element (scalar or real part)
         angles=nav.quat2angle(q0,qvec,output_unit='deg',rotation_sequence='ZYX') 
-        self.yaw=angles[0]       # [deg]   # Yaw 
-        self.pitch=-angles[1]    # [deg]   # Pitch  (it is negative when pointing up in a XZ plane...see [Oroz22])
-        self.roll=angles[2]      # [deg]   # Roll
+        self.yaw=angles[0]       # Rotación respecto a East [deg] 
+        self.pitch=-angles[1]    # Negativo cuando apunta arriba en plano XZ [deg]
+        self.roll=angles[2]      # Rotación sobre eje longitudinal [deg]
 
         #_______Velocity related calculation_____#
         self.v_b=Mat.q_rot(self.v_enu,self.q_enu2b,0)    # [m/s]   # Rotation of velocity from East-North-Up system to bodyframe
@@ -231,13 +279,40 @@ class Rocket(object):
         self.w_b=Mat.q_rot(self.w_enu,self.q_enu2b,0)               # [rad/s] # Rocket's rotational velocity in bodyframe   
 
     def update_atmosphere(self,density,press_amb,v_sonic):
-        "Updates environment atmospheric properties from Atmosphere Module"
+        
+        """
+        Actualiza las propiedades atmosféricas.
+
+        Args:
+            density (float): Densidad del aire [kg/m³]
+            press_amb (float): Presión atmosférica [Pa]
+            v_sonic (float): Velocidad del sonido [m/s]
+
+        Referencias:
+            - Atmósfera Estándar Internacional (ISA)
+        """
+        self.density = density      
+        self.press_amb = press_amb  
+        self.v_sonic = v_sonic 
         self.density=density      # [kg m3]   # Atmospheric air density
         self.press_amb=press_amb  # [Pa]      # Atmospheric pressure
         self.v_sonic=v_sonic      # [m/s]     # Speed of sound 
 
     def update_aerodynamics(self,rocket_name):
-        "Updates aerodynamic characteristics from Aerodynamics Module"
+        """
+        Actualiza las características aerodinámicas del cohete.
+
+        Args:
+            rocket_name (str): Nombre del cohete para cargar su configuración
+
+        Cálculos:
+            1. Número Mach
+            2. Coeficientes aerodinámicos (CD, CL)
+            3. Centro de presión
+
+        Referencias:
+            [Barro67] Método de Barrowman para coeficientes
+        """
         # Conditional to avoid Runtime Warning for division by zero
        
         if self.v_norm==0:
@@ -272,7 +347,19 @@ class Rocket(object):
         self.cp_b=Aero.xcp                        # [m]    # Location of centre of pressure from nose (ogive) tip
 
     def update_engine(self, rocket_name):
+        """
+        Actualiza las características del motor.
+
+        Args:
+            rocket_name (str): Nombre del cohete para cargar configuración del motor
+
+        Cálculos:
+            1. Flujo másico
+            2. Empuje total considerando presión ambiente
         
+        Referencias:
+            - Sutton, G. P., & Biblarz, O. (2016). Rocket propulsion elements
+        """
         with open('rockets.json', 'r') as file:
             rocket_settings = json.load(file)
 
@@ -287,14 +374,24 @@ class Rocket(object):
         self.mass_flux=Eng.mass_flux              # [kg/s] # Engine mass flux
         self.thrust=Eng.thrust                    # [N]    # Engine thrust
 
-    def update_forces_aero(self, reference_area):
-        "Calculates all aerodynamics related data"
-        
-        ref_area= reference_area  # [m2]     # Reference area for drag and lift calculation [Valle22]
-        raise RuntimeError(f"Mass became too low: {self.mass}kg")
 
     def update_forces_aero(self, reference_area):
-        """Calcula las fuerzas aerodinámicas con mejores validaciones"""
+        """
+        Calcula las fuerzas y momentos aerodinámicos.
+
+        Args:
+            reference_area (float): Área de referencia [m²]
+
+        Cálculos:
+            1. Presión dinámica: q = 1/2 ρV²
+            2. Fuerzas: F = qSC
+            3. Momentos: M = r × F
+
+        Validaciones:
+            - Ángulo de ataque entre -180° y 180°
+            - Velocidad mínima para cálculos
+            - Límites de fuerzas máximas
+        """
         try:
             # Validar valores críticos
             if not (-180 <= self.alpha <= 180):
@@ -327,12 +424,33 @@ class Rocket(object):
             st.error(f"Error en fuerzas aerodinámicas: {str(e)}")
 
     def update_forces_engine(self):
-        "Obtains forces and torques produced by the engine"
+        """
+        Calcula las fuerzas y torques producidos por el motor.
+
+        Cálculos:
+            1. Vector de empuje en el marco del cuerpo
+            2. Torques del motor (asumidos como cero por diseño)
+
+        Notas:
+            Se asume que el empuje está alineado con el eje longitudinal del cohete.
+        """
         self.forces_engine_b=np.array([self.thrust,0,0])    # [N]    # Thrust vector in bodyframe
         self.torques_engine_b=np.zeros(3)                   # [N m]  # Torques produced by engine in bodyframe (assumed to be zero )
 
     def update_forces_torques(self):
-        "Calculates all forces and torques for different reference systems"
+        """
+        Calcula todas las fuerzas y torques en diferentes sistemas de referencia.
+
+        Cálculos:
+            1. Suma de fuerzas en marco del cuerpo (bodyframe)
+            2. Transformación de fuerzas a marco ENU
+            3. Suma de torques en marco del cuerpo
+            4. Transformación de torques a marco ENU
+
+        Referencias:
+            [Yang19] Para transformaciones entre marcos de referencia
+        """
+
         self.forces_b=self.forces_aero_b + self.forces_engine_b     # [N]   # Sum of all forces in bodyframe
         self.forces_enu=Mat.q_rot(self.forces_b,self.q_enu2b,1)     # [N]   # Sum of all forces in East-North-Up system
 
@@ -340,33 +458,50 @@ class Rocket(object):
         self.torques_enu=Mat.q_rot(self.torques_b,self.q_enu2b,1)   # [N m] # Sum of all torques in East-North-Up system 
     
     def update_g_accel(self,coordinates):
-        "Calculates gravitational acceleration in all reference systems"
+        """
+        Calcula la aceleración gravitacional en todos los sistemas de referencia.
+
+        Args:
+            coordinates (np.ndarray): Coordenadas de la plataforma [lat, lon, alt]
+
+        Cálculos:
+            1. Vector unitario en ECEF
+            2. Transformación a ENU
+            3. Cálculo de aceleración gravitacional
+            4. Transformación a marco del cuerpo
+
+        Referencias:
+            [Regan93] Para modelo gravitacional
+        """
         self.g_vector_ecef=Mat.normalise(self.r_ecef)                  # [-]     # Rocket's location unit vector in Earth Centered-Earth Fixed system
         self.g_vector_enu=Geo.ecef2enu(coordinates,self.g_vector_ecef) # [-]     # Rocket's location unit vector in East-North-Up system
         self.g_enu=-9.81*self.g_vector_enu                             # [m/s2]  # Rocket's gravitational acceleration in East-North-Up system
         #self.g_enu=np.array([0,0,-9.81])   # [m/s2] # Gravitational acceleration assuming it parallel to Up direction
         self.g_b=Mat.q_rot(self.g_enu,self.q_enu2b,0)                  # [m/s2]  # Rocket's gravitational acceleration in bodyframe (used later for conditional only)
+ 
 
-    def dynamics(self,x):
-        "Calculates motion equations according to Newton's Second Law of motion"
-        r_enu=x[0:3]
-        v_enu=x[3:6]
-        q_enu2b=x[6:10]
-        w_b=x[10:13]
-        mass=x[13]
-
-        #________Trajectory_______#
-
-        ### Auxiliary values for conditional at the beginning of simulation
-        abs_force=np.abs(self.forces_b[0])
-        abs_grav=np.abs(self.g_b[0])
-        
-        # Conditionals to avoid problems with negative values of velocity and setting and end when landing
-        if abs_force<=abs_grav:
-            r_dot_enu=np.zeros(3)
-            v_dot_enu=np.zeros(3)
     def dynamics(self, x):
-        """Calcula las ecuaciones de movimiento"""
+        """
+        Calcula las ecuaciones de movimiento del cohete.
+
+        Args:
+            x (np.ndarray): Vector de estado [r_enu, v_enu, q_enu2b, w_b, mass]
+
+        Returns:
+            np.ndarray: Derivadas temporales del vector de estado
+
+        Ecuaciones:
+            1. Traslación: 
+                dr/dt = v
+                dv/dt = F/m + g
+
+            2. Rotación:
+                dq/dt = 1/2 Ω(ω)q
+                dω/dt = J⁻¹(M - ω × (Jω))
+
+            3. Masa:
+                dm/dt = -ṁ
+        """
         r_enu = x[0:3]
         v_enu = x[3:6]
         q_enu2b = x[6:10]
@@ -418,7 +553,23 @@ class Rocket(object):
         return fx
 
     def RK4_update(self,dt):
-        "Propagation of variables previously obtained in dynamics and updates all obtained variables"
+        
+        """
+        Propaga las variables de estado usando el método Runge-Kutta de 4to orden.
+
+        Args:
+            dt (float): Paso de tiempo [s]
+
+        Cálculos:
+            1. Concatenación de variables de estado
+            2. Cálculo de coeficientes k1, k2, k3, k4
+            3. Actualización del vector de estado
+            4. Normalización del cuaternión
+
+        Referencias:
+            - Butcher, J.C. (2016). Numerical Methods for Ordinary Differential Equations
+        """
+
         # Consecutive concatenation of all required variables
         traj=np.concatenate((self.r_enu,self.v_enu))
         att=np.concatenate((self.q_enu2b,self.w_b))
@@ -534,5 +685,13 @@ class Rocket(object):
             st.error(f"Error guardando datos históricos: {str(e)}")
 
     def update_time(self,dt):
-        "Updates time of simulation after each cycle"
+        """
+        Actualiza el tiempo de simulación.
+
+        Args:
+            dt (float): Incremento de tiempo [s]
+
+        Notas:
+            Método simple pero necesario para mantener consistencia en la simulación
+        """
         self.time+=dt   # [s]
