@@ -39,179 +39,210 @@ ___ _       ____________ _                  ___ _
 """
 # Imports
 import numpy as np
-from mattools import MatTools as Mat
+from src.utils.mattools import MatTools as Mat
 from cmath import pi
 
-# Auxiliary functions
-deg2rad=pi/180
-rad2deg=180/pi
-
-# Earth angular velocity as 3x3 skew matrix, [Regan93]
-w_earth_skew3=Mat.skew3([0,0,7.2119*1e-5]) # [rad/s]          
-
-# Ellipsoid World Geodetic System 1984 parameters        [Kuna20]
-a=6378137                      # WGS84 Equatorial radius [m]
-b=6356752.314245179            # WGS84 Polar Radius      [m] 
-f=1/298.257223563              # WGS84 Flattening        [-]
-e=np.sqrt(f*(2-f))             # Eccentricity            [-]
-e2=2*f -(f**2)                 # First eccentricity      [-]
-eps2=(a*a - b*b)/(b*b)         # Second eccentricity     [-]
-
-def enu2ecef(coord,r_enu): 
-    'Converts a vector in East-North-Up frame to Earth Centered-Earth Fixed frame. Coord must be in [deg]...[Done12]'
+class GeoTools:
+    """Clase de utilidades para conversiones geométricas y transformaciones de coordenadas."""
     
-    # Converts latitude and longitude from [deg] to [rad] 
-    lat=coord[0]*deg2rad; sin_lat=np.sin(lat); cos_lat=np.cos(lat)  
-    long=coord[1]*deg2rad; sin_long=np.sin(long); cos_long=np.cos(long)
+    # Constantes de clase
+    deg2rad = pi/180
+    rad2deg = 180/pi
     
-    # Builds rotation matrix
-    DCM_enu2ecef=(np.array([[-sin_long, -sin_lat*cos_long, cos_lat*cos_long],
-                [cos_long,-sin_lat*sin_long, cos_lat*sin_long],
-                [0,cos_lat,sin_lat]]))
+    # Earth angular velocity as 3x3 skew matrix, [Regan93]
+    w_earth_skew3 = Mat.skew3([0, 0, 7.2119e-5])  # [rad/s]
     
-    # Obtains vector in ECEF frame 
-    r_ecef=DCM_enu2ecef.dot(r_enu)
+    # Ellipsoid WGS84 parameters [Kuna20]
+    a = 6378137                    # Equatorial radius [m]
+    b = 6356752.314245179         # Polar Radius [m]
+    f = 1/298.257223563           # Flattening [-]
+    e = np.sqrt(f*(2-f))          # Eccentricity [-]
+    e2 = 2*f - (f**2)             # First eccentricity [-]
+    eps2 = (a*a - b*b)/(b*b)      # Second eccentricity [-]
+
+    @staticmethod
+    def enu2ecef(coord, r_enu):
+        """Convierte coordenadas ENU a ECEF"""
+        lat = coord[0] * GeoTools.deg2rad
+        long = coord[1] * GeoTools.deg2rad
         
-    return r_ecef
-
-def ecef2enu(coord,r_ecef):
-    'Converts a vector in ECEF frame to ENU frame. Coord must be in [deg]...[Done12]'
-
-    # Converts latitude and longitude from [deg] to [rad] 
-    lat=coord[0]*deg2rad; sin_lat=np.sin(lat); cos_lat=np.cos(lat)  
-    long=coord[1]*deg2rad; sin_long=np.sin(long); cos_long=np.cos(long)
-    
-    # Builds rotation matrix
-    DCM_enu2ecef=(np.array([[-sin_long, -sin_lat*cos_long, cos_lat*cos_long],
-                [cos_long,-sin_lat*sin_long, cos_lat*sin_long],
-                [0,cos_lat,sin_lat]]))
-    
-    DCM_ecef2enu=np.transpose(DCM_enu2ecef)
-    
-    # Obtains vector in ENU frame
-    r_enu=DCM_ecef2enu.dot(r_ecef)
+        sin_lat, cos_lat = np.sin(lat), np.cos(lat)
+        sin_long, cos_long = np.sin(long), np.cos(long)
         
-    return r_enu
- 
-def ecef2geo(r_ecef):
-    'Converts geocentric to geodetic coordinates in [deg] and [m]. r_ecef must be in [m]...[Seem02]'
+        DCM_enu2ecef = np.array([
+            [-sin_long, -sin_lat*cos_long, cos_lat*cos_long],
+            [cos_long, -sin_lat*sin_long, cos_lat*sin_long],
+            [0, cos_lat, sin_lat]
+        ])
+        
+        return DCM_enu2ecef.dot(r_enu)
 
-    x=r_ecef[0]    # [m]
-    y=r_ecef[1]    # [m]
-    z=r_ecef[2]    # [m]
+    @staticmethod
+    def ecef2enu(coord, r_ecef):
+        """Convierte coordenadas ECEF a ENU"""
+        lat = coord[0] * GeoTools.deg2rad
+        long = coord[1] * GeoTools.deg2rad
+        
+        sin_lat, cos_lat = np.sin(lat), np.cos(lat)
+        sin_long, cos_long = np.sin(long), np.cos(long)
+        
+        DCM_ecef2enu = np.array([
+            [-sin_long, cos_long, 0],
+            [-sin_lat*cos_long, -sin_lat*sin_long, cos_lat],
+            [cos_lat*cos_long, cos_lat*sin_long, sin_lat]
+        ])
+        
+        return DCM_ecef2enu.dot(r_ecef)
 
-    p=np.sqrt((x**2)+(y**2))        # [m]
-    theta=np.arctan((a*z)/(b*p))    # [rad]
-    
-    # Obtains longitude
-    long=np.arctan2(y,x)            # [rad]
-    
-    # Obtains latitude
-    lat=(np.arctan((z+(b*eps2*((np.sin(theta))**3)))/(p-(a*e2*((np.cos(theta))**3)))))    # [rad]
-   
-    N=a/(np.sqrt(1-(e2*((np.sin(lat))**2))))  # [m]
-    
-    #Obtains altitude
-    alt=p/(np.cos(lat)) - N # [m]
+    @staticmethod
+    def ecef2geo(r_ecef):
+        """Convierte coordenadas ECEF a geodéticas usando método iterativo"""
+        x, y, z = r_ecef
+        
+        p = np.sqrt(x**2 + y**2)
+        long = np.arctan2(y, x)
+        
+        # Método iterativo de Bowring
+        lat = np.arctan2(z, p * (1 - GeoTools.e2))
+        
+        for _ in range(5):  # 5 iteraciones suelen ser suficientes
+            N = GeoTools.a / np.sqrt(1 - GeoTools.e2 * np.sin(lat)**2)
+            h = p / np.cos(lat) - N
+            lat = np.arctan2(z, p * (1 - GeoTools.e2 * N/(N + h)))
+        
+        return np.array([lat * GeoTools.rad2deg, 
+                        long * GeoTools.rad2deg, 
+                        h])
 
-    return np.array([lat*rad2deg,long*rad2deg,alt])
-
-def geo2ecef(coord):
-    'Converts geodetic to geocentric coordinates in [m]. coord must be in [deg] and [m]...[Seem02]'
-
-    lat=coord[0]*deg2rad     # [rad]
-    long=coord[1]*deg2rad    # [rad]
-    alt=coord[2]             # [m]
-    
-    N=a/(np.sqrt(1-(e2*((np.sin(lat))**2))))   # [m]
-    
-    # Obtains XYZ coordinates
-    x=(N+alt) * (np.cos(lat)) * (np.cos(long)) # [m]
-    y=(N+alt) * (np.cos(lat)) * (np.sin(long)) # [m]
-    z=(((N *(b**2))/(a**2)) + alt)*np.sin(lat) # [m]
-    
-    return np.array([x,y,z])
+    @staticmethod
+    def geo2ecef(coord):
+        """Convierte coordenadas geodéticas a ECEF"""
+        lat = coord[0] * GeoTools.deg2rad
+        long = coord[1] * GeoTools.deg2rad
+        alt = coord[2]
+        
+        sin_lat, cos_lat = np.sin(lat), np.cos(lat)
+        sin_long, cos_long = np.sin(long), np.cos(long)
+        
+        N = GeoTools.a / np.sqrt(1 - GeoTools.e2 * sin_lat**2)
+        
+        x = (N + alt) * cos_lat * cos_long
+        y = (N + alt) * cos_lat * sin_long
+        z = (N * (1 - GeoTools.e2) + alt) * sin_lat
+        
+        return np.array([x, y, z])
                              
-def ecef2eci(gmst,r_ecef):
-    """
-    Position and forces from Earth Centered-Earth Fixed to Earth Centered Inertial...[Beau05]
-    gmst in [rad] and r_ecef in [m]
-    """
-    
-    cos_gmst=np.cos(gmst); sin_gmst=np.sin(gmst)
-    
-    # Builds rotation matrix
-    DCM_ecef2eci=np.array([[cos_gmst,-sin_gmst,0],[sin_gmst,cos_gmst,0],[0,0,1]])
-    
-    r_eci=np.dot(DCM_ecef2eci,r_ecef) # [m]
-    return r_eci
-                                                  
-def ecef2eci_v(gmst,r_ecef,v_ecef):
-    """
-    Converts velocity in Earth Centered-Earth Fixed system into Earth Centered Inertial system... [Beau05] and [Zhao16]
-    gmst in [rad], r_ecef in [m] and v_ecef in [m/s]
-    """
-    cos_gmst=np.cos(gmst); sin_gmst=np.sin(gmst)
-
-    # Builds rotation matrix
-    DCM_ecef2eci=np.array([[cos_gmst,-sin_gmst,0],[sin_gmst,cos_gmst,0],[0,0,1]])
-    
-    # Derivative of rotation matrix, [Zhao16]
-    DCM_ecef2eci_dot=DCM_ecef2eci.dot(w_earth_skew3)
-    
-    elem1=DCM_ecef2eci.dot(v_ecef)
-    elem2=np.dot(DCM_ecef2eci_dot,r_ecef)
-    v_eci_from_ecef=elem1 + elem2         # [m/s]
-       
-    return v_eci_from_ecef
-                                               
-def eci2ecef(gmst,r_eci):
-    """
-    Converts Earth Centered Inertial coordinates to Earth Centered-Earth Fixed coordinates...[Beau05]   
-    gmst in [rad] and r_eci in [m]
-    """
-
-    cos_gmst=np.cos(gmst); sin_gmst=np.sin(gmst)
-    
-    # Builds rotation matrix
-    DCM_eci2ecef=np.array([[cos_gmst,sin_gmst,0],[-sin_gmst,cos_gmst,0],[0,0,1]])
-    
-    r_eci=DCM_eci2ecef.dot(r_eci) # [m]
-    return r_eci
-                                                       
-def eci2ecef_v(gmst,r_eci,v_eci):
-    """
-    Converts Earth Centered Inertial velocity into Earth Centered-Earth Fixed system...[Beau05] and [Zhao16] 
-    gmst in [rad], r_ecef in [m] and v_ecef in [m/s]
-    """
-    cos_gmst=np.cos(gmst); sin_gmst=np.sin(gmst)
-    
-    # Builds rotation matrix
-    DCM_eci2ecef=np.array([[cos_gmst,sin_gmst,0],[-sin_gmst,cos_gmst,0],[0,0,1]])   
-    
-    # Derivative of rotation matrix, [Zhao16]
-    DCM_eci2ecef_dot=(DCM_eci2ecef.dot(w_earth_skew3))    
-    
-    elem1=np.dot(DCM_eci2ecef,v_eci)
-    elem2=-np.dot(DCM_eci2ecef_dot,r_eci)
-    v_ecef_from_eci=elem1 + elem2           # [m/s]
+    @staticmethod
+    def ecef2eci(gmst,r_ecef):
+        """
+        Position and forces from Earth Centered-Earth Fixed to Earth Centered Inertial...[Beau05]
+        gmst in [rad] and r_ecef in [m]
+        """
         
-    return v_ecef_from_eci
+        cos_gmst=np.cos(gmst); sin_gmst=np.sin(gmst)
+        
+        # Builds rotation matrix
+        DCM_ecef2eci=np.array([[cos_gmst,-sin_gmst,0],[sin_gmst,cos_gmst,0],[0,0,1]])
+        
+        r_eci=np.dot(DCM_ecef2eci,r_ecef) # [m]
+        return r_eci
+                                                      
+    @staticmethod
+    def ecef2eci_v(gmst,r_ecef,v_ecef):
+        """
+        Converts velocity in Earth Centered-Earth Fixed system into Earth Centered Inertial system... [Beau05] and [Zhao16]
+        gmst in [rad], r_ecef in [m] and v_ecef in [m/s]
+        """
+        cos_gmst=np.cos(gmst); sin_gmst=np.sin(gmst)
 
-def yawpitchroll(rot_vector):
-    """
-    Builds Director Cosine Matrix from angles of rotation in 312 sequence or yaw pitch roll...[Curt20]
-    Receives angles in [deg]
-    """
-    phi=rot_vector[0]*deg2rad ; sin_phi=np.sin(phi) ; cos_phi=np.cos(phi)
-    theta=rot_vector[1]*deg2rad ; sin_theta=np.sin(theta) ; cos_theta=np.cos(theta)
-    psy=rot_vector[2]*deg2rad ; sin_psy=np.sin(psy) ; cos_psy=np.cos(psy)
+        # Builds rotation matrix
+        DCM_ecef2eci=np.array([[cos_gmst,-sin_gmst,0],[sin_gmst,cos_gmst,0],[0,0,1]])
+        
+        # Derivative of rotation matrix, [Zhao16]
+        DCM_ecef2eci_dot=DCM_ecef2eci.dot(GeoTools.w_earth_skew3)
+        
+        elem1=DCM_ecef2eci.dot(v_ecef)
+        elem2=np.dot(DCM_ecef2eci_dot,r_ecef)
+        v_eci_from_ecef=elem1 + elem2         # [m/s]
+           
+        return v_eci_from_ecef
+                                                
+    @staticmethod
+    def eci2ecef(gmst,r_eci):
+        """
+        Converts Earth Centered Inertial coordinates to Earth Centered-Earth Fixed coordinates...[Beau05]   
+        gmst in [rad] and r_eci in [m]
+        """
 
-    matrix_phi=np.array([[cos_phi,sin_phi,0],[-sin_phi,cos_phi,0],[0,0,1]])            # Yaw
-    matrix_theta=np.array([[cos_theta,0,-sin_theta],[0,1,0],[sin_theta,0,cos_theta]])  # Pitch
-    matrix_psy=np.array([[1,0,0],[0,cos_psy,sin_psy],[0,-sin_psy,cos_psy]])            # Roll
+        cos_gmst=np.cos(gmst); sin_gmst=np.sin(gmst)
+        
+        # Builds rotation matrix
+        DCM_eci2ecef=np.array([[cos_gmst,sin_gmst,0],[-sin_gmst,cos_gmst,0],[0,0,1]])
+        
+        r_eci=DCM_eci2ecef.dot(r_eci) # [m]
+        return r_eci
+                                                      
+    @staticmethod
+    def eci2ecef_v(gmst,r_eci,v_eci):
+        """
+        Converts Earth Centered Inertial velocity into Earth Centered-Earth Fixed system...[Beau05] and [Zhao16] 
+        gmst in [rad], r_ecef in [m] and v_ecef in [m/s]
+        """
+        cos_gmst=np.cos(gmst); sin_gmst=np.sin(gmst)
+        
+        # Builds rotation matrix
+        DCM_eci2ecef=np.array([[cos_gmst,sin_gmst,0],[-sin_gmst,cos_gmst,0],[0,0,1]])   
+        
+        # Derivative of rotation matrix, [Zhao16]
+        DCM_eci2ecef_dot=(DCM_eci2ecef.dot(GeoTools.w_earth_skew3))    
+        
+        elem1=np.dot(DCM_eci2ecef,v_eci)
+        elem2=-np.dot(DCM_eci2ecef_dot,r_eci)
+        v_ecef_from_eci=elem1 + elem2           # [m/s]
+            
+        return v_ecef_from_eci
 
-    mult1=np.dot(matrix_theta,matrix_phi)
-    mult2=np.dot(matrix_psy,mult1)
+    @staticmethod
+    def yawpitchroll(rot_vector):
+        """
+        Builds Director Cosine Matrix from angles of rotation in 312 sequence or yaw pitch roll...[Curt20]
+        Receives angles in [deg]
+        """
+        phi=rot_vector[0]*GeoTools.deg2rad ; sin_phi=np.sin(phi) ; cos_phi=np.cos(phi)
+        theta=rot_vector[1]*GeoTools.deg2rad ; sin_theta=np.sin(theta) ; cos_theta=np.cos(theta)
+        psy=rot_vector[2]*GeoTools.deg2rad ; sin_psy=np.sin(psy) ; cos_psy=np.cos(psy)
+
+        matrix_phi=np.array([[cos_phi,sin_phi,0],[-sin_phi,cos_phi,0],[0,0,1]])            # Yaw
+        matrix_theta=np.array([[cos_theta,0,-sin_theta],[0,1,0],[sin_theta,0,cos_theta]])  # Pitch
+        matrix_psy=np.array([[1,0,0],[0,cos_psy,sin_psy],[0,-sin_psy,cos_psy]])            # Roll
+
+        mult1=np.dot(matrix_theta,matrix_phi)
+        mult2=np.dot(matrix_psy,mult1)
+        
+        return mult2
     
-    return mult2
+    @staticmethod
+    def calculate_rotation_matrix(lat, long):
+        """Calcula matriz de rotación basada en latitud y longitud"""
+        lat_rad = lat * GeoTools.deg2rad
+        long_rad = long * GeoTools.deg2rad
+        
+        sin_lat, cos_lat = np.sin(lat_rad), np.cos(lat_rad)
+        sin_long, cos_long = np.sin(long_rad), np.cos(long_rad)
+        
+        R = np.array([
+            [-sin_long, -sin_lat*cos_long, cos_lat*cos_long],
+            [cos_long, -sin_lat*sin_long, cos_lat*sin_long],
+            [0, cos_lat, sin_lat]
+        ])
+        
+        return R
+
+    @staticmethod
+    def calculate_geodetic_radius(lat):
+        """Calcula el radio geodético en una latitud dada"""
+        lat_rad = lat * GeoTools.deg2rad
+        sin_lat = np.sin(lat_rad)
+        
+        N = GeoTools.a / np.sqrt(1 - GeoTools.e2 * sin_lat**2)
+        return N

@@ -30,163 +30,125 @@ ___ _     _________ _     ___ _
 import numpy as np
 from cmath import pi
 
-# Auxiliary funtions
-deg2rad=pi/180
-rad2deg=180/pi
-
-def hexa2dec(coord):
-    'coord=[hour, minute, second] to coord[deg]'
+class MatTools:
+    """Clase de utilidades matemáticas para operaciones vectoriales y transformaciones."""
     
-    dec=coord[0]+((coord[1])/60)+((coord[2])/3600)
-    return dec
+    # Constantes de clase
+    deg2rad = pi/180
+    rad2deg = 180/pi
+    
+    @staticmethod
+    def hexa2dec(coord):
+        """Convierte coordenadas [hora, minuto, segundo] a decimales"""
+        return coord[0] + (coord[1]/60) + (coord[2]/3600)
 
-def skew3(vector):   
-    'vector is a 3 elements array or list'
+    @staticmethod
+    def skew3(vector):
+        """Crea matriz antisimétrica 3x3 a partir de vector"""
+        return np.array([[0, -vector[2], vector[1]],
+                        [vector[2], 0, -vector[0]],
+                        [-vector[1], vector[0], 0]])
 
-    skew_matrix=np.array([[0,-vector[2], vector[1]],
-                          [vector[2],0,-vector[0]],
-                          [-vector[1],vector[0],0]])
-    return skew_matrix
+    @staticmethod
+    def skew4(vector):
+        """Crea matriz antisimétrica 4x4 a partir de vector"""
+        return np.array([[0, vector[2], -vector[1], vector[0]],
+                        [-vector[2], 0, vector[0], vector[1]],
+                        [vector[1], -vector[0], 0, vector[2]],
+                        [-vector[0], -vector[1], -vector[2], 0]])
 
-def skew4(vector):
-    'vector is a 3 elements array or list'
+    @staticmethod
+    def mat2quat(dcm):
+        """Convierte matriz DCM a cuaternión"""
+        q11, q12, q13 = dcm[0][0], dcm[0][1], dcm[0][2]
+        q21, q22, q23 = dcm[1][0], dcm[1][1], dcm[1][2]
+        q31, q32, q33 = dcm[2][0], dcm[2][1], dcm[2][2]
 
-    skew_matrix=np.array([[0,vector[2],-vector[1],vector[0]],
-                          [-vector[2],0, vector[0],vector[1]],
-                          [vector[1],-vector[0],0, vector[2]],
-                          [-vector[0],-vector[1],-vector[2],0]])
-    return skew_matrix
+        q4 = 0.5 * (np.sqrt(1 + q11 + q22 + q33))
+        q1 = (q23 - q32) / (4 * q4)
+        q2 = (q31 - q13) / (4 * q4)
+        q3 = (q12 - q21) / (4 * q4)
 
-def mat2quat(dcm):  
-    'dcm= 3X3 Director Cosine Matrix... to its respective quaternion [q1,q2,q3,q4]'
+        return np.array([q1, q2, q3, q4])
 
-    q11=dcm[0][0]; q12=dcm[0][1]; q13=dcm[0][2]
-    q21=dcm[1][0]; q22=dcm[1][1]; q23=dcm[1][2]
-    q31=dcm[2][0]; q32=dcm[2][1]; q33=dcm[2][2]
+    @staticmethod
+    def quat2mat(quat):
+        """Convierte cuaternión a matriz DCM"""
+        q1, q2, q3, q4 = quat[0], quat[1], quat[2], quat[3]
+        
+        dcm11 = (q1**2) - (q2**2) - (q3**2) + (q4**2)
+        dcm22 = -(q1**2) + (q2**2) - (q3**2) + (q4**2)
+        dcm33 = -(q1**2) - (q2**2) + (q3**2) + (q4**2)
+        dcm12 = 2*((q2*q1) + (q3*q4))
+        dcm21 = 2*((q2*q1) - (q3*q4))
+        dcm13 = 2*((q3*q1) - (q2*q4))
+        dcm31 = 2*((q3*q1) + (q2*q4))
+        dcm23 = 2*((q3*q2) + (q1*q4))
+        dcm32 = 2*((q3*q2) - (q1*q4))
+        
+        return np.array([[dcm11, dcm12, dcm13],
+                        [dcm21, dcm22, dcm23],
+                        [dcm31, dcm32, dcm33]])
 
-    q4=0.5*(np.sqrt(1+q11+q22+q33))
-    q1=(q23-q32)/(4*q4)
-    q2=(q31-q13)/(4*q4)
-    q3=(q12-q21)/(4*q4)
+    @staticmethod
+    def check(vector):
+        """Convierte elementos menores a 1e-8 en 0"""
+        return np.where(np.abs(vector) <= 1e-8, 0, vector)
 
-    quaternion=np.array([q1,q2,q3,q4])
-    return quaternion
+    @staticmethod
+    def normalise(vector):
+        """Normaliza un vector"""
+        norm = np.linalg.norm(vector)
+        return np.zeros(3) if norm == 0 else vector/norm
 
-def quat2mat(quat):
-    'quat= quaternion [q1,q2,q3,q4]... into a 3x3 Director Cosine Matrix' 
+    @staticmethod
+    def vec2mat(vector):
+        """Convierte vector 3D en matriz diagonal"""
+        return np.diag(vector)
 
-    q1=quat[0] ; q2=quat[1] ; q3=quat[2] ; q4=quat[3]
-    dcm11=(q1**2) - (q2**2 )- (q3**2) + (q4**2) 
-    dcm22=-(q1**2) + (q2**2 )- (q3**2) + (q4**2) 
-    dcm33=-(q1**2) - (q2**2 )+ (q3**2) + (q4**2)
-    dcm12=2*((q2*q1)+(q3*q4)) ; dcm21=2*((q2*q1)-(q3*q4))
-    dcm13=2*((q3*q1)-(q2*q4)) ;dcm31=2*((q3*q1)+(q2*q4))
-    dcm23=2*((q3*q2)+(q1*q4)) ; dcm32=2*((q3*q2)-(q1*q4))
-    dcm=np.array([[dcm11,dcm12,dcm13],[dcm21,dcm22,dcm23],[dcm31,dcm32,dcm33]])
-    return dcm
+    @staticmethod
+    def q_conjugate(q):
+        """Calcula el conjugado de un cuaternión"""
+        return np.array([-q[0], -q[1], -q[2], q[3]])
 
-def check(vector):
-    'Receives any length vector.Converts all elements less than 1e-8 into 0'
-    for i in range(len(vector)):
-        if abs(vector[i])<=10**-8:
-            vector[i]=0
+    @staticmethod
+    def q_rot(v, q, invs):
+        """Rota un vector usando un cuaternión"""
+        q_v = np.array([v[0], v[1], v[2], 0])
+        if invs == 0:
+            q_conj = MatTools.q_conjugate(q)
+            first = MatTools.hamilton(q_conj, q_v)
+            new = MatTools.hamilton(first, q)
         else:
-            vector[i]=vector[i]
-    return vector
+            q_conj = MatTools.q_conjugate(q)
+            first = MatTools.hamilton(q, q_v)
+            new = MatTools.hamilton(first, q_conj)
+        return np.array([new[0], new[1], new[2]])
 
-def normalise(vector):
-    'Normalizes a vector'
+    @staticmethod
+    def angle_vector_z(velocity):
+        """Calcula ángulo entre vector y eje Z"""
+        v = np.linalg.norm(velocity)
+        if v == 0:
+            return 0
+        angle = np.arctan2(velocity[2], -velocity[0] if velocity[0] <= 0 else velocity[0])
+        return angle * MatTools.rad2deg * -1
 
-    norm=np.linalg.norm(vector)
-    if norm==0:
-        unit=np.zeros(3)
-    else:
-        unit=(1/norm)*vector
-    return unit
+    @staticmethod
+    def rot_z(vector, angle):
+        """Rota vector alrededor del eje Z"""
+        rot = angle * MatTools.deg2rad
+        sin, cos = np.sin(rot), np.cos(rot)
+        dcm = np.array([[cos, -sin, 0],
+                       [sin, cos, 0],
+                       [0, 0, 1]])
+        return dcm.dot(vector)
 
-def vec2mat(vector):
-    'Converts a 3 elements vector into a 3x3 diagonal matrix'
-
-    v1=vector[0]; v2=vector[1]; v3=vector[2]
-    mat=np.array([[v1,0,0],[0,v2,0],[0,0,v3]])
-    return mat
-
-def q_conjugate(q):
-    'Conjugates a [q1,q2,q3,q4] quaternion'
-
-    q1=-q[0]
-    q2=-q[1]
-    q3=-q[2]
-    q4=q[3]
-    conj=np.array([q1,q2,q3,q4])
-    return conj
-
-def q_rot(v,q,invs):
-    """
-    Rotates a vector by given quaternion [q1,q2,q3,q4]
-    If invs=1 rotates in opposite direction
-    """
-    if invs==0:
-       q_conj=q_conjugate(q)
-       q_v=np.array([v[0],v[1],v[2],0])
-       first=hamilton(q_conj,q_v)
-       new=hamilton(first,q)
-    elif invs==1:
-       q_conj=q_conjugate(q)
-       q_v=np.array([v[0],v[1],v[2],0])
-       first=hamilton(q,q_v)
-       new=hamilton(first,q_conj)
-    return np.array([new[0],new[1],new[2]])
-
-def angle_vector_z(velocity):
-    """
-    MAINLY USED FOR ANGLE OF ATTACK. Obtains angle between two vectors. 
-    """   
-    v=np.linalg.norm(velocity)
-    # Attempt to correct effect of negative X component of velocity on bodyframe:
-    if v==0:
-        angle=0
-    else:
-        if velocity[0]<=0:
-            angle=np.arctan2(velocity[2],-velocity[0])
-        else:
-            angle=np.arctan2(velocity[2],velocity[0])
-
-    return angle*rad2deg * -1  # Convention considers clockwise angle as positive for angle of attack
-
-def rot_z(vector,angle):
-    """
-    Rotates any vector around its Z axis according to input angle in [deg]
-    """
-    rot=angle*deg2rad
-    
-    sin=np.sin(rot); cos=np.cos(rot)
-
-    dcm=np.array([[cos,-sin,0],[sin,cos,0],[0,0,1]])
-
-    rot_vector=dcm.dot(vector)
-
-    return rot_vector
-
-def hamilton(left_quat,right_quat):
-    'Multiplies two quaternion by Hamiltons method...right quaternion is the first rotation'
-
-    q_1 = left_quat[3] * right_quat[0] - left_quat[2] * right_quat[1] + left_quat[1] * right_quat[2] + left_quat[0] * right_quat[3] 
-    q_2 = left_quat[2] * right_quat[0] + left_quat[3] * right_quat[1] - left_quat[0] * right_quat[2] + left_quat[1] * right_quat[3] 
-    q_3 = -left_quat[1] * right_quat[0] + left_quat[0] * right_quat[1] + left_quat[3] * right_quat[2] + left_quat[2] * right_quat[3] 
-    q_4 = -left_quat[0] * right_quat[0] - left_quat[1] * right_quat[1] - left_quat[2] * right_quat[2] + left_quat[3] * right_quat[3]
-
-    return np.array([q_1,q_2,q_3,q_4])
-
-# def hamilton(q1,q2):  ### Second method
-#     'Multiplies two quaternion by Hamiltons method'
-
-#     a1=q1[3]; b1=q1[0]; c1=q1[1]; d1=q1[2]
-#     a2=q2[3]; b2=q2[0]; c2=q2[1]; d2=q2[2]
-    
-#     q_4=a1*a2 - b1*b2 - c1*c2 - d1*d2
-#     q_1=a1*b2 + b1*a2 + c1*d2 - d1*c2
-#     q_2=a1*c2 - b1*d2 + c1*a2 + d1*b2
-#     q_3=a1*d2 + b1*c2 - c1*b2 + d1*a2
-
-#     return np.array([q_1,q_2,q_3,q_4])
+    @staticmethod
+    def hamilton(left_quat, right_quat):
+        """Multiplicación de cuaterniones por método de Hamilton"""
+        q1 = left_quat[3] * right_quat[0] - left_quat[2] * right_quat[1] + left_quat[1] * right_quat[2] + left_quat[0] * right_quat[3]
+        q2 = left_quat[2] * right_quat[0] + left_quat[3] * right_quat[1] - left_quat[0] * right_quat[2] + left_quat[1] * right_quat[3]
+        q3 = -left_quat[1] * right_quat[0] + left_quat[0] * right_quat[1] + left_quat[3] * right_quat[2] + left_quat[2] * right_quat[3]
+        q4 = -left_quat[0] * right_quat[0] - left_quat[1] * right_quat[1] - left_quat[2] * right_quat[2] + left_quat[3] * right_quat[3]
+        return np.array([q1, q2, q3, q4])
