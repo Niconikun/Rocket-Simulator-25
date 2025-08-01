@@ -28,8 +28,8 @@ ___ _       _________ _                     ___ _
 
 """
 # Imports
-import MatTools as Mat
 import numpy as np
+from src.utils.mattools import MatTools as Mat
 
 mass_earth=5.972*(10**24)              # Mass of the Earth                 [kg]          [Regan93]
 univers_constant=6.67384*(10**(-11))   # Universal gravitational constant  [N (kg2/m2)]  [Regan93]

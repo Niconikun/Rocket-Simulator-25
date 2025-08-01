@@ -56,13 +56,13 @@ if submitted:
     }
     
     try:
-        with open("locations.json", "r") as file:
+        with open("data\locations.json", "r") as file:
             locations = json.load(file)
     except FileNotFoundError:
         locations = {}# Save the location data in a nested dictionary
     locations[new_location["name"]] = new_location
     # Save the location data in a JSON file
-    with open("locations.json", "w") as f:
+    with open("data\locations.json", "w") as f:
         json.dump(locations, f, indent=4)
 
     

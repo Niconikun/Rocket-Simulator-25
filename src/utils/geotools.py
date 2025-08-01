@@ -39,7 +39,7 @@ ___ _       ____________ _                  ___ _
 """
 # Imports
 import numpy as np
-import MatTools as Mat
+from mattools import MatTools as Mat
 from cmath import pi
 
 # Auxiliary functions

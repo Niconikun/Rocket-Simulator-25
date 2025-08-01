@@ -6,7 +6,7 @@ import pyvista as pv # type: ignore
 from stpyvista import stpyvista # type: ignore
 
 try:
-    with open("rockets.json", "r") as file:
+    with open("data\rockets.json", "r") as file:
         rockets = json.load(file)
 except FileNotFoundError:
     rockets = {}

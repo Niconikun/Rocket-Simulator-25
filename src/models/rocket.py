@@ -38,14 +38,14 @@ Ecuaciones Principales:
 # Imports
 import numpy as np
 import navpy as nav
-import MatTools as Mat
-from Aerodynamics import Aerodynamics
-from Engine import Engine
 from cmath import pi
-import GeoTools as Geo
 import json
 import streamlit as st
 import logging
+from src.models.engine import Engine
+from src.models.aerodynamics import Aerodynamics
+from src.utils.mattools import MatTools as Mat
+from src.utils.geotools import GeoTools as Geo
 
 class Rocket(object):
     """

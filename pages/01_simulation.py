@@ -1,16 +1,16 @@
 import streamlit as st
-from Clock import Clock
-from Planet import Planet
-from Atmosphere import Atmosphere
-from Rocket import Rocket
 from math import pi
 import numpy as np
 import datetime
-import MatTools as Mat
 import json
 import pandas as pd
 import pytz
 import logging
+from src.models.rocket import Rocket
+from src.models.atmosphere import Atmosphere
+from src.models.clock import Clock
+from src.models.planet import Planet
+from src.utils.mattools import MatTools as Mat
 
 
 
@@ -27,8 +27,8 @@ def load_json_file(filename):
         st.error(f"Error: {filename} tiene un formato inválido")
         return {}
 
-rocket_settings = load_json_file('rockets.json')
-location_settings = load_json_file('locations.json')
+rocket_settings = load_json_file('data\rockets.json')
+location_settings = load_json_file('data\locations.json')
 
 timezone_dict = {
         "United States": "America/New_York",
@@ -448,18 +448,6 @@ with st.form("Simulation Settings"):
                                 st.write(f"Primer elemento: {type(value[0])}")
                     except Exception as debug_e:
                         st.write(f"{key}: Error al analizar - {str(debug_e)}")
-            # Dentro del bucle de simulación
-            if abs(t - 11.3) < 0.1:  # Cerca del tiempo crítico
-                st.write(f"""
-                    Estado del cohete en t={t:.2f}s:
-                    Altura: {Sistema.r_enu[2]:.2f}m
-                    Pitch: {Sistema.pitch:.2f}°
-                    Velocidad: {Sistema.v_norm:.2f}m/s
-                    Lift: {Sistema.lift:.2f}N
-                    Ángulo de ataque: {Sistema.alpha:.2f}°
-                    Coef. sustentación: {Sistema.lift_coeff:.4f}
-                    Densidad: {Sistema.density:.4f}kg/m³
-                """)
 
 
 

@@ -21,6 +21,7 @@ Referencias:
 """
 # Imports
 from cmath import pi
+import numpy as np
 
 # Define Engine class for Engine module. Data given by [Valle22]  # All data SHOULD be obtained from external file
 class Engine(object):
@@ -39,7 +40,8 @@ class Engine(object):
         burn_time (float): Tiempo total de quemado [s]
     """
 
-    def __init__(self,sim_time,press_amb, burn_time, nozzle_exit_diameter, mass_flux, gas_speed, exit_pressure):
+    def __init__(self, sim_time, press_amb, burn_time, nozzle_exit_diameter, 
+                 mass_flux, gas_speed, exit_pressure):
         """
         Inicializa un nuevo objeto Engine.
 
@@ -52,6 +54,15 @@ class Engine(object):
             gas_speed (float): Velocidad de los gases de escape [m/s]
             exit_pressure (float): Presión en la salida de la tobera [Pa]
         """  
+        # Validación de parámetros
+        if press_amb < 0:
+            raise ValueError("La presión ambiente no puede ser negativa")
+        if burn_time <= 0:
+            raise ValueError("El tiempo de quemado debe ser positivo")
+        if nozzle_exit_diameter <= 0:
+            raise ValueError("El diámetro de salida debe ser positivo")
+        
+        # Atributos básicos
         self.sim_time=sim_time           # [s]    # Current simulation time
         self.area_exit=((nozzle_exit_diameter/2)**2)*pi   # [m2]   # Nozzle exit area
         self.press_amb=press_amb         # [Pa]   # Current environment pressure
@@ -72,3 +83,48 @@ class Engine(object):
             
             
             #self.thrust=2600    #[N]   # Thrust according to data provided by FAMAE
+
+    @property
+    def mass_flux(self):
+        """Calcula el flujo másico actual basado en el tiempo de quemado"""
+        if 0 <= self.sim_time <= self.burn_time:
+            return self.mass_flux
+        return 0.0
+
+    def _update_thrust(self):
+        """Calcula el empuje actual del motor"""
+        # Si estamos fuera del tiempo de quemado, no hay empuje
+        if self.sim_time < 0 or self.sim_time > self.burn_time:
+            self.thrust = 0.0
+            return
+            
+        # Empuje = ṁv + (pe - pa)A
+        momentum_thrust = self.mass_flux * self.gas_speed
+        pressure_thrust = (self.press_exit - self.press_amb) * self.area_exit
+        self.thrust = momentum_thrust + pressure_thrust
+        
+    def update(self, time, ambient_pressure):
+        """
+        Actualiza el estado del motor.
+
+        Args:
+            time (float): Nuevo tiempo [s]
+            ambient_pressure (float): Nueva presión ambiente [Pa]
+        """
+        self.sim_time = time
+        self.press_amb = ambient_pressure
+        self._update_thrust()
+
+    @property
+    def specific_impulse(self):
+        """Calcula el impulso específico"""
+        if self.mass_flux > 0:
+            return self.thrust / (self.mass_flux * 9.81)
+        return 0.0
+
+    @property
+    def thrust_coefficient(self):
+        """Calcula el coeficiente de empuje"""
+        if self.press_exit > 0:
+            return self.thrust / (self.press_exit * self.area_exit)
+        return 0.0
