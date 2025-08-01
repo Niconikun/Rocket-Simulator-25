@@ -41,26 +41,25 @@ rad2deg=180/pi
 class Clock(object):
     "julian day, GMST..."
     def __init__(self):
-        # Usar dataclasses para simplificar la inicialización
-        self.Delta_UT1 = -0.11
-        # Obtener tiempo una sola vez y reutilizar
-        current_time = datetime.now(timezone.utc)
-        self.time_vector = np.array([
-            current_time.year,
-            current_time.month,
-            current_time.day,
-            current_time.hour,
-            current_time.minute,
-            current_time.second + self.Delta_UT1
-        ])
-        # Calcular j_day directamente
-        self._calculate_julian_day()
+        """Inicialización del reloj"""
+        self.Delta_UT1 = 0.0
+        self.time_vector = self._get_current_time()
+        self.j_day = self.julian_day(self.time_vector)
+
 
     # List of date and time
-    def time_utc(self):                        
-        'Obtain current ut1 time in Greenwich in a vector automatically'
-
-        return self.time_vector
+    def time_utc(self):
+        """Retorna el vector de tiempo actual considerando Delta_UT1"""
+        time = self._get_current_time()
+        # Aplicar Delta_UT1 solo a los segundos
+        time[5] = time[5] + self.Delta_UT1
+        
+        # Manejar el wraparound de segundos si es necesario
+        if time[5] >= 60:
+            time[5] = time[5] % 60
+            time[4] += 1  # Incrementar minutos
+        
+        return time
     
     # Calculation of julian day, [Vall13]
     def julian_day(self,time_vector):                                                 
@@ -108,3 +107,15 @@ class Clock(object):
             int((7*(self.time_vector[0]+int((self.time_vector[1]+9)/(12))))/(4)) + 
             int((275*self.time_vector[1])/9) + self.time_vector[2] + 1721013.5 + 
             ((((self.time_vector[5]/60)+self.time_vector[4])/60)+self.time_vector[3])/24)
+    
+    def _get_current_time(self):
+        """Obtiene el tiempo actual en UTC"""
+        current = datetime.now(timezone.utc)
+        return np.array([
+            current.year,
+            current.month,
+            current.day,
+            current.hour,
+            current.minute,
+            current.second + current.microsecond/1e6
+        ])

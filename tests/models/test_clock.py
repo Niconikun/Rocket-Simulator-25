@@ -61,14 +61,25 @@ class TestClock(unittest.TestCase):
 
     def test_delta_ut1_effect(self):
         """Prueba el efecto de Delta_UT1"""
-        original_delta = self.clock.Delta_UT1
-        self.clock.Delta_UT1 = 0.5  # Cambiar offset
+        # Guardar tiempo inicial
+        initial_time = self.clock.time_utc()
+        initial_seconds = initial_time[5]
         
-        time_vector = self.clock.time_utc()
-        self.assertAlmostEqual(time_vector[5] % 1, 0.5, places=1)
+        # Aplicar un Delta_UT1 de 0.5 segundos
+        test_delta = 0.5
+        self.clock.Delta_UT1 = test_delta
+        
+        # Obtener nuevo tiempo
+        new_time = self.clock.time_utc()
+        new_seconds = new_time[5]
+        
+        # Verificar que la diferencia es aproximadamente Delta_UT1
+        # considerando el wraparound en los segundos
+        diff = (new_seconds - initial_seconds) % 60
+        self.assertAlmostEqual(diff, test_delta, places=1)
         
         # Restaurar valor original
-        self.clock.Delta_UT1 = original_delta
+        self.clock.Delta_UT1 = 0.0
 
 if __name__ == '__main__':
     unittest.main()
