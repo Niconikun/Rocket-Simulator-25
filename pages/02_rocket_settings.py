@@ -4,10 +4,17 @@ import json
 import numpy as np
 import pyvista as pv # type: ignore
 from stpyvista import stpyvista # type: ignore
+import os
 
+# Cargar configuraciones de cohetes
 try:
-    with open("data/rockets.json", "r") as file:
-        rockets = json.load(file)
+    rockets = {}
+    configs_path = 'data/rockets/configs/'
+    for file in os.listdir(configs_path):
+        if file.endswith('.json'):
+            with open(os.path.join(configs_path, file), 'r') as f:
+                rocket_data = json.load(f)
+                rockets[rocket_data["name"]] = rocket_data
 except FileNotFoundError:
     rockets = {}
 
@@ -160,7 +167,6 @@ diameter_bodytube = middle_column.number_input('Diameter of body tube [mm]', min
 diameter_bodytube_fins = middle_column.number_input('Diameter of body tube where fins are met [mm]', min_value=0.0, value=float(diameter_bodytube_fins_edit), step=0.1, key="diameter_bodytube_fins")
 diameter_rear_bodytube = middle_column.number_input('Diameter of rear where it meets body tube [mm]', min_value=0.0, value=float(diameter_rear_bodytube_edit), step=0.1, key="diameter_rear_bodytube")
 end_diam_rear =  middle_column.number_input('End diameter rear [mm]', min_value=0.0, value=float(end_diam_rear_edit), step=0.1, key="end_diam_rear")
-normal_f_coef_warhead = middle_column.number_input('Normal force coefficient gradient for warhead [-]', min_value=0.0, value=float(normal_f_coef_warhead_edit), step=0.1, key="normal_f_coef_warhead")
 N_fins = middle_column.number_input('Number of fins [-]', min_value=0, value=N_fins_edit, step=1, key="N_fins")
    
 with right_column:
@@ -268,7 +274,6 @@ if submitted:
                 "diameter_bodytube_fins": diameter_bodytube_fins,
                 "diameter_rear_bodytube": diameter_rear_bodytube,
                 "end_diam_rear": end_diam_rear,
-                "normal_f_coef_warhead": normal_f_coef_warhead,
                 "N_fins": N_fins
             }
         }
