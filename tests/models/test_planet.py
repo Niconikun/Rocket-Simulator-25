@@ -10,7 +10,7 @@ class TestPlanet(unittest.TestCase):
         self.precision = 6
 
     def test_initialization(self):
-        """Prueba la inicialización correcta"""
+        """Prueba el arranque correcto"""
         self.assertEqual(self.planet.gmst, self.gmst_0)
         self.assertAlmostEqual(self.planet.rotation_speed, 7.2722e-5, places=9)  # [rad/s]
         self.assertEqual(len(self.planet.hist_gmst), 0)

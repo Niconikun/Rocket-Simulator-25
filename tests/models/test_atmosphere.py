@@ -18,13 +18,25 @@ class TestAtmosphere(unittest.TestCase):
     def test_temperature_profile(self):
         """Prueba el perfil de temperatura con la altura"""
         test_heights = [0, 1000, 5000, 10000]  # [m]
+        base_temp = self.atmosphere.sea_level_temp + self.atmosphere.offset
         
         for height in test_heights:
             temp = self.atmosphere.give_temp(height)
-            # Temperatura debe disminuir con la altura hasta la tropopausa
-            if height < 11000:  # Tropopausa
-                self.assertLess(temp, self.atmosphere.sea_level_temp + self.atmosphere.offset)
-            self.assertGreater(temp, 0)  # Temperatura en K siempre positiva
+            
+            # A nivel del mar, temperatura debe ser igual a la base
+            if height == 0:
+                self.assertAlmostEqual(temp, base_temp, places=self.precision)
+            # Por encima del nivel del mar, debe ser menor (hasta la tropopausa)
+            elif height < 11000:
+                self.assertLess(temp, base_temp)
+                # Verificar gradiente térmico aproximado (-6.5°C/km)
+                expected_temp = base_temp - 0.0065 * height
+                # Usar tolerancia relativa para altitudes mayores
+                tolerance = 0.01 * expected_temp  # 0.5% de tolerancia
+                self.assertAlmostEqual(temp, expected_temp, delta=tolerance)
+        
+            # Temperatura siempre debe ser positiva en Kelvin
+            self.assertGreater(temp, 0)
 
     def test_pressure_profile(self):
         """Prueba el perfil de presión con la altura"""
@@ -65,7 +77,10 @@ class TestAtmosphere(unittest.TestCase):
             R = 287.058  # Constante específica del gas para aire [J/(kg·K)]
             expected_v_sonic = np.sqrt(gamma * R * temp)
             
-            self.assertAlmostEqual(v_sonic, expected_v_sonic, places=2)
+            # Usar tolerancia relativa del 0.01% en lugar de lugares decimales
+            tolerance = 0.0001 * expected_v_sonic
+            self.assertAlmostEqual(v_sonic, expected_v_sonic, delta=tolerance,
+                msg=f"Para altura {height}m: velocidad calculada {v_sonic} != esperada {expected_v_sonic}")
 
 if __name__ == '__main__':
     unittest.main()

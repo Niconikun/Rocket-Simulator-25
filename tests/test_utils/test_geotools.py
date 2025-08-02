@@ -45,7 +45,7 @@ class TestGeoTools(unittest.TestCase):
         self.assertAlmostEqual(det, 1.0, places=self.precision)
 
     def test_geodetic_radius(self):
-        """Prueba el cálculo del radio geodético"""
+        """Prueba el cálculo del radio geodésico"""
         lat = self.test_coord[0]
         N = Geo.calculate_geodetic_radius(lat)
         
