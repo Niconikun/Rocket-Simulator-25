@@ -7,7 +7,7 @@ import streamlit as st
 def load_config():
     """Carga la configuración desde archivos JSON"""
     rockets_path = Path("data/rockets.json")
-    locations_path = Path("data/locations.json")
+    locations_path = Path("data/launch_sites.json")
     
     with open(rockets_path) as f:
         rockets = json.load(f)

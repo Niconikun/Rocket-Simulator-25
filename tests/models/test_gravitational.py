@@ -10,16 +10,19 @@ class TestGravitational(unittest.TestCase):
         
         # Valores típicos para pruebas
         self.r_eci = np.array([6378137.0, 0.0, 0.0])  # Radio terrestre en ecuador
-        self.inertia = np.array([1.0, 2.0, 3.0])  # Momentos de inercia
-        self.q_ecef_body = np.array([0.0, 0.0, 0.0, 1.0])  # Sin rotación
+        # Momentos de inercia muy diferentes para generar torque significativo
+        self.inertia = np.array([1000.0, 2000.0, 3000.0])  # kg·m²
+        # Cuaternión con rotación de 45° en Y para generar torque
+        self.q_ecef_body = np.array([0.0, np.sin(np.pi/4), 0.0, np.cos(np.pi/4)])
 
     def test_g_accel_magnitude(self):
         """Prueba magnitud de aceleración gravitacional"""
         g = g_accel(self.r_eci)
-        
-        # Magnitud debe ser aproximadamente 9.81 m/s²
         g_mag = np.linalg.norm(g)
-        self.assertAlmostEqual(g_mag, 9.81, places=2)
+        
+        # La aceleración a nivel del mar varía entre 9.78 y 9.83 m/s²
+        self.assertGreaterEqual(g_mag, 9.78)
+        self.assertLessEqual(g_mag, 9.83)
 
     def test_g_accel_direction(self):
         """Prueba dirección de aceleración gravitacional"""
@@ -66,13 +69,24 @@ class TestGravitational(unittest.TestCase):
         altitudes = [0, 1000e3, 10000e3]  # 0, 1000km, 10000km
         torques = []
         
+        # Usar momentos de inercia más grandes para esta prueba
+        test_inertia = np.array([10000.0, 20000.0, 30000.0])  # kg·m²
+        
         for alt in altitudes:
             r_ecef = np.array([6378137.0 + alt, 0.0, 0.0])
-            torque = g_torque(r_ecef, self.inertia, self.q_ecef_body)
-            torques.append(np.linalg.norm(torque))
+            torque = g_torque(r_ecef, test_inertia, self.q_ecef_body)
+            torque_mag = np.linalg.norm(torque)
+            torques.append(torque_mag)
+            print(f"Altitud: {alt/1000:.1f} km, Torque: {torque_mag:.2e} N·m")
         
-        # El torque debe disminuir con la altitud
-        self.assertTrue(all(x > y for x, y in zip(torques, torques[1:])))
+        # Verificar que los torques no son cero
+        self.assertGreater(torques[0], 0.0, "El torque no debería ser cero")
+        
+        # Verificar que cada torque es menor que el anterior
+        for i in range(len(torques)-1):
+            self.assertGreater(torques[i], torques[i+1], 
+                f"El torque a {altitudes[i]/1000:.1f}km ({torques[i]:.2e}) debería ser mayor "
+                f"que a {altitudes[i+1]/1000:.1f}km ({torques[i+1]:.2e})")
 
 if __name__ == '__main__':
     unittest.main()

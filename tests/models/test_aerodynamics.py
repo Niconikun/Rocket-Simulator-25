@@ -5,40 +5,53 @@ from src.models.aerodynamics import Aerodynamics
 class TestAerodynamics(unittest.TestCase):
     def setUp(self):
         """Configuración inicial para cada prueba"""
-        # Parámetros geométricos típicos
-        self.diameter = 0.1          # [m] Diámetro del cohete
-        self.length = 1.0            # [m] Longitud del cohete
-        self.nose_length = 0.2       # [m] Longitud de la ojiva
-        self.fin_span = 0.15         # [m] Envergadura de aleta
-        self.fin_root_chord = 0.2    # [m] Cuerda raíz de aleta
-        self.fin_tip_chord = 0.1     # [m] Cuerda punta de aleta
-        self.num_fins = 4            # [-] Número de aletas
+        # Parámetros geométricos originales
+        self.fins_chord_tip = 0.1        # [m] Cuerda en la punta de la aleta
+        self.fins_mid_chord = 0.15       # [m] Cuerda media de la aleta
+        self.len_rear = 0.1             # [m] Longitud de la sección trasera
+        self.fins_span = 0.15           # [m] Envergadura de las aletas
+        self.diameter_warhead_base = 0.1 # [m] Diámetro base de la ojiva
+        self.diameter_bodytube = 0.1     # [m] Diámetro del cuerpo principal
+        self.diameter_bodytube_fins = 0.1 # [m] Diámetro en la sección de aletas
+        self.diameter_rear_bodytube = 0.1 # [m] Diámetro en la sección trasera
+        self.end_diam_rear = 0.105       # [m] Diámetro final de la sección trasera
+        self.N_fins = 4                  # [-] Número de aletas
         
-        # Condiciones atmosféricas
-        self.density = 1.225         # [kg/m³] Densidad del aire
-        self.viscosity = 1.789e-5    # [kg/m·s] Viscosidad dinámica
-        self.sound_speed = 340       # [m/s] Velocidad del sonido
+        # Condiciones atmosféricas (mantenidas para los cálculos)
+        self.density = 1.225            # [kg/m³] Densidad del aire
+        self.viscosity = 1.789e-5       # [kg/m·s] Viscosidad dinámica
+        self.sound_speed = 340          # [m/s] Velocidad del sonido
         
-        # Crear instancia
+        # Crear instancia con los parámetros originales
         self.aero = Aerodynamics(
-            self.diameter,
-            self.length,
-            self.nose_length,
-            self.fin_span,
-            self.fin_root_chord,
-            self.fin_tip_chord,
-            self.num_fins
+            self.fins_chord_tip,
+            self.fins_mid_chord,
+            self.len_rear,
+            self.fins_span,
+            self.diameter_warhead_base,
+            self.diameter_bodytube,
+            self.diameter_bodytube_fins,
+            self.diameter_rear_bodytube,
+            self.end_diam_rear,
+            self.N_fins
         )
 
     def test_initialization(self):
         """Prueba la inicialización correcta"""
-        self.assertEqual(self.aero.diameter, self.diameter)
-        self.assertEqual(self.aero.length, self.length)
-        self.assertEqual(self.aero.num_fins, self.num_fins)
+        self.assertEqual(self.aero.fins_chord_tip, self.fins_chord_tip)
+        self.assertEqual(self.aero.fins_mid_chord, self.fins_mid_chord)
+        self.assertEqual(self.aero.len_rear, self.len_rear)
+        self.assertEqual(self.aero.fins_span, self.fins_span)
+        self.assertEqual(self.aero.diameter_warhead_base, self.diameter_warhead_base)
+        self.assertEqual(self.aero.diameter_bodytube, self.diameter_bodytube)
+        self.assertEqual(self.aero.diameter_bodytube_fins, self.diameter_bodytube_fins)
+        self.assertEqual(self.aero.diameter_rear_bodytube, self.diameter_rear_bodytube)
+        self.assertEqual(self.aero.end_diam_rear, self.end_diam_rear)
+        self.assertEqual(self.aero.N_fins, self.N_fins)
 
     def test_reference_area(self):
         """Prueba el cálculo del área de referencia"""
-        expected_area = np.pi * (self.diameter/2)**2
+        expected_area = np.pi * (self.diameter_bodytube/2)**2
         self.assertAlmostEqual(self.aero.reference_area, expected_area)
 
     def test_reynolds_number(self):

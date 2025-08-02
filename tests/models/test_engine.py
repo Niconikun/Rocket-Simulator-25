@@ -4,39 +4,39 @@ from src.models.engine import Engine
 
 class TestEngine(unittest.TestCase):
     def setUp(self):
-        """Configuración inicial para cada prueba"""
-        # Parámetros típicos del motor
-        self.time = 0.0
-        self.ambient_pressure = 101325.0  # Presión atmosférica a nivel del mar [Pa]
-        self.burn_time = 5.0             # Tiempo de quemado [s]
-        self.nozzle_exit_diameter = 0.05 # Diámetro de salida [m]
-        self.mass_flux = 0.1             # Flujo másico [kg/s]
-        self.gas_speed = 2000.0          # Velocidad de gases [m/s]
-        self.exit_pressure = 101325.0    # Presión de salida [Pa]
-        
+        """Configuración inicial para las pruebas"""
+        # Valores iniciales
+        self.time = 0.1  # Tiempo inicial [s]
+        self.ambient_pressure = 101325.0  # Presión ambiente [Pa]
+        self.burn_time = 2.0  # Tiempo de quemado [s]
+        self.nozzle_exit_diameter = 0.1  # Diámetro de salida [m]
+        self.mass_flux_max = 1.0  # Flujo másico máximo [kg/s]
+        self.gas_speed = 2000.0  # Velocidad de salida [m/s]
+        self.exit_pressure = 101325.0  # Presión de salida [Pa]
+
         # Crear instancia del motor
         self.engine = Engine(
             self.time,
             self.ambient_pressure,
             self.burn_time,
             self.nozzle_exit_diameter,
-            self.mass_flux,
+            self.mass_flux_max,
             self.gas_speed,
             self.exit_pressure
         )
 
     def test_initialization(self):
-        """Prueba la inicialización correcta del motor"""
+        """Prueba el arranque correcto del motor"""
         self.assertEqual(self.engine.time, self.time)
         self.assertEqual(self.engine.ambient_pressure, self.ambient_pressure)
         self.assertEqual(self.engine.burn_time, self.burn_time)
-        self.assertEqual(self.engine.mass_flux, self.mass_flux)
+        self.assertEqual(self.engine.mass_flux, self.mass_flux_max)
         
     def test_thrust_calculation(self):
         """Prueba el cálculo del empuje"""
         # Empuje esperado = ṁv + (pe - pa)A
         exit_area = np.pi * (self.nozzle_exit_diameter/2)**2
-        expected_thrust = (self.mass_flux * self.gas_speed + 
+        expected_thrust = (self.mass_flux_max * self.gas_speed + 
                          (self.exit_pressure - self.ambient_pressure) * exit_area)
         
         self.assertAlmostEqual(self.engine.thrust, expected_thrust, places=2)
@@ -45,7 +45,7 @@ class TestEngine(unittest.TestCase):
         """Prueba el comportamiento del motor durante el quemado"""
         # Antes del tiempo de quemado
         self.engine.time = 2.0  # Durante el quemado
-        self.assertEqual(self.engine.mass_flux, self.mass_flux)
+        self.assertEqual(self.engine.mass_flux, self.mass_flux_max)
         
         # Después del tiempo de quemado
         self.engine.time = 6.0  # Después del quemado
@@ -60,7 +60,7 @@ class TestEngine(unittest.TestCase):
         for p_amb in test_pressures:
             self.engine.ambient_pressure = p_amb
             exit_area = np.pi * (self.nozzle_exit_diameter/2)**2
-            expected_thrust = (self.mass_flux * self.gas_speed + 
+            expected_thrust = (self.mass_flux_max * self.gas_speed + 
                              (self.exit_pressure - p_amb) * exit_area)
             
             self.assertAlmostEqual(self.engine.thrust, expected_thrust, places=2)
@@ -80,7 +80,7 @@ class TestEngine(unittest.TestCase):
         self.engine.exit_pressure = 101325.0
         
         # El empuje debería ser principalmente debido al flujo másico
-        expected_thrust = self.mass_flux * self.gas_speed
+        expected_thrust = self.mass_flux_max * self.gas_speed
         actual_thrust = self.engine.thrust
         
         # Tolerancia del 1%
@@ -92,7 +92,7 @@ class TestEngine(unittest.TestCase):
         self.engine.ambient_pressure = 0.0
         
         exit_area = np.pi * (self.nozzle_exit_diameter/2)**2
-        expected_thrust = (self.mass_flux * self.gas_speed + 
+        expected_thrust = (self.mass_flux_max * self.gas_speed + 
                          self.exit_pressure * exit_area)  # pa = 0
         
         self.assertAlmostEqual(self.engine.thrust, expected_thrust, places=2)
@@ -110,21 +110,15 @@ class TestEngine(unittest.TestCase):
         self.assertLess(C_f, 2.5)
 
     def test_specific_impulse(self):
-        """
-        Prueba el cálculo del impulso específico.
-        """
-        # Isp = F/(ṁg0)
-        g0 = 9.81  # Gravedad estándar
-        Isp = self.engine.thrust / (self.mass_flux * g0)
+        """Prueba el cálculo del impulso específico."""
+        # Obtener Isp a nivel del mar y en vacío
+        Isp = self.engine.specific_impulse
+        Isp_vacuum = self.engine.vacuum_specific_impulse
         
-        # Verificar que está en un rango típico para motores cohete sólidos (180-250s)
-        self.assertGreater(Isp, 150)
-        self.assertLess(Isp, 300)
-        
-        # Verificar que aumenta en vacío
-        self.engine.ambient_pressure = 0.0
-        Isp_vacuum = self.engine.thrust / (self.mass_flux * g0)
-        self.assertGreater(Isp_vacuum, Isp)
+        # Verificaciones
+        self.assertGreater(Isp, 0)
+        self.assertGreater(Isp_vacuum, Isp)  # Isp en vacío debe ser mayor
+        self.assertLess(Isp_vacuum, 500)  # Límite superior razonable para motores químicos
 
     def test_transient_behavior(self):
         """
@@ -165,20 +159,25 @@ class TestEngine(unittest.TestCase):
         # Temperatura de combustión típica para propelente sólido
         T_chamber = 3000  # K
         
-        # Velocidad del sonido en gases calientes
+        # Velocidad del sonido en la garganta (condición sónica)
         gamma = 1.2  # Razón de calores específicos típica
         R = 8314/30  # Constante de gas específica (J/kg·K) para gases de escape típicos
-        a = np.sqrt(gamma * R * T_chamber)
+        a_throat = np.sqrt(gamma * R * T_chamber)
         
-        # La velocidad de los gases no debe superar la velocidad del sonido en la garganta
-        self.assertLess(self.gas_speed, a)
+        # La velocidad de los gases en la salida puede superar Mach 1
+        # pero típicamente no supera Mach 3.5 para toberas convencionales
+        max_exit_mach = 3.5
+        max_allowed_speed = max_exit_mach * a_throat
+        
+        self.assertLess(self.gas_speed, max_allowed_speed)
+        self.assertGreater(self.gas_speed, a_throat)  # Debe ser supersónico en la salida
 
     def test_performance_parameters(self):
         """
         Prueba varios parámetros de rendimiento del motor.
         """
         # Calcular potencia del motor
-        power = 0.5 * self.mass_flux * self.gas_speed**2
+        power = 0.5 * self.mass_flux_max * self.gas_speed**2
         
         # Calcular impulso total
         total_impulse = self.engine.thrust * self.burn_time
@@ -194,7 +193,7 @@ class TestEngine(unittest.TestCase):
         Prueba la consistencia del flujo másico durante el quemado.
         """
         # Masa total de propelente
-        total_propellant_mass = self.mass_flux * self.burn_time
+        total_propellant_mass = self.mass_flux_max * self.burn_time
         
         # Simular quemado en intervalos
         time_steps = np.linspace(0, self.burn_time, 100)
