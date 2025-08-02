@@ -1,68 +1,111 @@
-# Rocket Simulator GUI
+# Rocket-Simulator-GUI
 
-![version](https://img.shields.io/badge/version-3.5.0-blue.svg)
+Simulador de cohetes con interfaz gráfica para análisis de trayectorias y rendimiento.
 
 ## Descripción
 
-Simulador de trayectoria de cohetes con interfaz gráfica, visualización 3D y análisis de rendimiento.
+Este proyecto implementa un simulador de cohetes completo con las siguientes características:
+
+- Modelado físico completo (6 grados de libertad)
+- Cálculo de fuerzas aerodinámicas
+- Simulación del motor cohete
+- Interfaz gráfica para visualización de resultados
+- Almacenamiento y análisis de datos de vuelo
+
+## Características Principales
+
+- **Dinámica de Vuelo**
+  - Simulación 6-DOF completa
+  - Integración numérica RK4
+  - Cuaterniones para rotación
+  - Conservación de masa y energía
+
+- **Aerodinámica**
+  - Coeficientes basados en método Barrowman
+  - Efectos de compresibilidad
+  - Cálculo de centro de presión
+  - Estabilidad aerodinámica
+
+- **Motor Cohete**
+  - Empuje variable con la altura
+  - Compensación de presión ambiente
+  - Flujo másico variable
+  - Eficiencia de tobera
 
 ## Instalación
+
+1. Clonar el repositorio:
+
+```bash
+git clone https://github.com/username/Rocket-Simulator---GUI.git
+```
+
+2. Instalar dependencias:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Uso rápido
+## Uso
+
+1. Ejecutar la interfaz gráfica:
 
 ```bash
-streamlit run streamlit_app.py
+streamlit run src/app.py
 ```
+
+2. Cargar configuración del cohete desde `data/rockets.json`
+
+3. Configurar parámetros de simulación:
+   - Condiciones iniciales
+   - Parámetros atmosféricos
+   - Configuración del motor
+
+4. Ejecutar simulación y visualizar resultados
 
 ## Estructura del Proyecto
 
-- `Rocket.py`: Lógica principal de simulación.
-- `Analysis/dashboard.py`: Dashboard de resultados.
-- `Simulation Settings/rocket_settings.py`: Configuración de cohetes.
-- `rockets.json`: Base de datos de cohetes.
+```
+Rocket-Simulator---GUI/
+├── src/
+│   ├── models/
+│   │   ├── rocket.py       # Clase principal del cohete
+│   │   ├── engine.py       # Modelo del motor
+│   │   ├── aerodynamics.py # Cálculos aerodinámicos
+│   │   └── atmosphere.py   # Modelo atmosférico
+│   ├── utils/
+│   │   ├── mattools.py     # Herramientas matemáticas
+│   │   └── geotools.py     # Conversiones geográficas
+│   └── app.py             # Interfaz gráfica
+├── tests/
+│   └── models/            # Tests unitarios
+├── data/
+│   └── rockets.json      # Configuraciones de cohetes
+└── README.md
+```
 
-## Ecuaciones Físicas Utilizadas
+## Tests
 
-- **Fuerza de arrastre**  
-  $$
-  F_d = \frac{1}{2} \rho v^2 C_d A
-  $$
-  Donde:
-  - $F_d$: Fuerza de arrastre [N]
-  - $\rho$: Densidad del aire [kg/m³]
-  - $v$: Velocidad relativa [m/s]
-  - $C_d$: Coeficiente de arrastre [-]
-  - $A$: Área de referencia [m²]
+Ejecutar tests unitarios:
 
-- **Fuerza de sustentación**  
-  $$
-  F_l = \frac{1}{2} \rho v^2 C_l A
-  $$
-  Donde $C_l$ es el coeficiente de sustentación.
+```bash
+python -m unittest discover tests
+```
 
-- **Ecuación de movimiento**  
-  $$
-  m \frac{d\vec{v}}{dt} = \vec{F}_{\text{total}}
-  $$
+## Referencias
 
-- **Pérdida de masa por propulsión**  
-  $$
-  \dot{m} = -\frac{T}{v_e}
-  $$
-  Donde $T$ es el empuje y $v_e$ la velocidad de escape.
+- Sutton, G. P., & Biblarz, O. (2016). Rocket propulsion elements
+- Barrowman, J. (1967). The practical calculation of the aerodynamic characteristics of slender finned vehicles
+- Yang, (2019). Spacecraft Modeling, Attitude Determination, and Control
 
 ## Contribuir
 
-1. Haz un fork del repositorio.
-2. Crea una rama (`git checkout -b feature/nueva-funcionalidad`)
-3. Haz commit de tus cambios (`git commit -am 'Agrega nueva funcionalidad'`)
-4. Haz push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Abre un Pull Request.
+1. Fork el repositorio
+2. Crear rama para features (`git checkout -b feature/NuevaFeature`)
+3. Commit cambios (`git commit -am 'Agregar nueva feature'`)
+4. Push a la rama (`git push origin feature/NuevaFeature`)
+5. Crear Pull Request
 
 ## Licencia
 
-MIT
+Este proyecto está bajo la Licencia MIT - ver el archivo LICENSE para detalles.
