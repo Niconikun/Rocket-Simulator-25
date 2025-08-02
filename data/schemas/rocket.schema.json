@@ -1,0 +1,162 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Rocket Configuration Schema",
+    "type": "object",
+    "required": ["name", "initial_mass", "reference_area", "engine", "geometry", "fins", "nosecone", "fuselage"],
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Nombre del cohete"
+        },
+        "initial_mass": {
+            "type": "number",
+            "description": "Masa inicial del cohete [kg]",
+            "minimum": 0
+        },
+        "reference_area": {
+            "type": "number",
+            "description": "Área de referencia [m²]",
+            "minimum": 0
+        },
+        "I_before_burn": {
+            "type": "object",
+            "description": "Momentos de inercia antes del quemado [kg·m²]",
+            "properties": {
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "z": {"type": "number"}
+            },
+            "required": ["x", "y", "z"]
+        },
+        "CoM_before_burn": {
+            "type": "object",
+            "description": "Centro de masa antes del quemado [m]",
+            "properties": {
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "z": {"type": "number"}
+            },
+            "required": ["x", "y", "z"]
+        },
+        "engine": {
+            "type": "object",
+            "required": ["burn_time", "nozzle_exit_diameter", "mass_flux", "gas_speed", "exit_pressure"],
+            "properties": {
+                "burn_time": {
+                    "type": "number",
+                    "description": "Tiempo de quemado [s]",
+                    "minimum": 0
+                },
+                "nozzle_exit_diameter": {
+                    "type": "number",
+                    "description": "Diámetro de salida de la tobera [m]",
+                    "minimum": 0
+                },
+                "mass_flux": {
+                    "type": "number",
+                    "description": "Flujo másico [kg/s]",
+                    "minimum": 0
+                },
+                "gas_speed": {
+                    "type": "number",
+                    "description": "Velocidad de los gases [m/s]",
+                    "minimum": 0
+                },
+                "exit_pressure": {
+                    "type": "number",
+                    "description": "Presión de salida [Pa]",
+                    "minimum": 0
+                }
+            }
+        },
+        "geometry": {
+            "type": "object",
+            "required": ["length nosecone fins", "total length"],
+            "properties": {
+                "length nosecone fins": {
+                    "type": "number",
+                    "description": "Longitud desde la ojiva hasta las aletas [mm]"
+                },
+                "total length": {
+                    "type": "number",
+                    "description": "Longitud total del cohete [mm]"
+                }
+            }
+        },
+        "fins": {
+            "type": "object",
+            "required": ["span", "chord_root", "chord_tip", "mid_chord", "N_fins"],
+            "properties": {
+                "span": {
+                    "type": "number",
+                    "description": "Envergadura de las aletas [mm]"
+                },
+                "chord_root": {
+                    "type": "number",
+                    "description": "Cuerda en la raíz [mm]"
+                },
+                "chord_tip": {
+                    "type": "number",
+                    "description": "Cuerda en la punta [mm]"
+                },
+                "mid_chord": {
+                    "type": "number",
+                    "description": "Cuerda media [mm]"
+                },
+                "N_fins": {
+                    "type": "integer",
+                    "description": "Número de aletas",
+                    "minimum": 3,
+                    "maximum": 8
+                }
+            }
+        },
+        "nosecone": {
+            "type": "object",
+            "required": ["length", "diameter", "shape"],
+            "properties": {
+                "length": {
+                    "type": "number",
+                    "description": "Longitud de la ojiva [mm]"
+                },
+                "diameter": {
+                    "type": "number",
+                    "description": "Diámetro de la base [mm]"
+                },
+                "shape": {
+                    "type": "string",
+                    "enum": ["conical", "ogive", "parabolic"],
+                    "description": "Forma de la ojiva"
+                }
+            }
+        },
+        "fuselage": {
+            "type": "object",
+            "required": ["length", "diameter"],
+            "properties": {
+                "length": {
+                    "type": "number",
+                    "description": "Longitud del fuselaje [mm]"
+                },
+                "diameter": {
+                    "type": "number",
+                    "description": "Diámetro del fuselaje [mm]"
+                }
+            }
+        },
+        "rear_section": {
+            "type": "object",
+            "required": ["length", "diameter"],
+            "properties": {
+                "length": {
+                    "type": "number",
+                    "description": "Longitud de la sección trasera [mm]"
+                },
+                "diameter": {
+                    "type": "number",
+                    "description": "Diámetro de la sección trasera [mm]"
+                }
+            }
+        }
+    }
+}

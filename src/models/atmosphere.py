@@ -29,6 +29,7 @@ ___ _     _________ _     ___ _
 # Imports
 from fluids import ATMOSPHERE_1976 as atmos76
 from functools import lru_cache
+import numpy as np
 
 # Define class for atmosphere
 class Atmosphere(object):
@@ -47,11 +48,24 @@ class Atmosphere(object):
     def _get_atmosphere_data(height, offset):
         return atmos76(height, offset)
     
-    def give_temp(self,height):
-        'Gets temperature [K]'
-
-        atm = self._get_atmosphere_data(height, self.offset)
-        return atm.T
+    def give_temp(self, height):
+        """
+        Calcula la temperatura atmosférica a una altura dada.
+        
+        Args:
+            height (float): Altura sobre el nivel del mar [m]
+        
+        Returns:
+            float: Temperatura [K]
+        """
+        base_temp = self.sea_level_temp + self.offset
+        
+        if height < 11000:  # Troposfera
+            return base_temp - 0.0065 * height
+        elif height < 20000:  # Tropopausa
+            return base_temp - 0.0065 * 11000
+        else:  # Estratosfera
+            return base_temp - 0.0065 * 11000  # Temperatura constante
 
     def give_press(self,height):
         'Gets atmospheric pressure [Pa]'
@@ -65,8 +79,18 @@ class Atmosphere(object):
         self.atmosphere=atmos76(height,self.offset)
         return self.atmosphere.rho
     
-    def give_v_sonic(self,height):
-        'Gets sound speed [m/s]'
+    def give_v_sonic(self, height):
+        """
+        Calcula la velocidad del sonido a una altura dada.
         
-        self.atmosphere=atmos76(height,self.offset)
-        return self.atmosphere.v_sonic
+        Args:
+            height (float): Altura sobre el nivel del mar [m]
+        
+        Returns:
+            float: Velocidad del sonido [m/s]
+        """
+        gamma = 1.4  # Razón de calores específicos para aire
+        R = 287.058  # Constante específica del gas para aire [J/(kg·K)]
+        temp = self.give_temp(height)
+        
+        return np.sqrt(gamma * R * temp)

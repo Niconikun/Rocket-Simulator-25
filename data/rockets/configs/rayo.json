@@ -1,0 +1,56 @@
+{
+    "name": "Rayo",
+    "initial_mass": 9.48,
+    "reference_area": 0.006204,
+    "I_before_burn": {
+            "x": 0.009057381,
+            "y": 0.784037556,
+            "z": 0.784037556
+    },
+    "CoM_before_burn": {
+        "x": 0.5109,
+        "y": 0,
+        "z": 0
+    },
+    "I_after_burn": {
+        "x": 0.0062581,
+        "y": 0.522648762,
+        "z": 0.522648762
+    },
+    "CoM_after_burn": {
+        "x": 0.40215,
+        "y": 0,
+        "z": 0
+    },
+    "engine": {
+        "burn_time": 3.15,
+        "nozzle_exit_diameter": 0.0425,
+        "mass_flux": 1.057,
+        "gas_speed": 2187,
+        "exit_pressure": 186037
+    },
+    "geometry": {
+        "length nosecone fins": 856,
+        "total length": 936
+    },
+    "fins": {
+        "span": 41.65,
+        "chord_root": 76.32,
+        "chord_tip": 33.6722,
+        "mid_chord": 46.6440,
+        "N_fins": 4
+    },
+    "nosecone": {
+        "length": 205.35,
+        "diameter": 88.9,
+        "shape": "conical"
+    },
+    "fuselage": {
+        "length": 730,
+        "diameter": 88.9
+    },
+    "rear_section": {
+        "length": 62,
+        "diameter": 88.9
+    }
+}

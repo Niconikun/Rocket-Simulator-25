@@ -69,7 +69,7 @@ deg2rad=pi/180
 rad2deg=180/pi
 
 class Aerodynamics(object):
-    def __init__(self,mach,a, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_chord_tip, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, normal_f_coef_warhead, N_fins):                          
+    def __init__(self,mach,a, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_chord_tip, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, N_fins):                          
 
         #______________________Drag Coefficient____________________________#
         
@@ -101,7 +101,7 @@ class Aerodynamics(object):
         alpha=angle*deg2rad  # [rad]
 
         # Cone [Box09]:
-        Cn_alpha_cone=normal_f_coef_warhead       # [-]      # Normal force coefficient gradient for cone (warhead)
+        Cn_alpha_cone=2      # [-]      # Normal force coefficient gradient for cone (warhead)
         Xcp_cone=0.466*len_warhead    # [mm]     # Centre of pressure of cone
 
         # Body, [Box09]:

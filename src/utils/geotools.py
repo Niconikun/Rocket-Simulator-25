@@ -240,7 +240,7 @@ class GeoTools:
 
     @staticmethod
     def calculate_geodetic_radius(lat):
-        """Calcula el radio geodético en una latitud dada"""
+        """Calcula el radio geodésico en una latitud dada"""
         lat_rad = lat * GeoTools.deg2rad
         sin_lat = np.sin(lat_rad)
         

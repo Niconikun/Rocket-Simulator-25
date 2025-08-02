@@ -1,0 +1,45 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Launch Sites Configuration Schema",
+    "type": "object",
+    "patternProperties": {
+        "^[a-zA-Z0-9_ ]+$": {
+            "type": "object",
+            "required": ["name", "latitude", "longitude", "altitude"],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Nombre del sitio de lanzamiento"
+                },
+                "latitude": {
+                    "type": "number",
+                    "description": "Latitud [grados decimales]",
+                    "minimum": -90,
+                    "maximum": 90
+                },
+                "longitude": {
+                    "type": "number",
+                    "description": "Longitud [grados decimales]",
+                    "minimum": -180,
+                    "maximum": 180
+                },
+                "altitude": {
+                    "type": "number",
+                    "description": "Altitud sobre el nivel del mar [m]",
+                    "minimum": -500,
+                    "maximum": 5000
+                },
+                "magnetic_declination": {
+                    "type": "number",
+                    "description": "Declinación magnética [grados]",
+                    "minimum": -180,
+                    "maximum": 180
+                },
+                "weather_station": {
+                    "type": "string",
+                    "description": "ID de la estación meteorológica más cercana"
+                }
+            }
+        }
+    }
+}

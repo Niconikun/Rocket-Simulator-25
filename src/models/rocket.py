@@ -320,7 +320,7 @@ class Rocket(object):
         else:
             self.mach=self.v_norm/self.v_sonic    # [-]    # Mach number
         
-        with open('rockets.json', 'r') as file:
+        with open('data/rockets.json', 'r') as file:
             rocket_settings = json.load(file)
 
         len_warhead = rocket_settings[rocket_name]['geometry']["len_warhead"] 
@@ -337,11 +337,10 @@ class Rocket(object):
         diameter_bodytube_fins = rocket_settings[rocket_name]['geometry']["diameter_bodytube_fins"]
         diameter_rear_bodytube = rocket_settings[rocket_name]['geometry']["diameter_rear_bodytube"]
         end_diam_rear = rocket_settings[rocket_name]['geometry']["end_diam_rear"]
-        normal_f_coef_warhead = rocket_settings[rocket_name]['geometry']["normal_f_coef_warhead"]
         N_fins = rocket_settings[rocket_name]['geometry']["N_fins"]
         
 
-        Aero=Aerodynamics(self.mach,self.alpha, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_chord_tip, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, normal_f_coef_warhead, N_fins)   # Aerodynamics instance 
+        Aero=Aerodynamics(self.mach,self.alpha, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_chord_tip, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, N_fins)   # Aerodynamics instance 
         self.drag_coeff=Aero.cd                   # [-]    # Drag coefficient
         self.lift_coeff=Aero.cl                   # [-]    # Lift coefficient
         self.cp_b=Aero.xcp                        # [m]    # Location of centre of pressure from nose (ogive) tip
@@ -360,7 +359,7 @@ class Rocket(object):
         Referencias:
             - Sutton, G. P., & Biblarz, O. (2016). Rocket propulsion elements
         """
-        with open('rockets.json', 'r') as file:
+        with open('data/rockets/configs/rocket_name.json', 'r') as file:
             rocket_settings = json.load(file)
 
         burn_time = rocket_settings[rocket_name]['engine']["burn_time"]

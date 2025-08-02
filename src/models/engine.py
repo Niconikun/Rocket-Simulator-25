@@ -24,107 +24,183 @@ from cmath import pi
 import numpy as np
 
 # Define Engine class for Engine module. Data given by [Valle22]  # All data SHOULD be obtained from external file
-class Engine(object):
+class Engine:
     """
-    Clase para simular el comportamiento del motor cohete.
-
-    Esta clase calcula el empuje y flujo másico del motor basándose en:
-    - Tiempo de quemado
-    - Presión atmosférica
-    - Geometría de la tobera
-    - Características del propelente
-
+    Clase que modela el comportamiento del motor cohete.
+    
     Atributos:
-        thrust (float): Empuje actual [N]
-        mass_flux (float): Flujo másico actual [kg/s]
+        time (float): Tiempo actual de operación [s]
+        ambient_pressure (float): Presión ambiente [Pa]
         burn_time (float): Tiempo total de quemado [s]
+        nozzle_exit_diameter (float): Diámetro de salida de la tobera [m]
+        _mass_flux (float): Flujo másico [kg/s]
+        gas_speed (float): Velocidad de los gases de escape [m/s]
+        exit_pressure (float): Presión de salida [Pa]
     """
-
-    def __init__(self, sim_time, press_amb, burn_time, nozzle_exit_diameter, 
-                 mass_flux, gas_speed, exit_pressure):
+    
+    def __init__(self, time, ambient_pressure, burn_time, nozzle_exit_diameter, 
+                 mass_flux_max, gas_speed, exit_pressure):
         """
-        Inicializa un nuevo objeto Engine.
+        Inicializa el motor cohete.
 
         Args:
-            time (float): Tiempo actual de simulación [s]
-            ambient_pressure (float): Presión atmosférica [Pa]
+            time (float): Tiempo actual [s]
+            ambient_pressure (float): Presión ambiente [Pa]
             burn_time (float): Tiempo total de quemado [s]
             nozzle_exit_diameter (float): Diámetro de salida de la tobera [m]
-            mass_flux (float): Flujo másico nominal [kg/s]
-            gas_speed (float): Velocidad de los gases de escape [m/s]
-            exit_pressure (float): Presión en la salida de la tobera [Pa]
-        """  
-        # Validación de parámetros
-        if press_amb < 0:
+            mass_flux_max (float): Flujo másico máximo [kg/s]
+            gas_speed (float): Velocidad de los gases [m/s]
+            exit_pressure (float): Presión de salida [Pa]
+
+        Raises:
+            ValueError: Si algún parámetro es negativo o físicamente inválido
+        """
+        # Validación extendida de parámetros
+        if ambient_pressure < 0:
             raise ValueError("La presión ambiente no puede ser negativa")
         if burn_time <= 0:
             raise ValueError("El tiempo de quemado debe ser positivo")
         if nozzle_exit_diameter <= 0:
-            raise ValueError("El diámetro de salida debe ser positivo")
-        
-        # Atributos básicos
-        self.sim_time=sim_time           # [s]    # Current simulation time
-        self.area_exit=((nozzle_exit_diameter/2)**2)*pi   # [m2]   # Nozzle exit area
-        self.press_amb=press_amb         # [Pa]   # Current environment pressure
-        
-        self.burn_time=burn_time              # [s]    # Total propellant burn time
+            raise ValueError("El diámetro de la tobera debe ser positivo")
+        if mass_flux_max <= 0:
+            raise ValueError("El flujo másico máximo debe ser positivo")
+        if gas_speed <= 0:
+            raise ValueError("La velocidad de los gases debe ser positiva")
+        if exit_pressure <= 0:
+            raise ValueError("La presión de salida debe ser positiva")
 
-        if self.sim_time==0 or self.sim_time>=self.burn_time:
+        # Validaciones físicas adicionales
+        if exit_pressure < ambient_pressure/100:  # Factor de seguridad para vacío
+            raise ValueError("La presión de salida es demasiado baja")
+        if gas_speed > 5000:  # Límite superior típico para motores químicos
+            raise ValueError("Velocidad de gases demasiado alta")
             
-            self.mass_flux=0            # [kg/s]      
-            self.gas_speed=0            # [m/s]
-            self.press_exit=0           # [Pa]
-            self.thrust=0               # [N]
-        else:                                   
-            self.mass_flux=mass_flux        # [kg/s]
-            self.gas_speed=gas_speed         # [m/s]
-            self.press_exit=exit_pressure   # [Pa]   ## 1.86037 [bar] to be used in external files
-            self.thrust=self.mass_flux*self.gas_speed + (self.press_exit-self.press_amb)*self.area_exit   #[N] 
-            
-            
-            #self.thrust=2600    #[N]   # Thrust according to data provided by FAMAE
+        # Validaciones térmicas
+        T_chamber = 3000  # K (temperatura típica de combustión)
+        gamma = 1.2  # Razón de calores específicos
+        R = 8314/30  # Constante de gas específica (J/kg·K)
+        a_throat = np.sqrt(gamma * R * T_chamber)
+        max_exit_mach = 3.5
+        max_allowed_speed = max_exit_mach * a_throat
+
+        if gas_speed <= a_throat:
+            raise ValueError("La velocidad de los gases debe ser supersónica en la salida")
+        if gas_speed >= max_allowed_speed:
+            raise ValueError(f"La velocidad de los gases no puede superar Mach {max_exit_mach}")
+
+        self.time = time
+        self.ambient_pressure = ambient_pressure
+        self.burn_time = burn_time
+        self.nozzle_exit_diameter = nozzle_exit_diameter
+        self._mass_flux_max = mass_flux_max
+        self.gas_speed = gas_speed
+        self.exit_pressure = exit_pressure
+        
+        # Área de salida de la tobera
+        self.exit_area = np.pi * (self.nozzle_exit_diameter/2)**2
+        
+        # Inicializar valores
+        self._mass_flux = 0.0
+        self._thrust = 0.0
+        
+        # Calcular valores iniciales
+        self._calculate_performance()
 
     @property
     def mass_flux(self):
-        """Calcula el flujo másico actual basado en el tiempo de quemado"""
-        if 0 <= self.sim_time <= self.burn_time:
-            return self.mass_flux
-        return 0.0
+        """Getter para el flujo másico"""
+        return self._mass_flux
 
-    def _update_thrust(self):
-        """Calcula el empuje actual del motor"""
-        # Si estamos fuera del tiempo de quemado, no hay empuje
-        if self.sim_time < 0 or self.sim_time > self.burn_time:
-            self.thrust = 0.0
-            return
-            
-        # Empuje = ṁv + (pe - pa)A
-        momentum_thrust = self.mass_flux * self.gas_speed
-        pressure_thrust = (self.press_exit - self.press_amb) * self.area_exit
-        self.thrust = momentum_thrust + pressure_thrust
+    @property
+    def thrust(self):
+        """Getter para el empuje"""
+        return self._thrust
+
+    def _calculate_performance(self):
+        """Calcula el rendimiento del motor basado en el tiempo actual"""
+        # Inicializar valores
+        self._mass_flux = 0.0
+        self._thrust = 0.0
         
-    def update(self, time, ambient_pressure):
+        # Calcular flujo másico durante el tiempo de operación
+        if 0 <= self.time <= self.burn_time:
+            if self.time < 0.1:  # Rampa de encendido
+                ramp_factor = self.time/0.1
+                self._mass_flux = self._mass_flux_max * ramp_factor
+            elif self.time > (self.burn_time - 0.1):  # Rampa de apagado
+                remaining_time = self.burn_time - self.time
+                ramp_factor = remaining_time/0.1
+                self._mass_flux = self._mass_flux_max * ramp_factor
+            else:  # Operación nominal
+                self._mass_flux = self._mass_flux_max
+    
+            # Asegurar límites del flujo másico y manejar valores muy pequeños
+            self._mass_flux = max(0.0, min(self._mass_flux, self._mass_flux_max))
+        
+            # Usar un umbral más alto para el flujo másico en transiciones
+            if self._mass_flux > 1e-3:  # Umbral aumentado para mejor transición
+                momentum_thrust = self._mass_flux * self.gas_speed
+                pressure_thrust = (self.exit_pressure - self.ambient_pressure) * self.exit_area
+                self._thrust = momentum_thrust + pressure_thrust
+            else:
+                # En transiciones con flujo muy bajo, forzar todo a cero
+                self._mass_flux = 0.0
+                self._thrust = 0.0
+        else:
+            # Fuera del tiempo de operación, asegurar que todo sea cero
+            self._mass_flux = 0.0
+            self._thrust = 0.0
+
+    def update(self, time=None, ambient_pressure=None):
         """
         Actualiza el estado del motor.
 
         Args:
-            time (float): Nuevo tiempo [s]
-            ambient_pressure (float): Nueva presión ambiente [Pa]
+            time (float, opcional): Nuevo tiempo [s]
+            ambient_pressure (float, opcional): Nueva presión ambiente [Pa]
         """
-        self.sim_time = time
-        self.press_amb = ambient_pressure
-        self._update_thrust()
+        if time is not None:
+            self.time = time
+        if ambient_pressure is not None:
+            if ambient_pressure < 0:
+                raise ValueError("La presión ambiente no puede ser negativa")
+            self.ambient_pressure = ambient_pressure
+        
+        # Recalcular el rendimiento con los nuevos valores
+        self._calculate_performance()
+
+    def calculate_specific_impulse(self, ambient_pressure=None):
+        """
+        Calcula el impulso específico para una presión ambiente dada.
+        
+        Args:
+            ambient_pressure (float, opcional): Presión ambiente [Pa].
+                Si no se especifica, usa la presión ambiente actual.
+        
+        Returns:
+            float: Impulso específico [s]
+        """
+        g0 = 9.80665  # Aceleración gravitacional estándar [m/s²]
+        
+        # Usar la presión ambiente actual si no se especifica otra
+        p_amb = self.ambient_pressure if ambient_pressure is None else ambient_pressure
+        
+        # Calcular el empuje para esta presión
+        momentum_thrust = self._mass_flux * self.gas_speed
+        pressure_thrust = (self.exit_pressure - p_amb) * self.exit_area
+        total_thrust = momentum_thrust + pressure_thrust
+        
+        # Calcular el impulso específico
+        if self._mass_flux > 0:
+            return total_thrust / (self._mass_flux * g0)
+        return 0.0
 
     @property
     def specific_impulse(self):
-        """Calcula el impulso específico"""
-        if self.mass_flux > 0:
-            return self.thrust / (self.mass_flux * 9.81)
-        return 0.0
+        """Impulso específico actual [s]"""
+        return self.calculate_specific_impulse()
 
     @property
-    def thrust_coefficient(self):
-        """Calcula el coeficiente de empuje"""
-        if self.press_exit > 0:
-            return self.thrust / (self.press_exit * self.area_exit)
-        return 0.0
+    def vacuum_specific_impulse(self):
+        """Impulso específico en vacío [s]"""
+        return self.calculate_specific_impulse(0.0)

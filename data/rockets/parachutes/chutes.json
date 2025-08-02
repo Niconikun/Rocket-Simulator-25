@@ -1,0 +1,26 @@
+{
+    "main": {
+        "name": "Main Chute",
+        "diameter": 1.5,
+        "Cd": 1.75,
+        "material": "ripstop_nylon",
+        "deployment": {
+            "altitude": 300,
+            "min_velocity": 20,
+            "max_velocity": 100,
+            "deployment_time": 1.0
+        }
+    },
+    "drogue": {
+        "name": "Drogue Chute",
+        "diameter": 0.5,
+        "Cd": 1.5,
+        "material": "ripstop_nylon",
+        "deployment": {
+            "altitude": 700,
+            "min_velocity": 30,
+            "max_velocity": 150,
+            "deployment_time": 0.5
+        }
+    }
+}
