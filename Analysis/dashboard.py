@@ -13,7 +13,7 @@ st.title("Rocket Simulator Dashboard")
 def load_simulation_data():
     """Carga y valida los datos de la simulación"""
     try:
-        data = pd.read_parquet("sim_data.parquet")
+        data = pd.read_parquet("data/simulation/sim_data.parquet")
         return data
     except Exception as e:
         st.error(f"Error cargando datos: {str(e)}")

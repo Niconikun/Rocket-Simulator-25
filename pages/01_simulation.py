@@ -11,6 +11,7 @@ from src.models.atmosphere import Atmosphere
 from src.models.clock import Clock
 from src.models.planet import Planet
 from src.utils.mattools import MatTools as Mat
+import os
 
 
 
@@ -18,8 +19,19 @@ st.set_page_config(page_title="Rocket Simulator Settings", layout="wide")
 
 def load_json_file(filename):
     try:
-        with open(filename, 'r') as file:
-            return json.load(file)
+        # Actualizar rutas
+        if 'rockets.json' in filename:
+            rockets = {}
+            configs_path = 'data/rockets/configs/'
+            for file in os.listdir(configs_path):
+                if file.endswith('.json'):
+                    with open(os.path.join(configs_path, file), 'r') as f:
+                        rocket_data = json.load(f)
+                        rockets[rocket_data["name"]] = rocket_data
+            return rockets
+        elif 'locations.json' in filename:
+            with open('data/locations/launch_sites.json', 'r') as file:
+                return json.load(file)
     except FileNotFoundError:
         st.error(f"Error: {filename} no encontrado")
         return {}
@@ -27,8 +39,8 @@ def load_json_file(filename):
         st.error(f"Error: {filename} tiene un formato inválido")
         return {}
 
-rocket_settings = load_json_file('data\rockets.json')
-location_settings = load_json_file('data\locations.json')
+rocket_settings = load_json_file('data/rockets.json')
+location_settings = load_json_file('data/locations.json')
 
 timezone_dict = {
         "United States": "America/New_York",
@@ -326,7 +338,7 @@ with st.form("Simulation Settings"):
                 "v_bz": prepare_data_for_storage(np.array(Sistema.hist_v_bz)),
                 "Rotational velocity in East-North-Up": prepare_data_for_storage(np.array(Sistema.hist_w_enu)),
                 
-                # Atmosfera
+                # Atmósfera
                 "Density of the atmosphere": prepare_data_for_storage(np.array(Sistema.hist_density)),
                 "Ambient pressure": prepare_data_for_storage(np.array(Sistema.hist_press_amb)),
                 "Speed of sound": prepare_data_for_storage(np.array(Sistema.hist_v_sonic)),
@@ -394,7 +406,7 @@ with st.form("Simulation Settings"):
                 "v_bz": prepare_data_for_storage(np.array(Sistema.hist_v_bz[:min_length])),
                 "Rotational velocity in East-North-Up": prepare_data_for_storage(np.array(Sistema.hist_w_enu[:min_length])),
                 
-                # Atmosfera
+                # Atmósfera
                 "Density of the atmosphere": prepare_data_for_storage(np.array(Sistema.hist_density[:min_length])),
                 "Ambient pressure": prepare_data_for_storage(np.array(Sistema.hist_press_amb[:min_length])),
                 "Speed of sound": prepare_data_for_storage(np.array(Sistema.hist_v_sonic[:min_length])),

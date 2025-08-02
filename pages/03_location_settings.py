@@ -46,6 +46,7 @@ with right_column:
 
 # Add a submit button
 submitted = st.button("Save Location Settings")
+# Al guardar una nueva ubicación
 if submitted:
     st.success("Location settings saved!")
     new_location = {
@@ -56,15 +57,11 @@ if submitted:
     }
     
     try:
-        with open("data\locations.json", "r") as file:
+        with open("data/locations/launch_sites.json", "r") as file:
             locations = json.load(file)
     except FileNotFoundError:
-        locations = {}# Save the location data in a nested dictionary
-    locations[new_location["name"]] = new_location
-    # Save the location data in a JSON file
-    with open("data\locations.json", "w") as f:
-        json.dump(locations, f, indent=4)
-
+        locations = {}
     
-
-#que te guarde aca los datos de la localizacion en un nested dictionary
+    locations[new_location["name"]] = new_location
+    with open("data/locations/launch_sites.json", "w") as f:
+        json.dump(locations, f, indent=4)
