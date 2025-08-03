@@ -118,7 +118,11 @@ with st.form("Simulation Settings"):
         sim_date = st.date_input('Simulation date', min_value=None, max_value=None, key="sim_date")
         sim_time = st.time_input('Simulation time', key="sim_time")
         sim_timezone = st.selectbox('Simulation timezone', options=options, index=default_index, key="sim_timezone")
-        conditions = st.pills("Conditions for simulation", ["Detonation","Parachute [Coming soon]", "Second Stage [Coming Soon]"], key="conditions")
+        conditions = st.pills(
+    "Conditions for simulation", 
+    ["Detonation", "Parachute", "Second Stage [Coming Soon]"],  # Removed [Coming soon] from Parachute
+    key="conditions"
+)
         
 
     with right_column:
@@ -157,6 +161,7 @@ with st.form("Simulation Settings"):
         sim_datetime = datetime.datetime.combine(sim_date, sim_time)
         sim_datetime = sim_datetime.replace(tzinfo=pytz.timezone(timezone_dict[sim_timezone]))
 
+        
 
         # ------ Configuration of time simulation related data ------ #
         Start=0                     # [s]  # Starting time of simulation
@@ -233,6 +238,7 @@ with st.form("Simulation Settings"):
         Environment=Atmosphere(average_temperature)                        # Atmosphere module object creation
         Sistema=Rocket(r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass)          # Rocket module object creation
 
+        
         # Auxiliary timer for conditionals loop break
         Time=[]       
         t=Start
@@ -444,7 +450,7 @@ with st.form("Simulation Settings"):
             
             # Crear DataFrame y guardar
             df = pd.DataFrame(df_data)
-            df.to_parquet("sim_data.parquet", engine='pyarrow')
+            df.to_parquet("data/simulation/sim_data.parquet", engine='pyarrow')
             st.success("Datos guardados exitosamente!")
 
         except Exception as e:

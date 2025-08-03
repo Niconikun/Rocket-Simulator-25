@@ -33,30 +33,29 @@ ___ _       _________ _               ___ _
 [Ketch92]   Ketchledge,1992           Active Guidance and Dynamic Flight Mechanics for Model Rockets
 [Fleem01]   Fleeman,2001              Tactical Missile Design
 
-        len_warhead=205.35            # [mm]     # Length of warhead or distance from tip of nose to base of nose
-        len_nosecone_fins=856               # [mm]     # Length between nose cone tip and the point where the fin leading edge meets the body tube
-        len_nosecone_rear=936               # [mm]     # Length between nose tip to rear
+        len_warhead [mm]     # Length of warhead or distance from tip of nose to base of nose
+        len_nosecone_fins [mm]     # Length between nose cone tip and the point where the fin leading edge meets the body tube
+        len_nosecone_rear [mm]     # Length between nose tip to rear
         
-        len_bodytube_wo_rear=730               # [mm]     # Length of body tube (not considering rear)
-        fins_chord_root=76.32             # [mm]     # Fins aerodynamic chord at root
-        fins_chord_tip=33.6722           # [mm]     # Fins aerodynamic chord at tip
-        fins_mid_chord=46.6440           # [mm]     # Fins aerodynamic mid-chord
-        len_rear=62                # [mm]     # Length of rear
-        fins_span=41.75             # [mm]     # Fins span
+        len_bodytube_wo_rear [mm]     # Length of body tube (not considering rear)
+        fins_chord_root [mm]     # Fins aerodynamic chord at root
+        fins_chord_tip [mm]     # Fins aerodynamic chord at tip
+        fins_mid_chord [mm]     # Fins aerodynamic mid-chord
+        len_rear [mm]     # Length of rear
+        fins_span [mm]     # Fins span
 
-        diameter_warhead_base=88.9              # [mm]     # Diameter of base of warhead
-        diameter_bodytube=88.9              # [mm]     # Diameter of body tube
-        diameter_bodytube_fins=88.9              # [mm]     # Diameter of body tube where fins are met
-        diameter_rear_bodytube=88.9              # [mm]     # Diameter of rear where it meets body tube
-        end_diam_rear=93                # [mm]     # Diameter of rear at the end
+        diameter_warhead_base [mm]     # Diameter of base of warhead
+        diameter_bodytube [mm]     # Diameter of body tube
+        end_diam_rear [mm]     # Diameter of rear at the end
         
-        N_fins=4                # [-]      # Number of fins
+        N_fins [-]      # Number of fins
 
 
 """
 
 # Imports
 from os import path
+import logging
 
 
 path
@@ -64,82 +63,160 @@ import numpy as np
 from scipy import interpolate
 from cmath import pi
 
-# Auxiliary functions
-deg2rad=pi/180
-rad2deg=180/pi
+class Aerodynamics:
+    def __init__(self, mach, angle_attack, geometry):
+        logging.debug(f"Inicializando cálculos aerodinámicos: Mach={mach:.2f}, α={angle_attack:.1f}°")
+        try:
+            self.mach = mach
+            self.alpha = self._validate_angle(angle_attack)
+            self.geometry = self._validate_geometry(geometry)
+            
+            # Calcular coeficientes
+            self.cd = self._calculate_drag_coefficient()
+            self.cl = self._calculate_lift_coefficient()
+            self.xcp = self._calculate_pressure_center()
+            
+            logging.debug(f"Coeficientes calculados: CD={self.cd:.3f}, CL={self.cl:.3f}")
+        except Exception as e:
+            logging.error(f"Error en cálculos aerodinámicos: {str(e)}")
+            raise
 
-class Aerodynamics(object):
-    def __init__(self,mach,a, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_chord_tip, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, N_fins):                          
+    def _validate_angle(self, angle):
+        """Valida y ajusta el ángulo de ataque"""
+        a_max = 10  # [deg]
+        if abs(angle) >= a_max:
+            return a_max * (abs(angle)/angle)
+        return angle
 
-        #______________________Drag Coefficient____________________________#
+    def _validate_geometry(self, geometry):
+        """
+        Valida los parámetros geométricos y sus relaciones.
         
-        # m= Mach number [-], [Valle22]      ## To be obtained from external file
-        m = np.array([0.1,0.4,0.7,0.8,0.9,1,1.1,1.15,1.2,1.25,1.3,1.4,1.6,1.9,2.2,2.5,3])  
-       
-        # cd= Drag coefficient [-], [Valle22]    ## To be obtained from external file
-        cd = np.array([0.32498,0.32302,0.32639,0.32957,0.34603,
-                      0.45078,0.50512,0.525,0.55998,0.53465,0.51829,
-                      0.50535,0.47411,0.42844,0.38992,0.3556,0.30924,])
-  
-        # Interpolation from data to create a curve function that describes cd behavior
-        spline = interpolate.splrep(m, cd)           
+        Args:
+            geometry (dict): Diccionario con parámetros geométricos
+            
+        Returns:
+            dict: Geometría validada
+            
+        Raises:
+            ValueError: Si algún parámetro es inválido o inconsistente
+        """
+        required_params = [
+            'len_warhead', 'diameter_warhead_base', 'len_nosecone_fins',
+            'fins_chord_root', 'fins_chord_tip', 'fins_mid_chord',
+            'N_fins', 'fins_span', 'len_bodytube_wo_rear',
+            'diameter_bodytube', 'len_rear', 'end_diam_rear', 
+            'len_nosecone_rear', 'diameter_rear_bodytube', 'diameter_bodytube_fins'
+        ]
+        
+        # Verificar existencia y positividad
+        for param in required_params:
+            if param not in geometry:
+                raise ValueError(f"Falta parámetro geométrico: {param}")
+            if geometry[param] <= 0:
+                raise ValueError(f"Parámetro inválido {param}: {geometry[param]}")
+        
+        # Verificar relaciones geométricas
+        if geometry['len_warhead'] > geometry['len_nosecone_rear']:
+            raise ValueError("Longitud de ojiva mayor que longitud total")
+            
+        if geometry['fins_chord_tip'] > geometry['fins_chord_root']:
+            raise ValueError("Cuerda de punta mayor que cuerda de raíz")
+            
+        if geometry['fins_span'] > geometry['diameter_bodytube'] * 2:
+            raise ValueError("Envergadura de aletas mayor que diámetro del cuerpo")
+        
+        return geometry
 
-        self.mach=mach     # [-]          # Mach number
+    def _calculate_drag_coefficient(self):
+        """Calcula el coeficiente de arrastre"""
+        # Datos tabulados [Valle22]
+        m = np.array([0.1, 0.4, 0.7, 0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.25,
+                     1.3, 1.4, 1.6, 1.9, 2.2, 2.5, 3.0])
+        cd = np.array([0.32498, 0.32302, 0.32639, 0.32957, 0.34603,
+                      0.45078, 0.50512, 0.525, 0.55998, 0.53465, 0.51829,
+                      0.50535, 0.47411, 0.42844, 0.38992, 0.3556, 0.30924])
         
-        # Obtains cd from interpolation and given Mach number
-        self.cd=interpolate.splev(self.mach, spline)  
-       
-        #_____________Lift Coefficient and Centre of Pressure_____________#
+        spline = interpolate.splrep(m, cd)
+        return float(interpolate.splev(self.mach, spline))
+
+    def _calculate_normal_force_coefficients(self):
+        """Calcula los coeficientes de fuerza normal para cada componente"""
+        g = self.geometry
+        alpha_rad = np.radians(self.alpha)
         
-        # Angle of attack must be very close to zero degrees [Barro67]
-        a_max=10              # [deg]    # Limit for angle of attack
-        if abs(a)>=a_max:
-            angle=a_max*((abs(a))/a)
+        # Ojiva [Box09]
+        Cn_alpha_cone = 2.0
+        
+        # Cuerpo [Box09]
+        Cn_alpha_body = (g['len_bodytube_wo_rear']/(pi*0.25*g['diameter_bodytube'])) * alpha_rad
+        
+        # Sección trasera [Box09]
+        Cn_alpha_tail = 2.0 * (
+            (g['end_diam_rear']/g['diameter_warhead_base'])**2 - 
+            (g['diameter_rear_bodytube']/g['diameter_warhead_base'])**2
+        )
+        
+        # Aletas [Box09]
+        Kfb = 1.0 + ((0.5*g['diameter_bodytube_fins'])/(g['fins_span'] + 0.5*g['diameter_bodytube_fins']))
+        Cn_alpha_fins = (Kfb*4*g['N_fins']) * (
+            (g['fins_span']/g['diameter_warhead_base'])**2 /
+            (1 + np.sqrt(1+(2*g['fins_mid_chord']/(g['fins_chord_root']+g['fins_chord_tip']))**2))
+        )
+        
+        return {
+            'cone': Cn_alpha_cone,
+            'body': Cn_alpha_body,
+            'tail': Cn_alpha_tail,
+            'fins': Cn_alpha_fins
+        }
+
+    def _calculate_pressure_centers(self):
+        """Calcula la posición del centro de presión para cada componente"""
+        g = self.geometry
+        
+        cp = {
+            'cone': 0.466 * g['len_warhead'],
+            'body': g['len_warhead'] + 0.5 * g['len_bodytube_wo_rear'],
+            'tail': g['len_nosecone_rear'] + (g['len_rear']/3) * (
+                1 + 1/(1+(g['diameter_rear_bodytube']/g['diameter_warhead_base']))
+            ),
+            'fins': g['len_nosecone_fins'] + 
+                   ((g['fins_mid_chord']/3) * 
+                    ((g['fins_chord_root'] + 2*g['fins_chord_tip'])/
+                     (g['fins_chord_root']+g['fins_chord_tip']))) +
+                   ((1/6)*(g['fins_chord_root'] + g['fins_chord_tip']-
+                    ((g['fins_chord_root']*g['fins_chord_tip'])/
+                     (g['fins_chord_root']+g['fins_chord_tip']))))
+        }
+        
+        return cp
+
+    def _calculate_lift_coefficient(self):
+        """Calcula el coeficiente de sustentación"""
+        # Obtener coeficientes de fuerza normal
+        Cn_coeffs = self._calculate_normal_force_coefficients()
+        Cn_sum = sum(Cn_coeffs.values())
+        cn = Cn_sum * np.radians(self.alpha)
+        
+        # Corrección de Ketchledge [Ketch92]
+        if self.mach <= 0.8:
+            return cn / np.sqrt(1 - (self.mach**2))
+        elif self.mach <= 1.2:
+            return cn / np.sqrt(1 - (0.8**2))
         else:
-            angle=a
-    
-        alpha=angle*deg2rad  # [rad]
+            return cn / np.sqrt(-1 + (self.mach**2))
 
-        # Cone [Box09]:
-        Cn_alpha_cone=2      # [-]      # Normal force coefficient gradient for cone (warhead)
-        Xcp_cone=0.466*len_warhead    # [mm]     # Centre of pressure of cone
-
-        # Body, [Box09]:
-        Cn_alpha_body=(len_bodytube_wo_rear/(pi*0.25*diameter_bodytube))*alpha            # [-]        # Normal force coefficient gradient for body tube
-        Xcp_body=len_warhead + 0.5*len_bodytube_wo_rear                             # [mm]       # Centre of pressure of body tube
+    def _calculate_pressure_center(self):
+        """Calcula la posición del centro de presión"""
+        Cn_coeffs = self._calculate_normal_force_coefficients()
+        cp_positions = self._calculate_pressure_centers()
         
-        # Cn_alpha_body=2*alpha     # Fleeman's method for Rocket's body [Fleem01]
-        # Xcp_body=len_warhead + 0.5*len_bodytube_wo_rear    
-        
-        # Cn_alpha_body=0           # Box cites a previous version that doesn't consider body's effect on lift or normal force coefficient
-        # Xcp_body=0
-        
-        # Tail, [Box09]:
-        Cn_alpha_tail=2*(((end_diam_rear/diameter_warhead_base)**2) - ((diameter_rear_bodytube/diameter_warhead_base)**2))  # [-]        # Normal force coefficient gradient for rear 
-        Xcp_tail= len_nosecone_rear + (len_rear/3)* (1 + 1/(1+(diameter_rear_bodytube/diameter_warhead_base)))     # [mm]       # Centre of pressure of rear
-        # Fins [Box09]:
-        Kfb=1 + ((0.5*diameter_bodytube_fins)/(fins_span + 0.5*diameter_bodytube_fins))                                                           # [-]     # Coefficient for interference effects between the fin and the body
-        Cn_alpha_fins=(Kfb*4*N_fins)*(((fins_span/diameter_warhead_base)**2)/(1 + (np.sqrt(1+(2*fins_mid_chord/(fins_chord_root+fins_chord_tip))**2))))           # [-]     # Normal force coefficient gradient for fins
-        Xcp_fins= len_nosecone_fins+((fins_mid_chord/3)*((fins_chord_root + 2*fins_chord_tip)/(fins_chord_root+fins_chord_tip)))+((1/6)*(fins_chord_root + fins_chord_tip-((fins_chord_root*fins_chord_tip)/(fins_chord_root+fins_chord_tip))))   # [mm]    # Centre of pressure of fins
- 
-        # Results, [Box09]:
-        Cn_sum=Cn_alpha_cone + Cn_alpha_body + Cn_alpha_tail + Cn_alpha_fins # [-]      # Sum of all coefficients gradients
-        cn=Cn_sum*alpha                                                      # [-]      # Obtaining of rocket's normal force coefficient
-    
-        # Centre of pressure location from nose tip using [Box09]:
-        xcp=((Cn_alpha_cone*Xcp_cone + Cn_alpha_body*Xcp_body + Cn_alpha_tail*Xcp_tail + Cn_alpha_fins*Xcp_fins)/Cn_sum)/1000  # [m]
-        self.xcp=np.array([xcp,0,0])
-        
-        #Ketchledge correction, [Ketch92] and [Box09]
-        if self.mach<=0.8:
-            # Subsonic case
-            self.cl=cn/(np.sqrt(1-(self.mach**2)))   # [-]
-
-        elif self.mach>=0.8 and self.mach<=1.2:
-            # Transonic case
-            self.cl=cn/(np.sqrt(1-(0.8**2)))         # [-]
-
-        else:
-            # Supersonic case
-            self.cl=cn/(np.sqrt(-1+(self.mach**2)))  # [-]
+        # Centro de presión total [Box09]
+        Cn_sum = sum(Cn_coeffs.values())
+        if Cn_sum == 0:
+            return np.array([0., 0., 0.])
+            
+        xcp = sum(Cn_coeffs[k] * cp_positions[k] for k in Cn_coeffs.keys()) / Cn_sum
+        return np.array([xcp/1000, 0, 0])  # Convertir a metros
 

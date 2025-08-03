@@ -103,7 +103,7 @@ try:
     # Segunda fila de métricas
     col4.metric("Initial Mass", f"{metrics['initial_mass']}kg", border=True)
     col5.metric("Final Mass", f"{metrics['final_mass']}kg", border=True)
-    col6.metric("Mass Delta", f"{metrics['initial_mass'] - metrics['final_mass']}kg", border=True)
+    col6.metric("Mass Delta", f"{round(metrics['initial_mass'] - metrics['final_mass'],3)}kg", border=True)
 
     # Tercera fila de métricas
     col7.metric("Max Speed", f"{metrics['max_speed']}m/s", border=True)

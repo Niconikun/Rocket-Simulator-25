@@ -1,14 +1,14 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.graph_objects as go # type: ignore
 from src.models.markov_models import (
     AtmosphericMarkovModel, 
     FailureMarkovModel,
     ParachuteMarkovModel
 )
 
-st.title("Análisis Monte Carlo [En Proceso]")
+st.title("Análisis de Monte Carlo")
 
 # Configuración de la simulación
 n_sims = st.sidebar.slider("Número de simulaciones", 100, 1000, 500)
@@ -22,11 +22,12 @@ fail_model = FailureMarkovModel()
 chute_model = ParachuteMarkovModel()
 
 if st.button("Ejecutar simulaciones"):
-    # Contenedores para resultados
+    # Inicializar estadísticas usando los estados de los modelos
+    failure_stats = {state: 0 for state in fail_model.states}
+    chute_stats = {state: 0 for state in chute_model.states}
+    
     landing_points = []
     max_altitudes = []
-    failure_stats = {"nominal": 0, "engine_failure": 0, "struct_failure": 0}
-    chute_stats = {"nominal": 0, "damaged": 0, "failed": 0}
     
     progress_bar = st.progress(0)
     
@@ -63,10 +64,10 @@ if st.button("Ejecutar simulaciones"):
             else:
                 altitude -= 5
         
-        # Guardar resultados
+        # Guardar resultados (convertir a str normal)
         landing_points.append((x, y))
-        failure_stats[rocket_state] += 1
-        chute_stats[chute_state] += 1
+        failure_stats[str(rocket_state)] += 1
+        chute_stats[str(chute_state)] += 1
         
         progress_bar.progress((i + 1) / n_sims)
     

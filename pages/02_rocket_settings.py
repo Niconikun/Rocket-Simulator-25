@@ -6,17 +6,62 @@ import pyvista as pv # type: ignore
 from stpyvista import stpyvista # type: ignore
 import os
 
+def load_rocket_configs():
+    """Carga todas las configuraciones de cohetes desde la nueva estructura"""
+    rockets = {}
+    configs_path = 'data/rockets/configs'
+    
+    try:
+        for filename in os.listdir(configs_path):
+            if filename.endswith('.json'):
+                file_path = os.path.join(configs_path, filename)
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    rocket_data = json.load(f)
+                    rockets[rocket_data["name"]] = rocket_data
+        return rockets
+    except FileNotFoundError:
+        st.error(f"No se encontró el directorio {configs_path}")
+        return {}
+    except Exception as e:
+        st.error(f"Error cargando configuraciones: {str(e)}")
+        return {}
+
+def save_rocket_config(rocket_data):
+    """Guarda la configuración de un cohete en un archivo individual"""
+    configs_path = 'data/rockets/configs'
+    
+    try:
+        # Crear directorio si no existe
+        os.makedirs(configs_path, exist_ok=True)
+        
+        # Generar nombre de archivo seguro
+        safe_name = rocket_data["name"].lower().replace(" ", "_")
+        file_path = os.path.join(configs_path, f"{safe_name}.json")
+        
+        # Guardar archivo
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(rocket_data, f, indent=4, ensure_ascii=False)
+            
+        return True, f"Cohete guardado en {file_path}"
+    except Exception as e:
+        return False, f"Error guardando cohete: {str(e)}"
+
+def delete_rocket_config(rocket_name):
+    """Elimina la configuración de un cohete"""
+    configs_path = 'data/rockets/configs'
+    safe_name = rocket_name.lower().replace(" ", "_")
+    file_path = os.path.join(configs_path, f"{safe_name}.json")
+    
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return True, f"Cohete {rocket_name} eliminado"
+        return False, "Archivo no encontrado"
+    except Exception as e:
+        return False, f"Error eliminando cohete: {str(e)}"
+
 # Cargar configuraciones de cohetes
-try:
-    rockets = {}
-    configs_path = 'data/rockets/configs/'
-    for file in os.listdir(configs_path):
-        if file.endswith('.json'):
-            with open(os.path.join(configs_path, file), 'r') as f:
-                rocket_data = json.load(f)
-                rockets[rocket_data["name"]] = rocket_data
-except FileNotFoundError:
-    rockets = {}
+rockets = load_rocket_configs()
 
 sim_rocket = st.selectbox('Rocket Selection', options=list(rockets.keys()) + ["Manual"], index=0, key="sim_rocket")
 
@@ -42,22 +87,19 @@ if sim_rocket != "Manual":
     mass_flux_edit = rocket_settings["engine"]["mass_flux"]
     gas_speed_edit = rocket_settings["engine"]["gas_speed"]
     exit_pressure_edit = rocket_settings["engine"]["exit_pressure"]
-    len_warhead_edit = rocket_settings["geometry"]["len_warhead"]
-    len_nosecone_fins_edit = rocket_settings["geometry"]["len_nosecone_fins"]
-    len_nosecone_rear_edit = rocket_settings["geometry"]["len_nosecone_rear"]
-    len_bodytube_wo_rear_edit = rocket_settings["geometry"]["len_bodytube_wo_rear"]
-    fins_chord_root_edit = rocket_settings["geometry"]["fins_chord_root"]
-    fins_mid_chord_edit = rocket_settings["geometry"]["fins_mid_chord"]
-    fins_chord_tip_edit = rocket_settings["geometry"]["fins_chord_tip"]
-    len_rear_edit = rocket_settings["geometry"]["len_rear"]
-    fins_span_edit = rocket_settings["geometry"]["fins_span"]
-    diameter_warhead_base_edit = rocket_settings["geometry"]["diameter_warhead_base"]
-    diameter_bodytube_edit = rocket_settings["geometry"]["diameter_bodytube"]
-    diameter_bodytube_fins_edit = rocket_settings["geometry"]["diameter_bodytube_fins"]
-    diameter_rear_bodytube_edit = rocket_settings["geometry"]["diameter_rear_bodytube"]
-    end_diam_rear_edit =  rocket_settings["geometry"]["end_diam_rear"]
-    normal_f_coef_warhead_edit = rocket_settings["geometry"]["normal_f_coef_warhead"]
-    N_fins_edit =rocket_settings["geometry"]["N_fins"]
+    len_warhead_edit = rocket_settings["nosecone"]["length"]
+    nosecone_shape = rocket_settings["nosecone"]["shape"]
+    len_nosecone_fins_edit = rocket_settings["geometry"]["length nosecone fins"]
+    len_bodytube_wo_rear_edit = rocket_settings["fuselage"]["length"]
+    fins_chord_root_edit = rocket_settings["fins"]["chord_root"]
+    fins_mid_chord_edit = rocket_settings["fins"]["mid_chord"]
+    fins_chord_tip_edit = rocket_settings["fins"]["chord_tip"]
+    len_rear_edit = rocket_settings["rear_section"]["length"]
+    fins_span_edit = rocket_settings["fins"]["span"]
+    diameter_warhead_base_edit = rocket_settings["nosecone"]["diameter"]
+    diameter_bodytube_edit = rocket_settings["fuselage"]["diameter"]
+    end_diam_rear_edit =  rocket_settings["rear_section"]["diameter"]
+    N_fins_edit =rocket_settings["fins"]["N_fins"]
 else:
 
     rocket_name_edit = "New Rocket"
@@ -82,7 +124,6 @@ else:
     exit_pressure_edit = 0.0
     len_warhead_edit = 0.0
     len_nosecone_fins_edit = 0.0
-    len_nosecone_rear_edit = 0.0
     len_bodytube_wo_rear_edit = 0.0
     fins_chord_root_edit = 0.0
     fins_mid_chord_edit = 0.0
@@ -94,7 +135,6 @@ else:
     diameter_bodytube_fins_edit = 0.0
     diameter_rear_bodytube_edit = 0.0
     end_diam_rear_edit =  0.0
-    normal_f_coef_warhead_edit = 0.0
     N_fins_edit = 0
 
 bodytube = {
@@ -151,24 +191,30 @@ mass_flux = left_column.number_input("Mass Flux ", min_value=0.0, value=float(ma
 gas_speed = left_column.number_input("Gas Speed", min_value=0.0, value=float(gas_speed_edit), step=0.1, key="gas_speed")
 exit_pressure = left_column.number_input("Exit Pressure", min_value=0.0, value=float(exit_pressure_edit), step=0.1, key="exit_pressure")
 
-middle_column.subheader("Rocket Geometry")
-        # Add input fields for rocket performance metrics
-len_warhead = middle_column.number_input('Length of warhead or distance from tip of nose to base of nose [mm]', min_value=0.0, value=float(len_warhead_edit), step=0.1, key="len_warhead")
-len_nosecone_fins = middle_column.number_input('Length between nose cone tip and the point where the fin leading edge meets the body tube [mm]', min_value=0.0, value=float(len_nosecone_fins_edit), step=0.1, key="len_nosecone_fins")
-len_nosecone_rear = middle_column.number_input('Length between nose tip to rear [mm]', min_value=0.0, value=float(len_nosecone_rear_edit), step=0.1, key="len_nosecone_rear")              
-len_bodytube_wo_rear = middle_column.number_input('Length of body tube (not considering rear) [mm]', min_value=0.0, value=float(len_bodytube_wo_rear_edit), step=0.1, key="len_bodytube_wo_rear")
+middle_column.subheader("Fins")
+N_fins = middle_column.number_input('Number of fins [-]', min_value=0, value=N_fins_edit, step=1, key="N_fins")
 fins_chord_root = middle_column.number_input('Fins aerodynamic chord at root [mm]', min_value=0.0, value=float(fins_chord_root_edit), step=0.1, key="fins_chord_root")
 fins_mid_chord = middle_column.number_input('Fins aerodynamic mid-chord [mm]', min_value=0.0, value=float(fins_mid_chord_edit), step=0.1, key="fins_mid_chord")
 fins_chord_tip = middle_column.number_input('Fins aerodynamic chord at tip [mm]', min_value=0.0, value=float(fins_chord_tip_edit), step=0.1, key="fins_chord_tip")
-len_rear = middle_column.number_input('Length of rear [mm]', min_value=0.0, value=float(len_rear_edit), step=0.1, key="len_rear")
 fins_span = middle_column.number_input('Fins span [mm]', min_value=0.0, value=float(fins_span_edit), step=0.1, key="fins_span")
+len_nosecone_fins = middle_column.number_input('Length between nose cone tip and the point where the fin leading edge meets the body tube [mm]', min_value=0.0, value=float(len_nosecone_fins_edit), step=0.1, key="len_nosecone_fins")
+
+middle_column.subheader("Nosecone")
+len_warhead = middle_column.number_input('Length of warhead or distance from tip of nose to base of nose [mm]', min_value=0.0, value=float(len_warhead_edit), step=0.1, key="len_warhead")
 diameter_warhead_base = middle_column.number_input('Diameter of base of warhead [mm]', min_value=0.0, value=float(diameter_warhead_base_edit), step=0.1, key="diameter_warhead_base")
+nosecone_shape = middle_column.selectbox("Nosecone Shape", options=["Conical", "Elliptical", "Parabolic"], index=0, key="nosecone_shape")
+
+
+middle_column.subheader("Fuselage")
+len_bodytube_wo_rear = middle_column.number_input('Length of body tube (not considering rear) [mm]', min_value=0.0, value=float(len_bodytube_wo_rear_edit), step=0.1, key="len_bodytube_wo_rear")
 diameter_bodytube = middle_column.number_input('Diameter of body tube [mm]', min_value=0.0, value=float(diameter_bodytube_edit), step=0.1, key="diameter_bodytube")
-diameter_bodytube_fins = middle_column.number_input('Diameter of body tube where fins are met [mm]', min_value=0.0, value=float(diameter_bodytube_fins_edit), step=0.1, key="diameter_bodytube_fins")
-diameter_rear_bodytube = middle_column.number_input('Diameter of rear where it meets body tube [mm]', min_value=0.0, value=float(diameter_rear_bodytube_edit), step=0.1, key="diameter_rear_bodytube")
+
+
+middle_column.subheader("Rear Section")
+len_rear = middle_column.number_input('Length of rear [mm]', min_value=0.0, value=float(len_rear_edit), step=0.1, key="len_rear")
 end_diam_rear =  middle_column.number_input('End diameter rear [mm]', min_value=0.0, value=float(end_diam_rear_edit), step=0.1, key="end_diam_rear")
-N_fins = middle_column.number_input('Number of fins [-]', min_value=0, value=N_fins_edit, step=1, key="N_fins")
-   
+
+
 with right_column:
     right_column.subheader("Rocket Graphics")
     
@@ -260,21 +306,28 @@ if submitted:
                 "exit_pressure": exit_pressure
             },
             "geometry": {
-                "len_warhead": len_warhead,
-                "len_nosecone_fins": len_nosecone_fins,
-                "len_nosecone_rear": len_nosecone_rear,
-                "len_bodytube_wo_rear": len_bodytube_wo_rear,
-                "fins_chord_root": fins_chord_root,
-                "fins_chord_tip": fins_chord_tip,
-                "fins_mid_chord": fins_mid_chord,
-                "len_rear": len_rear,
-                "fins_span": fins_span,
-                "diameter_warhead_base": diameter_warhead_base,
-                "diameter_bodytube": diameter_bodytube,
-                "diameter_bodytube_fins": diameter_bodytube_fins,
-                "diameter_rear_bodytube": diameter_rear_bodytube,
-                "end_diam_rear": end_diam_rear,
-                "N_fins": N_fins
+                "length nosecone fins": len_nosecone_fins,
+                "len_nosecone_rear": len_warhead + len_bodytube_wo_rear + len_rear,
+            },
+            "fins": {
+                "span": fins_span,
+                "chord_root": fins_chord_root,
+                "chord_tip": fins_chord_tip,
+                "mid_chord": fins_mid_chord,
+                "N_fins": N_fins,
+            },
+            "nosecone": {
+                "length": len_warhead,
+                "diameter": diameter_warhead_base,
+                "shape": nosecone_shape
+            },
+            "fuselage": {
+                "length": len_bodytube_wo_rear,
+                "diameter": diameter_bodytube
+            },
+            "rear_section": {
+                "length": len_rear,
+                "diameter": end_diam_rear
             }
         }
         # Save the new rocket settings to a JSON file
@@ -284,10 +337,24 @@ if submitted:
             
 
         rockets[new_rocket["name"]] = new_rocket
-        with open("rockets.json", "w") as file: 
-            json.dump(rockets, file, indent=4)
-        st.success(f"Rocket '{new_rocket['name']}' settings saved successfully!")
+        success, message = save_rocket_config(new_rocket)
+        if success:
+            st.success(f"Cohete '{new_rocket['name']}' guardado exitosamente!")
+            st.rerun()  # Recargar la página
+        else:
+            st.error(message)
+        
         # Optionally, you can clear the form fields after submission
         st.session_state.clear()
         
         #aca poner que se guarden los datos en un nested dictionary
+
+# Agregar botón de eliminación
+if sim_rocket != "Manual":
+    if st.button("Eliminar Cohete"):
+        success, message = delete_rocket_config(sim_rocket)
+        if success:
+            st.success(message)
+            st.rerun()  # Recargar la página
+        else:
+            st.error(message)

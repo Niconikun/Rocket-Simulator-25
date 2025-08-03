@@ -181,5 +181,44 @@ class TestAerodynamics(unittest.TestCase):
         # Verificar que Cd aumenta con alpha
         self.assertTrue(all(x < y for x, y in zip(Cd_values, Cd_values[1:])))
 
+    def test_normal_force_coefficients(self):
+        """Prueba el cálculo de coeficientes de fuerza normal"""
+        coeffs = self.aero._calculate_normal_force_coefficients()
+        
+        # Verificar que existen todos los componentes
+        self.assertIn('cone', coeffs)
+        self.assertIn('body', coeffs)
+        self.assertIn('tail', coeffs)
+        self.assertIn('fins', coeffs)
+        
+        # Verificar valores razonables
+        self.assertEqual(coeffs['cone'], 2.0)  # Valor teórico para cono
+        self.assertGreater(coeffs['fins'], 0)
+        self.assertLess(coeffs['fins'], 10)
+
+    def test_pressure_center_locations(self):
+        """Prueba el cálculo de posiciones del centro de presión"""
+        cp_positions = self.aero._calculate_pressure_centers()
+        
+        # Verificar orden correcto
+        self.assertLess(cp_positions['cone'], cp_positions['body'])
+        self.assertLess(cp_positions['body'], cp_positions['tail'])
+        
+        # Verificar rangos razonables
+        for pos in cp_positions.values():
+            self.assertGreater(pos, 0)
+            self.assertLess(pos, 1000)  # mm
+
+    def test_mach_effects(self):
+        """Prueba los efectos del número Mach"""
+        # Crear instancias con diferentes Mach
+        subsonic = Aerodynamics(0.5, 5.0, self.geometry)
+        transonic = Aerodynamics(1.0, 5.0, self.geometry)
+        supersonic = Aerodynamics(2.0, 5.0, self.geometry)
+        
+        # Verificar comportamiento esperado
+        self.assertGreater(transonic.cd, subsonic.cd)  # Aumento en transónico
+        self.assertLess(supersonic.cd, transonic.cd)   # Disminución en supersónico
+
 if __name__ == '__main__':
     unittest.main()

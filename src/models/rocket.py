@@ -144,6 +144,13 @@ class Rocket(object):
         self.cm2cp_b = np.array([0.0, 0.0, 0.0])
         self.accel_b = np.zeros(3)   # Inicializar forces_aero_b
 
+        self.parachute = None
+        self.has_parachute = False
+        
+        # Historial para paracaídas
+        self.hist_parachute_state = []
+        self.hist_parachute_force = []
+
         # Preallocate historical arrays
         self._initialize_history_arrays()
     
@@ -298,7 +305,7 @@ class Rocket(object):
         self.press_amb=press_amb  # [Pa]      # Atmospheric pressure
         self.v_sonic=v_sonic      # [m/s]     # Speed of sound 
 
-    def update_aerodynamics(self,rocket_name):
+    def update_aerodynamics(self, rocket_name):
         """
         Actualiza las características aerodinámicas del cohete.
 
@@ -313,37 +320,53 @@ class Rocket(object):
         Referencias:
             [Barro67] Método de Barrowman para coeficientes
         """
-        # Conditional to avoid Runtime Warning for division by zero
-       
-        if self.v_norm==0:
-            self.mach=0                           # [-]    # Mach number
-        else:
-            self.mach=self.v_norm/self.v_sonic    # [-]    # Mach number
-        
-        with open('data/rockets.json', 'r') as file:
-            rocket_settings = json.load(file)
+        # Calcular número Mach
+        self.mach = 0 if self.v_norm == 0 else self.v_norm/self.v_sonic
 
-        len_warhead = rocket_settings[rocket_name]['geometry']["len_warhead"] 
-        len_nosecone_fins = rocket_settings[rocket_name]['geometry']["len_nosecone_fins"]
-        len_nosecone_rear = rocket_settings[rocket_name]['geometry']["len_nosecone_rear"]
-        len_bodytube_wo_rear = rocket_settings[rocket_name]['geometry']["len_bodytube_wo_rear"]
-        fins_chord_root = rocket_settings[rocket_name]['geometry']["fins_chord_root"]
-        fins_chord_tip = rocket_settings[rocket_name]['geometry']["fins_chord_tip"]
-        fins_mid_chord = rocket_settings[rocket_name]['geometry']["fins_mid_chord"]
-        len_rear = rocket_settings[rocket_name]['geometry']["len_rear"]
-        fins_span = rocket_settings[rocket_name]['geometry']["fins_span"]
-        diameter_warhead_base = rocket_settings[rocket_name]['geometry']["diameter_warhead_base"]
-        diameter_bodytube = rocket_settings[rocket_name]['geometry']["diameter_bodytube"]
-        diameter_bodytube_fins = rocket_settings[rocket_name]['geometry']["diameter_bodytube_fins"]
-        diameter_rear_bodytube = rocket_settings[rocket_name]['geometry']["diameter_rear_bodytube"]
-        end_diam_rear = rocket_settings[rocket_name]['geometry']["end_diam_rear"]
-        N_fins = rocket_settings[rocket_name]['geometry']["N_fins"]
-        
+        try:
+            # Cargar configuración del cohete
+            with open('data/rockets/configs/' + rocket_name + '.json', 'r') as file:
+                rocket_settings = json.load(file)
 
-        Aero=Aerodynamics(self.mach,self.alpha, len_warhead, len_nosecone_fins, len_nosecone_rear, len_bodytube_wo_rear, fins_chord_root, fins_chord_tip, fins_mid_chord, len_rear, fins_span, diameter_warhead_base, diameter_bodytube, diameter_bodytube_fins, diameter_rear_bodytube, end_diam_rear, N_fins)   # Aerodynamics instance 
-        self.drag_coeff=Aero.cd                   # [-]    # Drag coefficient
-        self.lift_coeff=Aero.cl                   # [-]    # Lift coefficient
-        self.cp_b=Aero.xcp                        # [m]    # Location of centre of pressure from nose (ogive) tip
+            # Crear diccionario de geometría
+            geometry = {
+                'len_warhead': rocket_settings['nosecone']['length'],
+                'diameter_warhead_base': rocket_settings['nosecone']['diameter'],
+                'len_nosecone_fins': rocket_settings['geometry']['length nosecone fins'],
+                'len_nosecone_rear': rocket_settings['geometry']['total length'],
+                'len_bodytube_wo_rear': rocket_settings['fuselage']['length'],
+                'diameter_bodytube': rocket_settings['fuselage']['diameter'],
+                'len_rear': rocket_settings['rear_section']['length'],
+                'end_diam_rear': rocket_settings['rear_section']['diameter'],
+                'diameter_rear_bodytube': rocket_settings['rear_section']['diameter'],
+                'diameter_bodytube_fins': rocket_settings['fuselage']['diameter'],
+                'fins_chord_root': rocket_settings['fins']['chord_root'],
+                'fins_chord_tip': rocket_settings['fins']['chord_tip'],
+                'fins_mid_chord': rocket_settings['fins']['mid_chord'],
+                'fins_span': rocket_settings['fins']['span'],
+                'N_fins': rocket_settings['fins']['N_fins']
+            }
+
+            # Crear instancia de Aerodynamics con validación
+            try:
+                aero = Aerodynamics(self.mach, self.alpha, geometry)
+                self.drag_coeff = aero.cd
+                self.lift_coeff = aero.cl
+                self.cp_b = aero.xcp
+            except ValueError as e:
+                logging.error(f"Error en cálculo aerodinámico: {str(e)}")
+                st.error(f"Error en cálculos aerodinámicos: {str(e)}")
+                # Usar valores por defecto seguros
+                self.drag_coeff = 0.5
+                self.lift_coeff = 0.0
+                self.cp_b = np.array([0.5, 0, 0])
+
+        except FileNotFoundError:
+            logging.error(f"No se encontró el archivo de configuración para {rocket_name}")
+            st.error(f"No se encontró la configuración del cohete {rocket_name}")
+        except Exception as e:
+            logging.error(f"Error cargando configuración: {str(e)}")
+            st.error(f"Error en la configuración aerodinámica: {str(e)}")
 
     def update_engine(self, rocket_name):
         """
@@ -359,14 +382,15 @@ class Rocket(object):
         Referencias:
             - Sutton, G. P., & Biblarz, O. (2016). Rocket propulsion elements
         """
-        with open('data/rockets/configs/rocket_name.json', 'r') as file:
+        
+        with open('data/rockets/configs/'+ rocket_name +'.json', 'r') as file:
             rocket_settings = json.load(file)
 
-        burn_time = rocket_settings[rocket_name]['engine']["burn_time"]
-        nozzle_exit_diameter = rocket_settings[rocket_name]['engine']["nozzle_exit_diameter"]
-        mass_flux = rocket_settings[rocket_name]['engine']["mass_flux"]
-        gas_speed = rocket_settings[rocket_name]['engine']["gas_speed"]
-        exit_pressure = rocket_settings[rocket_name]['engine']["exit_pressure"]
+        burn_time = rocket_settings['engine']["burn_time"]
+        nozzle_exit_diameter = rocket_settings['engine']["nozzle_exit_diameter"]
+        mass_flux = rocket_settings['engine']["mass_flux"]
+        gas_speed = rocket_settings['engine']["gas_speed"]
+        exit_pressure = rocket_settings['engine']["exit_pressure"]
 
         "Updates engine performance characteristics from Engine Module"
         Eng=Engine(self.time,self.press_amb, burn_time, nozzle_exit_diameter, mass_flux, gas_speed, exit_pressure)      # Engine instance
@@ -694,3 +718,9 @@ class Rocket(object):
             Método simple pero necesario para mantener consistencia en la simulación
         """
         self.time+=dt   # [s]
+
+    def add_parachute(self, diameter, Cd, deployment_altitude):
+        """Agrega un paracaídas al cohete"""
+        from src.models.parachute import Parachute
+        self.parachute = Parachute(diameter, Cd, deployment_altitude)
+        self.has_parachute = True
