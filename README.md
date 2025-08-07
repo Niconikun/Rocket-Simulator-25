@@ -69,19 +69,39 @@ streamlit run streamlit_app.py
 Rocket-Simulator---GUI/
 ├── src/
 │   ├── models/
-│   │   ├── rocket.py       # Clase principal del cohete
-│   │   ├── engine.py       # Modelo del motor
-│   │   ├── aerodynamics.py # Cálculos aerodinámicos
-│   │   └── atmosphere.py   # Modelo atmosférico
+│   │   ├── rocket.py             # Clase principal del cohete
+│   │   ├── engine.py             # Modelo del motor
+│   │   ├── aerodynamics.py       # Cálculos aerodinámicos
+│   │   ├── atmosphere.py         # Modelo atmosférico
+│   │   ├── clock.py              # Reloj y gestión de husos horarios
+│   │   ├── gravitational.py      # Modelo gravitacional
+│   │   ├── markov_models.py      # Modelos de cadenas de markov para simulación monte carlo
+│   │   ├── parachute.py          # Modulo de paracaídas (en proceso)
+│   │   └── planet.py             # Modelo del planeta
 │   ├── utils/
-│   │   ├── mattools.py     # Herramientas matemáticas
-│   │   └── geotools.py     # Conversiones geográficas
-│   └── app.py             # Interfaz gráfica
+│   │   ├── mattools.py           # Herramientas matemáticas
+│   │   └── geotools.py           # Conversiones geográficas
+│   └── app.py                    # Interfaz gráfica
 ├── tests/
-│   └── models/            # Tests unitarios
+│   └── models/                   # Tests unitarios de los modelos
+│   └── utils/                    # Tests unitarios de las clases de utilidades
 ├── data/
-│   └── rockets.json      # Configuraciones de cohetes
-└── README.md
+│   └── locations/                # Ubicación de datos de locaciones guardadas
+│   └── rockets/                  # Ubicación de datos de cohetes guardados
+│   └── schemas/                  # Ubicacion de schemas guardados
+│   └── simulation                # Ubicación de datos guardados en formato parquet
+├── scripts/
+│   └── validate_data.py          # Validacion de datos ingresados en rocket settings y location settings
+├── pages/
+│   ├── 01_simulation.py          # configuración de la simulación
+│   ├── 02_rocket_settings.py     # Agregar y configurar nuevos cohetes para simular
+│   ├── 03_location_settings.py   # Agregar y configurar nuevas ubicaciones de lanzamiento
+│   ├── 04_monte_carlo.py         # Uso de simulaciones de monte carlo (en proceso)
+│   └── 05_dashboard.py           # mostrar panel gráfico de análisis de la simulación de trayectoria realizada
+├── static/                       # Fuentes, imágenes
+├── README.md
+├── LICENSE
+└── streamlit_app.py
 ```
 
 ## Tests
