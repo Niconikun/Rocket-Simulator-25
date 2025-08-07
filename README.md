@@ -34,13 +34,13 @@ Este proyecto implementa un simulador de cohetes completo con las siguientes car
 
 ## Instalación
 
-1. Clonar el repositorio:
+- Clonar el repositorio:
 
 ```bash
 git clone https://github.com/username/Rocket-Simulator---GUI.git
 ```
 
-2. Instalar dependencias:
+- Instalar dependencias:
 
 ```bash
 pip install -r requirements.txt
@@ -48,24 +48,24 @@ pip install -r requirements.txt
 
 ## Uso
 
-1. Ejecutar la interfaz gráfica:
+- Ejecutar la interfaz gráfica:
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-2. Cargar configuración del cohete desde `data/rockets.json`
+- Cargar configuración del cohete desde `data/rockets/`
 
-3. Configurar parámetros de simulación:
-   - Condiciones iniciales
-   - Parámetros atmosféricos
-   - Configuración del motor
+- Configurar parámetros de simulación:
+  - Condiciones iniciales
+  - Parámetros atmosféricos
+  - Configuración del motor
 
-4. Ejecutar simulación y visualizar resultados
+- Ejecutar simulación y visualizar resultados
 
 ## Estructura del Proyecto
 
-```
+```bash
 Rocket-Simulator---GUI/
 ├── src/
 │   ├── models/
