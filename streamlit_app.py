@@ -18,9 +18,9 @@ def load_config():
 
 def main():
     rocket_page = st.Page("pages/02_rocket_settings.py", title="Rocket", icon=":material/rocket:")
-    sim_page = st.Page("pages/01_simulation.py", title="Simulation", icon=":material/settings:",default=True)
+    sim_page = st.Page("pages/01_simulation.py", title="Simulation", icon=":material/nest_heat_link_e:",default=True)
     location_page = st.Page("pages/03_location_settings.py", title="Location", icon=":material/location_on:")
-    dashboard_page = st.Page("pages/dashboard.py", title="Dashboard", icon=":material/dashboard:")
+    dashboard_page = st.Page("pages/05_dashboard.py", title="Dashboard", icon=":material/dashboard:")
     monte_carlo_page = st.Page("pages/04_monte_carlo.py", title="Monte Carlo", icon=":material/graph_3:")
     #risk_page = st.Page("Analysis/risk_analysis.py", title="Risk Analysis", icon=":material/analytics:")
 
@@ -28,7 +28,7 @@ def main():
         [rocket_page, location_page, sim_page, dashboard_page, monte_carlo_page],
         position="top")
 
-    st.set_page_config(page_title="Data manager", page_icon=":material/edit:")
+    st.set_page_config(page_title="Data manager", page_icon=":material/hub:")
 
     pg.run()
 
