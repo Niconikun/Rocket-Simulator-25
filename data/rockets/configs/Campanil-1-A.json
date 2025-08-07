@@ -1,15 +1,15 @@
 {
     "name": "Campanil-1-A",
-    "initial_mass": 7.2,
+    "initial_mass": 7.091,
     "reference_area": 0.006204,
     "I_before_burn": {
-            "x": 0.009565202,
-            "y": 0.514492586,
-            "z": 0.51463046
+            "x": 0.009416153,
+            "y": 0.520127852,
+            "z": 0.520199542
     },
     "CoM_before_burn": {
         "x": 0.84957, 
-        "y": 0.00001, 
+        "y": 0.0, 
         "z": 0.00012 
     },
     "I_after_burn": {
