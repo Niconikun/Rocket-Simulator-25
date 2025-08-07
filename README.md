@@ -51,7 +51,7 @@ pip install -r requirements.txt
 1. Ejecutar la interfaz gráfica:
 
 ```bash
-streamlit run src/app.py
+streamlit run streamlit_app.py
 ```
 
 2. Cargar configuración del cohete desde `data/rockets.json`
