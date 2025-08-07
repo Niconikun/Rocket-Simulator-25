@@ -17,3 +17,4 @@ stpyvista
 pyarrow>=14.0.1
 fastparquet>=2023.10.1
 fluids
+ephem

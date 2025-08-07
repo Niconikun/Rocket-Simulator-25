@@ -44,12 +44,19 @@ secondaryTextColor = "#cccccc"  # Light gray
 
 # Font family for the app
 font = "monospace"  # Monospace font for a techy feel
+baseRadius = "none"
+borderColor = "#c30a0aff"
+
 
 # Optional: Customize the sidebar
 
 [sidebar]
+primaryColor = "#c30a0aff"
 backgroundColor = "#2a2a2a"  # Match secondary background
+secondaryBackgroundColor = "#c30a0aff"
 textColor = "#ffffff"  # White text in sidebar
+baseRadius = "none"
+showSidebarBorder = "True"
 
 [server]
 runOnSave = true

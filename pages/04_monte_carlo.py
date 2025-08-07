@@ -8,7 +8,7 @@ from src.models.markov_models import (
     ParachuteMarkovModel
 )
 
-st.title("Análisis de Monte Carlo")
+st.title("Análisis de Monte Carlo [En Proceso]")
 
 # Configuración de la simulación
 n_sims = st.sidebar.slider("Número de simulaciones", 100, 1000, 500)

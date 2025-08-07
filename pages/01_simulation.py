@@ -118,12 +118,16 @@ with st.form("Simulation Settings"):
         sim_date = st.date_input('Simulation date', min_value=None, max_value=None, key="sim_date")
         sim_time = st.time_input('Simulation time', key="sim_time")
         sim_timezone = st.selectbox('Simulation timezone', options=options, index=default_index, key="sim_timezone")
-        conditions = st.pills(
-    "Conditions for simulation", 
-    ["Detonation", "Parachute", "Second Stage [Coming Soon]"],  # Removed [Coming soon] from Parachute
-    key="conditions"
-)
-        
+        conditions = st.segmented_control(label="Conditions for simulation", options=[
+            "Detonation", 
+            "Parachute [Coming Soon]", 
+            "Second Stage [Coming Soon]", 
+            "Wind Conditions [Coming Soon]", 
+            "Telemetry [Coming Soon]", 
+            "ACS [Coming Soon]",
+            "Thermal Model [coming Soon]",
+            "Structural Model [Coming Soon]",
+            "Inertial Navigation System [Coming Soon]"], default=None)
 
     with right_column:
         #info
@@ -466,7 +470,43 @@ with st.form("Simulation Settings"):
                                 st.write(f"Primer elemento: {type(value[0])}")
                     except Exception as debug_e:
                         st.write(f"{key}: Error al analizar - {str(debug_e)}")
-
+        if conditions and "Wind Conditions" in conditions:
+            st.subheader("Wind Settings [Coming Soon]")
+            wind_profile = st.selectbox(
+                "Wind Profile",
+                ["Calm", "Light", "Moderate", "Strong"]
+            )
+            
+            # Parámetros avanzados
+            with st.expander("Advanced Wind Parameters"):
+                surface_speed = st.slider(
+                    "Surface Wind Speed [m/s]",
+                    0.0, 20.0, 5.0
+                )
+                wind_direction = st.slider(
+                    "Primary Wind Direction [°]",
+                    0, 360, 180
+                )
+                turbulence = st.slider(
+                    "Turbulence Intensity [%]",
+                    0, 100, 20
+                )
+        if conditions and "Telemetry" in conditions:
+            st.subheader("Configuración de Telemetría")
+            telemetry_config = {
+                'sampling_rate': st.slider(
+                    "Tasa de muestreo [Hz]", 1, 100, 10),
+                'tx_power': st.number_input(
+                    "Potencia de transmisión [W]", 0.1, 10.0, 1.0),
+                'frequency': st.selectbox(
+                    "Frecuencia [MHz]",
+                    [433, 915, 2400]
+                ) * 1e6,
+                'antenna_gain': st.slider(
+                    "Ganancia de antena [dBi]", 0, 12, 3),
+                'min_snr': st.slider(
+                    "SNR mínimo [dB]", 5, 20, 10)
+            }
 
 
 
