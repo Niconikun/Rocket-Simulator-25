@@ -147,73 +147,75 @@ st.set_page_config(page_title="Rocket Settings", page_icon=":material/rocket:", 
 rock_set = st.form("Rocket Settings")
 rock_set.title("Rocket Settings")
     
-left_column, middle_column, right_column = rock_set.columns([2, 2, 4])
-    
-
+left_column, right_column = rock_set.columns([4, 2])
 
         
 left_column.subheader("Rocket Properties")
-        # Add input fields for rocket properties
-rocket_name = left_column.text_input("Rocket Name", value=rocket_name_edit, key="rocket_name")
-initial_mass = left_column.number_input("Initial Mass (kg)", min_value=0.0, value=float(initial_mass_edit), step=0.1,key="initial_mass")
-burn_time = left_column.number_input("Burn Time [s]", min_value=0.0, value=float(burn_time_edit), step=0.1, key="burn_time")
-reference_area = left_column.number_input("Reference area (Lift & Drag) [mm]", min_value=0.0, value=float(reference_area_edit), step=0.01, key="reference_area")
 
-left_column.subheader("Inertia and Centre of Mass (CoM) Settings")
-left_column.write("Inertia Before burning")
-a, b, c = left_column.columns(3)
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = left_column.tabs(["Properties", "Engine", "Fuselage", "Fins", "Nosecone", "Rear Section", "Aerodynamics [soon]", "Others"])
+        # Add input fields for rocket properties
+rocket_name = tab1.text_input("Rocket Name", value=rocket_name_edit, key="rocket_name")
+initial_mass = tab1.number_input("Initial Mass (kg)", min_value=0.0, value=float(initial_mass_edit), step=0.1,key="initial_mass")
+
+reference_area = tab1.number_input("Reference area (Lift & Drag) [mm]", min_value=0.0, value=float(reference_area_edit), step=0.01, key="reference_area")
+
+tab1.subheader("Inertia and Centre of Mass (CoM) Settings")
+tab1.write("Inertia Before burning")
+a, b, c = tab1.columns(3)
 
 I_before_burn_x = a.number_input("X", min_value=0.0, value=float(I_after_burn_x_edit), step=0.01, key="I_before_burn_x")
 I_before_burn_y = b.number_input("Y", min_value=0.0, value=float(I_before_burn_y_edit), step=0.01, key="I_before_burn_y")
 I_before_burn_z = c.number_input("Z", min_value=0.0, value=float(I_before_burn_z_edit), step=0.01, key="I_before_burn_z")
 
-left_column.write("Centre of Mass (CoM) Before burning")
-d, e, f = left_column.columns(3)
+tab1.write("Centre of Mass (CoM) Before burning")
+d, e, f = tab1.columns(3)
 CoM_before_burn_x = d.number_input("X", min_value=0.0, value=float(CoM_before_burn_x_edit), step=0.01, key="CoM_before_burn_x")
 CoM_before_burn_y = e.number_input("Y", min_value=0.0, value=float(CoM_before_burn_y_edit), step=0.01, key="CoM_before_burn_y")
 CoM_before_burn_z = f.number_input("Z", min_value=0.0, value=float(CoM_before_burn_z_edit), step=0.01, key="CoM_before_burn_z")
 
-left_column.write("Inertia After burning")
-g, h, i = left_column.columns(3)
+tab1.write("Inertia After burning")
+g, h, i = tab1.columns(3)
 I_after_burn_x = g.number_input("X", min_value=0.0, value=float(I_after_burn_x_edit), step=0.01, key="I_after_burn_x")
 I_after_burn_y = h.number_input("Y", min_value=0.0, value=float(I_after_burn_y_edit), step=0.01, key="I_after_burn_y")
 I_after_burn_z = i.number_input("Z", min_value=0.0, value=float(I_after_burn_z_edit), step=0.01, key="I_after_burn_z")
 
-left_column.write("Centre of Mass (CoM) After burning")
-j, k, l = left_column.columns(3)
+tab1.write("Centre of Mass (CoM) After burning")
+j, k, l = tab1.columns(3)
 CoM_after_burn_x = j.number_input("X", min_value=0.0, value=float(CoM_after_burn_x_edit), step=0.01, key="CoM_after_burn_x")
 CoM_after_burn_y = k.number_input("Y", min_value=0.0, value=float(CoM_after_burn_y_edit), step=0.01, key="CoM_after_burn_y")
 CoM_after_burn_z = l.number_input("Z", min_value=0.0, value=float(CoM_after_burn_z_edit), step=0.01, key="CoM_after_burn_z")
 
-left_column.subheader("Engine Properties")
-nozzle_exit_diameter= left_column.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
-mass_flux = left_column.number_input("Mass Flux ", min_value=0.0, value=float(mass_flux_edit), step=0.1, key="mass_flux")
-gas_speed = left_column.number_input("Gas Speed", min_value=0.0, value=float(gas_speed_edit), step=0.1, key="gas_speed")
-exit_pressure = left_column.number_input("Exit Pressure", min_value=0.0, value=float(exit_pressure_edit), step=0.1, key="exit_pressure")
+tab2.subheader("Engine Properties")
+burn_time = tab2.number_input("Burn Time [s]", min_value=0.0, value=float(burn_time_edit), step=0.1, key="burn_time")
+nozzle_exit_diameter= tab2.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
+mass_flux = tab2.number_input("Mass Flux ", min_value=0.0, value=float(mass_flux_edit), step=0.1, key="mass_flux")
+gas_speed = tab2.number_input("Gas Speed", min_value=0.0, value=float(gas_speed_edit), step=0.1, key="gas_speed")
+exit_pressure = tab2.number_input("Exit Pressure", min_value=0.0, value=float(exit_pressure_edit), step=0.1, key="exit_pressure")
 
-middle_column.subheader("Fins")
-N_fins = middle_column.number_input('Number of fins [-]', min_value=0, value=N_fins_edit, step=1, key="N_fins")
-fins_chord_root = middle_column.number_input('Fins aerodynamic chord at root [mm]', min_value=0.0, value=float(fins_chord_root_edit), step=0.1, key="fins_chord_root")
-fins_mid_chord = middle_column.number_input('Fins aerodynamic mid-chord [mm]', min_value=0.0, value=float(fins_mid_chord_edit), step=0.1, key="fins_mid_chord")
-fins_chord_tip = middle_column.number_input('Fins aerodynamic chord at tip [mm]', min_value=0.0, value=float(fins_chord_tip_edit), step=0.1, key="fins_chord_tip")
-fins_span = middle_column.number_input('Fins span [mm]', min_value=0.0, value=float(fins_span_edit), step=0.1, key="fins_span")
-len_nosecone_fins = middle_column.number_input('Length between nose cone tip and the point where the fin leading edge meets the body tube [mm]', min_value=0.0, value=float(len_nosecone_fins_edit), step=0.1, key="len_nosecone_fins")
+tab4.subheader("Fins")
+N_fins = tab4.number_input('Number of fins [-]', min_value=0, value=N_fins_edit, step=1, key="N_fins")
+fins_chord_root = tab4.number_input('Fins aerodynamic chord at root [mm]', min_value=0.0, value=float(fins_chord_root_edit), step=0.1, key="fins_chord_root")
+fins_mid_chord = tab4.number_input('Fins aerodynamic mid-chord [mm]', min_value=0.0, value=float(fins_mid_chord_edit), step=0.1, key="fins_mid_chord")
+fins_chord_tip = tab4.number_input('Fins aerodynamic chord at tip [mm]', min_value=0.0, value=float(fins_chord_tip_edit), step=0.1, key="fins_chord_tip")
+fins_span = tab4.number_input('Fins span [mm]', min_value=0.0, value=float(fins_span_edit), step=0.1, key="fins_span")
+len_nosecone_fins = tab4.number_input('Length between nose cone tip and the point where the fin leading edge meets the body tube [mm]', min_value=0.0, value=float(len_nosecone_fins_edit), step=0.1, key="len_nosecone_fins")
 
-middle_column.subheader("Nosecone")
-len_warhead = middle_column.number_input('Length of warhead or distance from tip of nose to base of nose [mm]', min_value=0.0, value=float(len_warhead_edit), step=0.1, key="len_warhead")
-diameter_warhead_base = middle_column.number_input('Diameter of base of warhead [mm]', min_value=0.0, value=float(diameter_warhead_base_edit), step=0.1, key="diameter_warhead_base")
-nosecone_shape = middle_column.selectbox("Nosecone Shape", options=["Conical", "Elliptical", "Parabolic"], index=0, key="nosecone_shape")
-
-
-middle_column.subheader("Fuselage")
-len_bodytube_wo_rear = middle_column.number_input('Length of body tube (not considering rear) [mm]', min_value=0.0, value=float(len_bodytube_wo_rear_edit), step=0.1, key="len_bodytube_wo_rear")
-diameter_bodytube = middle_column.number_input('Diameter of body tube [mm]', min_value=0.0, value=float(diameter_bodytube_edit), step=0.1, key="diameter_bodytube")
+tab5.subheader("Nosecone")
+len_warhead = tab5.number_input('Length of warhead or distance from tip of nose to base of nose [mm]', min_value=0.0, value=float(len_warhead_edit), step=0.1, key="len_warhead")
+diameter_warhead_base = tab5.number_input('Diameter of base of warhead [mm]', min_value=0.0, value=float(diameter_warhead_base_edit), step=0.1, key="diameter_warhead_base")
+nosecone_shape = tab5.selectbox("Nosecone Shape", options=["Conical", "Elliptical", "Parabolic"], index=0, key="nosecone_shape")
 
 
-middle_column.subheader("Rear Section")
-len_rear = middle_column.number_input('Length of rear [mm]', min_value=0.0, value=float(len_rear_edit), step=0.1, key="len_rear")
-end_diam_rear =  middle_column.number_input('End diameter rear [mm]', min_value=0.0, value=float(end_diam_rear_edit), step=0.1, key="end_diam_rear")
+tab3.subheader("Fuselage")
+len_bodytube_wo_rear = tab3.number_input('Length of body tube (not considering rear) [mm]', min_value=0.0, value=float(len_bodytube_wo_rear_edit), step=0.1, key="len_bodytube_wo_rear")
+diameter_bodytube = tab3.number_input('Diameter of body tube [mm]', min_value=0.0, value=float(diameter_bodytube_edit), step=0.1, key="diameter_bodytube")
 
+
+tab6.subheader("Rear Section")
+len_rear = tab6.number_input('Length of rear [mm]', min_value=0.0, value=float(len_rear_edit), step=0.1, key="len_rear")
+end_diam_rear =  tab6.number_input('End diameter rear [mm]', min_value=0.0, value=float(end_diam_rear_edit), step=0.1, key="end_diam_rear")
+
+tab8.write("Section in progress!")
 
 with right_column:
     right_column.subheader("Rocket Graphics")

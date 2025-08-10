@@ -202,7 +202,7 @@ class Aerodynamics:
         # Corrección de Ketchledge [Ketch92]
         if self.mach <= 0.8:
             return cn / np.sqrt(1 - (self.mach**2))
-        elif self.mach <= 1.2:
+        elif self.mach > 0.8 and self.mach <= 1.2:
             return cn / np.sqrt(1 - (0.8**2))
         else:
             return cn / np.sqrt(-1 + (self.mach**2))

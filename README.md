@@ -1,18 +1,31 @@
-# Rocket-Simulator-GUI
+# Rocket-Simulator-UdeC
+
+![Versión](https://img.shields.io/badge/versión-3.2.0-blue.svg)
 
 Simulador de cohetes con interfaz gráfica para análisis de trayectorias y rendimiento.
 
-## Descripción
+## Historia
 
-Este proyecto implementa un simulador de cohetes completo con las siguientes características:
+Proyecto iniciado por Jorge Orozco en 2022 para la predicción de trayectorias del Cohete Rayo usando cuaterniones. En 2025 se agregó:
 
-- Modelado físico completo (6 grados de libertad)
-- Cálculo de fuerzas aerodinámicas
-- Simulación del motor cohete
-- Interfaz gráfica para visualización de resultados
-- Almacenamiento y análisis de datos de vuelo
+- Interfaz gráfica para simplificar su uso
+- Capacidad de agregar nuevos cohetes
+- Configuración de ubicaciones de lanzamiento
+- Análisis detallado de proyectiles
 
-## Características Principales
+## Características Pendientes
+
+- Módulos más precisos para cálculos de trayectoria:
+  - Mejor modelado aerodinámico
+  - Condiciones de viento
+- Descomposición física del cohete en subsistemas
+- Implementación de simulaciones Monte Carlo
+
+## Uso Básico
+
+El simulador se inicia automáticamente con parámetros predefinidos.
+
+## Funcionalidades Principales
 
 - **Dinámica de Vuelo**
   - Simulación 6-DOF completa
