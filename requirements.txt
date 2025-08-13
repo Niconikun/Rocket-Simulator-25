@@ -1,12 +1,11 @@
 streamlit
-keplergl
 streamlit_keplergl
 streamlit_globe
+keplergl
 scipy
 numpy
 pandas
 fluids
-cmath
 matplotlib
 plotly
 datetime
@@ -18,3 +17,4 @@ pyarrow
 fastparquet
 fluids
 ephem
+os
