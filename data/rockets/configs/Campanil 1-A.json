@@ -34,9 +34,9 @@
         "total length": 1199.47
     },
     "fins": {
-        "span": 136,
+        "span": 139.119,
         "chord_root": 130,
-        "chord_tip": 1,
+        "chord_tip": 43.92,
         "mid_chord": 86.96,
         "N_fins": 4
     },

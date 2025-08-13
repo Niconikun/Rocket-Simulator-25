@@ -149,9 +149,6 @@ rock_set.title("Rocket Settings")
     
 left_column, right_column = rock_set.columns([4, 2])
 
-        
-left_column.subheader("Rocket Properties")
-
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = left_column.tabs(["Properties", "Engine", "Fuselage", "Fins", "Nosecone", "Rear Section", "Aerodynamics [soon]", "Others"])
         # Add input fields for rocket properties
 rocket_name = tab1.text_input("Rocket Name", value=rocket_name_edit, key="rocket_name")
@@ -260,7 +257,7 @@ with right_column:
     for i in range(N_fins_edit):
         angle = i * (360 / N_fins_edit)
         grid = pv.UnstructuredGrid(np.array([5, 0, 1, 2, 3, 4], dtype=np.int64), cell_type, fins_points)
-        fins_array.append(grid.translate((diameter_bodytube_edit/2, len_bodytube_wo_rear_edit/2 + len_warhead_edit - 2* fins_span_edit - len_nosecone_fins_edit, 0)).rotate_y(angle, inplace=False))
+        fins_array.append(grid.translate((diameter_bodytube_edit/2, len_bodytube_wo_rear_edit/2 + len_warhead_edit - fins_span_edit*1.33 - len_nosecone_fins_edit, 0)).rotate_y(angle, inplace=False))
     fins = pv.merge(fins_array)
     # Combine all parts into a single mesh
     rocket_mesh = sphere + nosecone + rear + fins
