@@ -15,9 +15,6 @@ numpy       -Numpy Python extension. http://numpy.org/
 scipy       -Scipy Python extension. https://www.scipy.org
              Version: Scipy 1.6.2
 
-Internal dependencies:
-cmath       -cMath Python extension. https://docs.python.org/3/library/cmath.html
-
 Changelog:
 Date          Name              Change
 __ _          __ _              ____ _
@@ -61,7 +58,6 @@ import logging
 path
 import numpy as np
 from scipy import interpolate
-from cmath import pi
 
 class Aerodynamics:
     def __init__(self, mach, angle_attack, geometry):
@@ -149,7 +145,7 @@ class Aerodynamics:
         Cn_alpha_cone = 2.0
         
         # Cuerpo [Box09]
-        Cn_alpha_body = (g['len_bodytube_wo_rear']/(pi*0.25*g['diameter_bodytube'])) * alpha_rad
+        Cn_alpha_body = (g['len_bodytube_wo_rear']/(np.pi*0.25*g['diameter_bodytube'])) * alpha_rad
         
         # Sección trasera [Box09]
         Cn_alpha_tail = 2.0 * (
