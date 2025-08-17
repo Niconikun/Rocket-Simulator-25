@@ -44,9 +44,9 @@ import streamlit as st
 import logging
 from src.models.engine import Engine
 from src.models.aerodynamics import Aerodynamics
-from src.models.detonationmodel import DetonationModel
-from src.models.parachute import Parachute
-from src.models.windmodel import WindModel
+from src.models.to_be_implemented.detonationmodel import DetonationModel
+from src.models.to_be_implemented.parachute import Parachute
+from src.models.to_be_implemented.windmodel import WindModel
 from src.utils.mattools import MatTools as Mat
 from src.utils.geotools import GeoTools as Geo
 
@@ -724,6 +724,6 @@ class Rocket(object):
 
     def add_parachute(self, diameter, Cd, deployment_altitude):
         """Agrega un paracaídas al cohete"""
-        from src.models.parachute import Parachute
+        from src.models.to_be_implemented.parachute import Parachute
         self.parachute = Parachute(diameter, Cd, deployment_altitude)
         self.has_parachute = True
