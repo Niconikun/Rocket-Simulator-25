@@ -137,6 +137,7 @@ with st.form("Simulation Settings"):
         average_temperature = st.number_input('Average temperature [°C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0, key="average_temperature")
         launch_elevation = st.number_input('Launch elevation [°]', min_value=0.0, max_value=180.0, value=60.0, step=1.0, key="launch_elevation")
         launch_site_orientation = st.number_input('Launch site orientation (from the East) [°]', min_value=-180.0, max_value=180.0, value=20.0, step=1.0, key="launch_site_orientation")
+        vel_initial = st.number_input('Initial velocity [m/s]', min_value=0.0, max_value=1000.0, value=0.0, step=1.0, key="vel_initial")
         average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=1000000.0, value=101325.0, step=1.0, key="average_pressure")
         
         #average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0, key="average_humidity")
@@ -178,9 +179,9 @@ with st.form("Simulation Settings"):
         North=0       # [m]   # Y axis initial location of rocket from platform
         Up=1.0        # [m]   # Z axis initial location of rocket from platform  (do not set at 0...this is in order to used a conditional later on for max. alt and range)
 
-        Vel_east=0    # [m/s]   # X axis initial velocity of rocket from platform
-        Vel_north=0   # [m/s]   # Y axis initial velocity of rocket from platform
-        Vel_up=0      # [m/s]   # Z axis initial velocity of rocket from platform
+        Vel_east= vel_initial * np.sin(launch_elevation * deg2rad) * np.cos(launch_site_orientation * deg2rad)    # [m/s]   # X axis initial velocity of rocket from platform
+        Vel_north= vel_initial * np.sin(launch_elevation * deg2rad) * np.sin(launch_site_orientation * deg2rad)   # [m/s]   # Y axis initial velocity of rocket from platform
+        Vel_up= vel_initial * np.cos(launch_elevation * deg2rad)      # [m/s]   # Z axis initial velocity of rocket from platform
 
         Roll=0        # [deg]   # From initial position (between -180 and 180). Assumed to be always zero
 
