@@ -31,12 +31,11 @@ ___ _       _________ _            ___ _
 """
 # Imports
 from datetime import datetime, timezone
-from cmath import pi
 import numpy as np
 
 # Auxiliary functions
-deg2rad=pi/180
-rad2deg=180/pi
+deg2rad=np.pi/180
+rad2deg=180/np.pi
 
 class Clock(object):
     "julian day, GMST..."
