@@ -104,7 +104,7 @@ class Motor():
         return max(thrust, 0)
 
     def calcFreeVolume(self, regDepth):
-        """Calculates the volume inside of the motor not occupied by proppellant for a set of regression depths."""
+        """Calculates the volume inside of the motor not occupied by propellant for a set of regression depths."""
         return sum([grain.getFreeVolume(reg) for grain, reg in zip(self.grains, regDepth)])
 
     def calcTotalVolume(self):
@@ -160,7 +160,7 @@ class Motor():
             aText = 'Motor must have at least one propellant grain'
             simRes.addAlert(SimAlert(SimAlertLevel.ERROR, SimAlertType.CONSTRAINT, aText, 'Motor'))
         for gid, grain in enumerate(self.grains):
-            if isinstance(grain, EndBurningGrain) and gid != 0: # Endburners have to be at the foward end
+            if isinstance(grain, EndBurningGrain) and gid != 0: # Endburners have to be at the Froward end
                 aText = 'End burning grains must be the forward-most grain in the motor'
                 simRes.addAlert(SimAlert(SimAlertLevel.ERROR, SimAlertType.CONSTRAINT, aText, 'Grain {}'.format(gid + 1)))
             for alert in grain.getGeometryErrors():
