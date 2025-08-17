@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from src.models.parachute import Parachute
+from src.models.to_be_implemented.parachute import Parachute
 
 class TestParachute(unittest.TestCase):
     def setUp(self):
