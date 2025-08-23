@@ -5,7 +5,7 @@ import skimage.draw as draw
 from ..grain import FmmGrain
 from ..properties import PolygonProperty, EnumProperty
 from ..simResult import SimAlert, SimAlertLevel, SimAlertType
-from ..units import getAllConversions, convert
+from src.utils.units import getAllConversions, convert
 
 class CustomGrain(FmmGrain):
     """Custom grains can have any core shape. They define their geometry using a polygon property, which tracks a list

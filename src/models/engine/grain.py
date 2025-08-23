@@ -5,23 +5,24 @@ from abc import abstractmethod
 
 import numpy as np
 import skfmm
-import mathlib
+from . import mathlib
 from skimage import measure
 from scipy.signal import savgol_filter
 from scipy import interpolate
 
 from ..engine import geometry
 from .simResult import SimAlert, SimAlertLevel, SimAlertType
-from .properties import FloatProperty, EnumProperty, PropertyCollection
 
-class Grain(PropertyCollection):
+
+class Grain():
     """A basic propellant grain. This is the class that all grains inherit from. It provides a few properties and
     composed methods but otherwise it is up to the subclass to make a functional grain."""
     geomName = None
     def __init__(self):
-        super().__init__()
-        self.props['diameter'] = FloatProperty('Diameter', 'm', 0, 1)
-        self.props['length'] = FloatProperty('Length', 'm', 0, 3)
+        self.props = {
+            'diameter': FloatProperty('Diameter', 'm', 0, 1),
+            'length': FloatProperty('Length', 'm', 0, 3)
+        }
 
     def getVolumeSlice(self, regDist, dRegDist):
         """Returns the amount of propellant volume consumed as the grain regresses from a distance of 'regDist' to
@@ -103,8 +104,11 @@ class PerforatedGrain(Grain):
     basic grain class """
     geomName = 'perfGrain'
     def __init__(self):
-        super().__init__()
-        self.props['inhibitedEnds'] = EnumProperty('Inhibited ends', ['Neither', 'Top', 'Bottom', 'Both'])
+        self.props = {
+            'diameter': FloatProperty('Diameter', 'm', 0.01, 1),
+            'length': FloatProperty('Length', 'm', 0.01, 5),
+            'inhibitedEnds': EnumProperty('Inhibited ends', ['Neither', 'Top', 'Bottom', 'Both'])
+        }
         self.wallWeb = 0 # Max distance from the core to the wall
 
     def getEndPositions(self, regDist):
@@ -283,7 +287,7 @@ class FmmGrain(PerforatedGrain):
 
     def getCorePerimeter(self, regDist):
         mapDist = self.normalize(regDist)
-        return self.mapToLength(mathlib.find_perimeter(self.regressionMap, mapDist)[0])
+        return self.mapToLength(mathlib._perimeter(self.regressionMap, mapDist)[0])
     
     def getFaceArea(self, regDist):
         mapDist = self.normalize(regDist)

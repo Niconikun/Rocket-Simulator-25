@@ -5,8 +5,7 @@ from .propellant import Propellant
 from . import geometry
 from .simResult import SimulationResult, SimAlert, SimAlertLevel, SimAlertType
 from .grains import EndBurningGrain
-from .properties import PropertyCollection, FloatProperty, IntProperty
-from constants import gasConstant
+from .constants import gasConstant
 from scipy.optimize import newton
 import numpy as np
 

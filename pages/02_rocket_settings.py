@@ -258,7 +258,10 @@ with right_column:
         angle = i * (360 / N_fins_edit)
         grid = pv.UnstructuredGrid(np.array([5, 0, 1, 2, 3, 4], dtype=np.int64), cell_type, fins_points)
         fins_array.append(grid.translate((diameter_bodytube_edit/2, len_bodytube_wo_rear_edit/2 + len_warhead_edit - fins_span_edit*1.33 - len_nosecone_fins_edit, 0)).rotate_y(angle, inplace=False))
-    fins = pv.merge(fins_array)
+    if fins_array:
+        fins = pv.merge(fins_array)
+    else:
+        fins = None
     # Combine all parts into a single mesh
     rocket_mesh = sphere + nosecone + rear + fins
     # Add the rocket mesh to the plotter

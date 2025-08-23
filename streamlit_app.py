@@ -23,7 +23,7 @@ def main():
     dashboard_page = st.Page("pages/05_dashboard.py", title="Dashboard", icon=":material/dashboard:")
     monte_carlo_page = st.Page("pages/04_monte_carlo.py", title="Monte Carlo", icon=":material/graph_3:")
     units_page = st.Page("pages/06_units_conversion.py", title="Units Conversion", icon=":material/scale:")
-    engine_page = st.Page("pages/07_engine_settings.py", title="Engine Settings", icon=":material/rocket_launch:")
+    engine_page = st.Page("pages/07_engine_settings.py", title="Engine", icon=":material/explosion:")
 
     pg = st.navigation(
         [engine_page, rocket_page, location_page, sim_page, dashboard_page, monte_carlo_page, units_page],

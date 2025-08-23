@@ -2,7 +2,7 @@
 
 import numpy as np
 import skfmm
-import mathlib
+from .. import mathlib
 
 from ..grain import PerforatedGrain
 from .. import geometry

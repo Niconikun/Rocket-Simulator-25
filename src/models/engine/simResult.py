@@ -5,7 +5,7 @@ import math
 from enum import Enum
 
 from . import geometry
-from . import units
+from src.utils import units
 from . import constants
 
 class SimAlertLevel(Enum):

@@ -2,7 +2,7 @@
 them, such as allowed ranges. They also can optionally associate a unit with the value, which aids with display and
 conversion of the value."""
 
-from . import units
+from src.utils import units
 
 class Property():
     """The base class that properties inherit from. It associates a human-readable display name with the data, as well

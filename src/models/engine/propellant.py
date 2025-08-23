@@ -2,14 +2,25 @@
 
 from scipy.optimize import fsolve
 
-from .properties import PropertyCollection, FloatProperty, StringProperty, TabularProperty
 from .simResult import SimAlert, SimAlertLevel, SimAlertType
 from .constants import gasConstant
+import json
+import os
 
-class PropellantTab(PropertyCollection):
+# Load the data from data/propellant/propellant_data.json
+propellant_data_path = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    '..', '..', 'data', 'propellant', 'propellant_data.json'
+)
+propellant_data_path = os.path.normpath(propellant_data_path)
+
+with open(propellant_data_path, 'r', encoding='utf-8') as f:
+    PROPELLANT_DATA = json.load(f)
+
+class PropellantTab():
     """Contains the combustion properties of a propellant over a specified pressure range."""
     def __init__(self, tabDict=None):
-        super().__init__()
+        self.props = {}
         self.props['minPressure'] = FloatProperty('Minimum Pressure', 'Pa', 0, 7e7)
         self.props['maxPressure'] = FloatProperty('Maximum Pressure', 'Pa', 0, 7e7)
         self.props['a'] = FloatProperty('Burn rate Coefficient', 'm/(s*Pa^n)', 1E-8, 2)

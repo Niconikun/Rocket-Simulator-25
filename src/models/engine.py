@@ -20,8 +20,8 @@ Referencias:
     - Hill, P., & Peterson, C. (1992). Mechanics and Thermodynamics of Propulsion.
 """
 # Imports
-from cmath import pi
 import numpy as np
+import json
 
 # Define Engine class for Engine module. Data given by [Valle22]  # All data SHOULD be obtained from external file
 class Engine:
@@ -39,7 +39,9 @@ class Engine:
     """
     
     def __init__(self, time, ambient_pressure, burn_time, nozzle_exit_diameter, 
-                 mass_flux_max, gas_speed, exit_pressure):
+                 mass_flux_max, gas_speed, exit_pressure,
+                 length_chamber, diameter_chamber,
+                 grain_outer_diameter, grain_length, grain_inner_diameter, N_grains, rho_grain, rho_percentage):
         """
         Inicializa el motor cohete.
 
@@ -56,6 +58,15 @@ class Engine:
             ValueError: Si algún parámetro es negativo o físicamente inválido
         """
         # Validación extendida de parámetros
+        try:
+            # Cargar configuración del cohete
+            with open('data/propellant/propellant_data.json', 'r') as file:
+                propellant_data = json.load(file)
+        except FileNotFoundError:
+            raise FileNotFoundError("No se encontró el archivo de configuración del cohete")
+        except json.JSONDecodeError:
+            raise ValueError("Error al leer el archivo de configuración del cohete")
+
         if ambient_pressure < 0:
             raise ValueError("La presión ambiente no puede ser negativa")
         if burn_time <= 0:
@@ -98,13 +109,28 @@ class Engine:
         
         # Área de salida de la tobera
         self.exit_area = np.pi * (self.nozzle_exit_diameter/2)**2
-        
+
+        self.length_chamber = length_chamber
+        self.diameter_chamber = diameter_chamber
+        self.chamber_volume = np.pi * (self.diameter_chamber / 2)**2 * self.length_chamber
+
+        self.grain_outer_diameter = grain_outer_diameter
+        self.grain_length = grain_length
+        self.grain_inner_diameter = grain_inner_diameter
+        self.N_grains = N_grains
+        self.rho_grain = rho_grain
+        self.rho_percentage = rho_percentage
+
+        self.grain_volume_initial = np.pi * (self.grain_outer_diameter / 2)**2 * self.grain_length * self.N_grains - np.pi * (self.grain_inner_diameter / 2)**2 * self.grain_length * self.N_grains
+        self.grain_mass_initial = self.grain_volume_initial * self.rho_grain * self.rho_percentage
+
         # Inicializar valores
         self._mass_flux = 0.0
         self._thrust = 0.0
         
         # Calcular valores iniciales
         self._calculate_performance()
+
 
     @property
     def mass_flux(self):
