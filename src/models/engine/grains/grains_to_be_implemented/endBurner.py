@@ -1,7 +1,7 @@
 """End Burner submodule"""
 
-from ..grain import Grain
-from ..import geometry
+from ...grain import Grain
+from ...import geometry
 
 class EndBurningGrain(Grain):
     """Defines an end-burning grain, which is a simple cylinder that burns on one end."""
