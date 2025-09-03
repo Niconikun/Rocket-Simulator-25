@@ -154,7 +154,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = left_column.tabs(["Properties",
 rocket_name = tab1.text_input("Rocket Name", value=rocket_name_edit, key="rocket_name")
 initial_mass = tab1.number_input("Initial Mass (kg)", min_value=0.0, value=float(initial_mass_edit), step=0.1,key="initial_mass")
 
-reference_area = tab1.number_input("Reference area (Lift & Drag) [mm]", min_value=0.0, value=float(reference_area_edit), step=0.01, key="reference_area")
+reference_area = tab1.number_input("Reference area (Lift & Drag) [mm^2]", min_value=0.0, value=float(reference_area_edit), step=0.01, key="reference_area")
 
 tab1.subheader("Inertia and Centre of Mass (CoM) Settings")
 tab1.write("Inertia Before burning")
