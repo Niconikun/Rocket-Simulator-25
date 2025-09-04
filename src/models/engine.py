@@ -23,6 +23,24 @@ Referencias:
 import numpy as np
 import json
 
+class MotorConfig():
+    """Contains the settings required for simulation, including environmental conditions and details about
+    how to run the simulation."""
+    def __init__(self, maxPressure, maxMassFlux, maxMachNumber, minPortThroat, flowSeparationWarnPercent, burnoutWebThres, burnoutThrustThres, timestep, ambPressure, mapDim, sepPressureRatio):
+        # Limits
+        self.maxPressure = maxPressure #Max Allowed Pressure [Pa]
+        self.maxMassFlux = maxMassFlux #Maximum Allowed Mass Flux [kg/(m^2*s)]
+        self.maxMachNumber = maxMachNumber #Maximum Allowed Core Mach Number [-]
+        self.minPortThroat = minPortThroat #Minimum Allowed Port/Throat Ratio [-]
+        self.flowSeparationWarnPercent = flowSeparationWarnPercent #Flow Separation Warning Threshold [-]
+        # Simulation
+        self.burnoutWebThres = burnoutWebThres #Web Burnout Threshold [m]
+        self.burnoutThrustThres = burnoutThrustThres #Thrust Burnout Threshold [%]
+        self.timestep = timestep #Simulation Timestep [s]
+        self.ambPressure = ambPressure #Ambient Pressure [Pa]
+        self.mapDim = mapDim #Grain Map Dimension [-]
+        self.sepPressureRatio = sepPressureRatio #Separation Pressure Ratio [-]
+
 # Define Engine class for Engine module. Data given by [Valle22]  # All data SHOULD be obtained from external file
 class Engine:
     """
