@@ -136,7 +136,7 @@ if show_wind_rose:
                 tickvals=temp_wind_rose.directions,
                 ticktext=directions,
                 direction="clockwise",
-                start=90
+                rotation=90
             )
         ),
         title=f"Rosa de Vientos - {location_name} ({display_season.value.title()})",

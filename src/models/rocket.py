@@ -44,9 +44,6 @@ import streamlit as st
 import logging
 from src.models.engine import Engine
 from src.models.aerodynamics import Aerodynamics
-from src.models.to_be_implemented.detonationmodel import DetonationModel
-from src.models.to_be_implemented.parachute import Parachute
-from src.models.to_be_implemented.windmodel import WindModel
 from src.utils.mattools import MatTools as Mat
 from src.utils.geotools import GeoTools as Geo
 
