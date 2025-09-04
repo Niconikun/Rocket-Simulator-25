@@ -2,7 +2,6 @@
 
 from scipy.optimize import fsolve
 
-from .simResult import SimAlert, SimAlertLevel, SimAlertType
 from .constants import gasConstant
 import json
 import os
@@ -19,28 +18,26 @@ with open(propellant_data_path, 'r', encoding='utf-8') as f:
 
 class PropellantTab():
     """Contains the combustion properties of a propellant over a specified pressure range."""
-    def __init__(self, tabDict=None):
+    def __init__(self, minPressure, maxPressure, a, n, k, t, m):
         self.props = {}
-        self.props['minPressure'] = FloatProperty('Minimum Pressure', 'Pa', 0, 7e7)
-        self.props['maxPressure'] = FloatProperty('Maximum Pressure', 'Pa', 0, 7e7)
-        self.props['a'] = FloatProperty('Burn rate Coefficient', 'm/(s*Pa^n)', 1E-8, 2)
-        self.props['n'] = FloatProperty('Burn rate Exponent', '', -0.99, 0.99)
-        self.props['k'] = FloatProperty('Specific Heat Ratio', '', 1+1e-6, 10)
-        self.props['t'] = FloatProperty('Combustion Temperature', 'K', 1, 10000)
-        self.props['m'] = FloatProperty('Exhaust Molar Mass', 'g/mol', 1e-6, 100)
-        if tabDict is not None:
-            self.setProperties(tabDict)
+        self.props['minPressure'] = minPressure #Minimum Pressure [Pa]
+        self.props['maxPressure'] = maxPressure #Maximum Pressure [Pa]
+        self.props['a'] = a #Burn rate Coefficient [m/(s*Pa^n)]
+        self.props['n'] = n #Burn rate Exponent [-]
+        self.props['k'] = k #Specific Heat Ratio [-]
+        self.props['t'] = t #Combustion Temperature [K]
+        self.props['m'] = m #Exhaust Molar Mass [g/mol]
 
 
-class Propellant(PropertyCollection):
+class Propellant():
     """Contains the physical and thermodynamic properties of a propellant formula."""
-    def __init__(self, propDict=None):
-        super().__init__()
-        self.props['name'] = StringProperty('Name')
-        self.props['density'] = FloatProperty('Density', 'kg/m^3', 1, 10000)
-        self.props['tabs'] = TabularProperty('Properties', PropellantTab)
-        if propDict is not None:
-            self.setProperties(propDict)
+    def __init__(self, name, density):
+        self.props = {}
+        self.props['name'] = name
+        self.props['density'] = density #Density [kg/m^3]
+        self.props['tabs'] = {
+            PropellantTab.__name__: []
+        }
 
     def getCStar(self, pressure):
         """Returns the propellant's characteristic velocity."""
@@ -55,7 +52,7 @@ class Propellant(PropertyCollection):
         return ballA * (pressure ** ballN)
 
     def getPressureFromKn(self, kn):
-        density = self.getProperty('density')
+        density = self.density
         tabPressures = []
         for tab in self.getProperty('tabs'):
             ballA, ballN, gamma, temp, molarMass = tab['a'], tab['n'], tab['k'], tab['t'], tab['m']
@@ -107,35 +104,6 @@ class Propellant(PropertyCollection):
     def getMaximumValidPressure(self):
         """Returns the highest pressure value with associated combustion properties"""
         return max([tab['maxPressure'] for tab in self.getProperty('tabs')])
-
-    def getErrors(self):
-        """Checks that all tabs have smaller start pressures than their end pressures, and verifies that no ranges
-        overlap."""
-        errors = []
-        for tabId, tab in enumerate(self.getProperty('tabs')):
-            if tab['maxPressure'] == tab['minPressure']:
-                errText = 'Tab #{} has the same minimum and maximum pressures.'.format(tabId + 1)
-                errors.append(SimAlert(SimAlertLevel.ERROR, SimAlertType.VALUE, errText, 'Propellant'))
-            if tab['maxPressure'] < tab['minPressure']:
-                errText = 'Tab #{} has reversed pressure limits.'.format(tabId + 1)
-                errors.append(SimAlert(SimAlertLevel.ERROR, SimAlertType.VALUE, errText, 'Propellant'))
-            for otherTabId, otherTab in enumerate(self.getProperty('tabs')):
-                if tabId != otherTabId:
-                    if otherTab['minPressure'] < tab['maxPressure'] < otherTab['maxPressure']:
-                        err = 'Tabs #{} and #{} have overlapping ranges.'.format(tabId + 1, otherTabId + 1)
-                        errors.append(SimAlert(SimAlertLevel.ERROR, SimAlertType.VALUE, err, 'Propellant'))
-        return errors
-
-    def getPressureErrors(self, pressure):
-        """Returns if the propellant has any errors associated with the supplied pressure such as not having set
-        combustion properties"""
-        errors = []
-        for tab in self.getProperty('tabs'):
-            if tab['minPressure'] < pressure < tab['maxPressure']:
-                return errors
-        aText = "Chamber pressure deviated from propellant's entered ranges. Results may not be accurate."
-        errors.append(SimAlert(SimAlertLevel.WARNING, SimAlertType.VALUE, aText, 'Propellant'))
-        return errors
 
     def addTab(self, tab):
         """Adds a set of combustion properties to the propellant"""

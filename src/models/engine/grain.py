@@ -11,18 +11,15 @@ from scipy.signal import savgol_filter
 from scipy import interpolate
 
 from ..engine import geometry
-from .simResult import SimAlert, SimAlertLevel, SimAlertType
 
 
 class Grain():
     """A basic propellant grain. This is the class that all grains inherit from. It provides a few properties and
     composed methods but otherwise it is up to the subclass to make a functional grain."""
     geomName = None
-    def __init__(self):
-        self.props = {
-            'diameter': FloatProperty('Diameter', 'm', 0, 1),
-            'length': FloatProperty('Length', 'm', 0, 3)
-        }
+    def __init__(self, diameter, length):
+        self.diameter = diameter # meters
+        self.length = length # meters
 
     def getVolumeSlice(self, regDist, dRegDist):
         """Returns the amount of propellant volume consumed as the grain regresses from a distance of 'regDist' to
@@ -77,18 +74,6 @@ class Grain():
     def simulationSetup(self, config):
         """Do anything needed to prepare this grain for simulation"""
 
-    def getGeometryErrors(self):
-        """Returns a list of simAlerts that detail any issues with the geometry of the grain. Errors should be
-        used for any condition that prevents simulation of the grain, while warnings can be used to notify the
-        user of possible non-fatal mistakes in their entered numbers. Subclasses should still call the superclass
-        method, as it performs checks that still apply to its subclasses."""
-        errors = []
-        if self.props['diameter'].getValue() == 0:
-            errors.append(SimAlert(SimAlertLevel.ERROR, SimAlertType.GEOMETRY, 'Diameter must not be 0'))
-        if self.props['length'].getValue() == 0:
-            errors.append(SimAlert(SimAlertLevel.ERROR, SimAlertType.GEOMETRY, 'Length must not be 0'))
-        return errors
-
     def getGrainBoundingVolume(self):
         """Returns the volume of the bounding cylinder around the grain"""
         return geometry.cylinderVolume(self.props['diameter'].getValue(), self.props['length'].getValue())
@@ -103,23 +88,23 @@ class PerforatedGrain(Grain):
     """A grain with a hole of some shape through the center. Adds abstract methods related to the core to the
     basic grain class """
     geomName = 'perfGrain'
-    def __init__(self):
+    def __init__(self, diameter, length, inhibitedEnds='Neither'):
         self.props = {
-            'diameter': FloatProperty('Diameter', 'm', 0.01, 1),
-            'length': FloatProperty('Length', 'm', 0.01, 5),
-            'inhibitedEnds': EnumProperty('Inhibited ends', ['Neither', 'Top', 'Bottom', 'Both'])
+            'diameter': diameter,
+            'length': length,
+            'inhibitedEnds': inhibitedEnds #['Neither', 'Top', 'Bottom', 'Both']
         }
         self.wallWeb = 0 # Max distance from the core to the wall
 
     def getEndPositions(self, regDist):
-        if self.props['inhibitedEnds'].getValue() == 'Neither': # Neither
-            return (regDist, self.props['length'].getValue() - regDist)
-        if self.props['inhibitedEnds'].getValue() == 'Top': # Top
-            return (0, self.props['length'].getValue() - regDist)
-        if self.props['inhibitedEnds'].getValue() == 'Bottom': # Bottom
-            return (regDist, self.props['length'].getValue())
-        if self.props['inhibitedEnds'].getValue() == 'Both':
-            return (0, self.props['length'].getValue())
+        if self.inhibitedEnds == 'Neither': # Neither
+            return (regDist, self.length - regDist)
+        if self.inhibitedEnds == 'Top': # Top
+            return (0, self.length - regDist)
+        if self.inhibitedEnds == 'Bottom': # Bottom
+            return (regDist, self.length)
+        if self.inhibitedEnds == 'Both':
+            return (0, self.length)
         # The enum should prevent this from even being raised, but to cover the case where it somehow gets set wrong
         raise ValueError('Invalid number of faces inhibited')
 
@@ -140,7 +125,7 @@ class PerforatedGrain(Grain):
 
     def getWebLeft(self, regDist):
         wallLeft = self.wallWeb - regDist
-        if self.props['inhibitedEnds'].getValue() == 'Both':
+        if self.inhibitedEnds == 'Both':
             return wallLeft
         lengthLeft = self.getRegressedLength(regDist)
         return min(lengthLeft, wallLeft)
@@ -150,9 +135,9 @@ class PerforatedGrain(Grain):
         coreArea = self.getCoreSurfaceArea(regDist)
 
         exposedFaces = 2
-        if self.props['inhibitedEnds'].getValue() == 'Top' or self.props['inhibitedEnds'].getValue() == 'Bottom':
+        if self.inhibitedEnds == 'Top' or self.inhibitedEnds == 'Bottom':
             exposedFaces = 1
-        if self.props['inhibitedEnds'].getValue() == 'Both':
+        if self.inhibitedEnds == 'Both':
             exposedFaces = 0
 
         return coreArea + (exposedFaces * faceArea)
@@ -163,11 +148,11 @@ class PerforatedGrain(Grain):
 
     def getPortArea(self, regDist):
         faceArea = self.getFaceArea(regDist)
-        uncored = geometry.circleArea(self.props['diameter'].getValue())
+        uncored = geometry.circleArea(self.diameter)
         return uncored - faceArea
 
     def getMassFlux(self, massIn, dTime, regDist, dRegDist, position, density):
-        diameter = self.props['diameter'].getValue()
+        diameter = self.diameter
 
         endPos = self.getEndPositions(regDist)
         # If a position above the top face is queried, the mass flow is just the input mass and the
@@ -177,7 +162,7 @@ class PerforatedGrain(Grain):
         # If a position in the grain is queried, the mass flow is the input mass, from the top face,
         # and from the tube up to the point. The diameter is the core.
         if position <= endPos[1]:
-            if self.props['inhibitedEnds'].getValue() in ('Top', 'Both'):
+            if self.inhibitedEnds in ('Top', 'Both'):
                 top = 0
                 countedCoreLength = position
             else:
@@ -223,28 +208,28 @@ class FmmGrain(PerforatedGrain):
     def normalize(self, value):
         """Transforms real unit quantities into self.mapX, self.mapY coordinates. For use in indexing into the
         coremap."""
-        return value / (0.5 * self.props['diameter'].getValue())
+        return value / (0.5 * self.diameter)
 
     def unNormalize(self, value):
         """Transforms self.mapX, self.mapY coordinates to real unit quantities. Used to determine real lengths in
         coremap."""
-        return (value / 2) * self.props['diameter'].getValue()
+        return (value / 2) * self.diameter
 
     def lengthToMap(self, value):
         """Converts meters to pixels. Used to compare real distances to pixel distances in the regression map."""
-        return self.mapDim * (value / self.props['diameter'].getValue())
+        return self.mapDim * (value / self.diameter)
 
     def mapToLength(self, value):
         """Converts pixels to meters. Used to extract real distances from pixel distances such as contour lengths"""
-        return self.props['diameter'].getValue() * (value / self.mapDim)
+        return self.diameter * (value / self.mapDim)
 
     def areaToMap(self, value):
         """Used to convert sqm to sq pixels, like on the regression map."""
-        return (self.mapDim ** 2) * (value / (self.props['diameter'].getValue() ** 2))
+        return (self.mapDim ** 2) * (value / (self.diameter ** 2))
 
     def mapToArea(self, value):
         """Used to convert sq pixels to sqm. For extracting real areas from the regression map."""
-        return (self.props['diameter'].getValue() ** 2) * (value / (self.mapDim ** 2))
+        return (self.diameter ** 2) * (value / (self.mapDim ** 2))
 
     def initGeometry(self, mapDim):
         """Set up an empty core map and reset the regression map. Takes in the dimension of both maps."""

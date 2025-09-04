@@ -4,7 +4,6 @@ import math
 from scipy.optimize import fsolve
 
 from ..engine import geometry
-from .simResult import SimAlert, SimAlertLevel, SimAlertType
 
 
 def eRatioFromPRatio(k, pRatio):
@@ -14,7 +13,6 @@ def eRatioFromPRatio(k, pRatio):
 class Nozzle():
     """An object that contains the details about a motor's nozzle."""
     def __init__(self, throat, exit, efficiency, divAngle, convAngle, throatLength, slagCoeff, erosionCoeff):
-        super().__init__()
         self.throat = throat # Throat Diameter [m]
         self.exit = exit # Exit Diameter [m]
         self.efficiency = efficiency # Efficiency []
@@ -23,10 +21,6 @@ class Nozzle():
         self.throatLength = throatLength # Throat Length [m]
         self.slagCoeff = slagCoeff # Slag Buildup Coefficient [(m*Pa)/s]
         self.erosionCoeff = erosionCoeff # Throat Erosion Coefficient [m/(s*Pa)]
-
-    def getDetailsString(self, lengthUnit='m'):
-        """Returns a human-readable string containing some details about the nozzle."""
-        return 'Throat: {}'.format(self.throat.dispFormat(lengthUnit))
 
     def calcExpansion(self):
         """Returns the nozzle's expansion ratio."""
@@ -87,7 +81,7 @@ class Nozzle():
 
     def getAdjustedThrustCoeff(self, chamberPres, ambPres, gamma, dThroat, exitPres=None):
         """Calculates adjusted thrust coefficient for the nozzle, given the propellant's specific heat ratio, the
-        ambient and chamber pressures. If nozzle exit presure isn't provided, it will be calculated. dThroat is the 
+        ambient and chamber pressures. If nozzle exit pressure isn't provided, it will be calculated. dThroat is the 
         change in throat diameter due to erosion or slag accumulation. This method uses a combination of the techniques
         described in these resources to adjust the thrust coefficient:
         https://apps.dtic.mil/dtic/tr/fulltext/u2/a099791.pdf
@@ -98,17 +92,3 @@ class Nozzle():
         skinLoss = self.getSkinLosses()
         efficiency = self.getProperty('efficiency')
         return divLoss * throatLoss * efficiency * (skinLoss * thrustCoeffIdeal + (1 - skinLoss))
-
-    def getGeometryErrors(self):
-        """Returns a list containing any errors with the nozzle's properties."""
-        errors = []
-        if self.throat == 0:
-            aText = 'Throat diameter must not be 0'
-            errors.append(SimAlert(SimAlertLevel.ERROR, SimAlertType.GEOMETRY, aText, 'Nozzle'))
-        if self.exit < self.throat:
-            aText = 'Exit diameter must not be smaller than throat diameter'
-            errors.append(SimAlert(SimAlertLevel.ERROR, SimAlertType.GEOMETRY, aText, 'Nozzle'))
-        if self.efficiency == 0:
-            aText = 'Efficiency must not be 0'
-            errors.append(SimAlert(SimAlertLevel.ERROR, SimAlertType.CONSTRAINT, aText, 'Nozzle'))
-        return errors
