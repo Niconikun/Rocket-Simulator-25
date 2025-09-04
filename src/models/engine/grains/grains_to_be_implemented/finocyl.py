@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from ..grain import FmmGrain
-from ..properties import FloatProperty, IntProperty, BooleanProperty
-from ..simResult import SimAlert, SimAlertLevel, SimAlertType
+from ...grain import FmmGrain
+from ...properties import FloatProperty, IntProperty, BooleanProperty
+from ...simResult import SimAlert, SimAlertLevel, SimAlertType
 
 class Finocyl(FmmGrain):
     """A finocyl (fins on cylinder) grain has a circular core with a number of rectangular extensions that start at the

@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from ..grain import FmmGrain
-from ..properties import FloatProperty
-from ..simResult import SimAlert, SimAlertLevel, SimAlertType
+from ...grain import FmmGrain
+from ...properties import FloatProperty
+from ...simResult import SimAlert, SimAlertLevel, SimAlertType
 
 class XCore(FmmGrain):
     """An X Core grain has a core shaped like a plus sign or an X."""

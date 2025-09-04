@@ -1,8 +1,8 @@
 """D Grain submodule"""
 
-from ..grain import FmmGrain
-from ..properties import FloatProperty
-from ..simResult import SimAlert, SimAlertLevel, SimAlertType
+from ...grain import FmmGrain
+from ...properties import FloatProperty
+from ...simResult import SimAlert, SimAlertLevel, SimAlertType
 
 class DGrain(FmmGrain):
     """Defines a D grain, which is a grain that has no propellant past a chord that is a user-specified distance from

@@ -1,8 +1,8 @@
 """Moon burning grain submodule"""
 
-from ..grain import FmmGrain
-from ..properties import FloatProperty
-from ..simResult import SimAlert, SimAlertLevel, SimAlertType
+from ...grain import FmmGrain
+from ...properties import FloatProperty
+from ...simResult import SimAlert, SimAlertLevel, SimAlertType
 
 class MoonBurner(FmmGrain):
     """A moonburner is very similar to a BATES grain except the core is off center by a specified distance."""
