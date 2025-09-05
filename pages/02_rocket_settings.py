@@ -6,6 +6,23 @@ import pyvista as pv # type: ignore
 from stpyvista import stpyvista # type: ignore
 import os
 
+def load_engine_configs():
+    """Load available engine configurations."""
+    engines = {}
+    engine_configs_path = 'data/rockets/engines'
+    try:
+        if os.path.exists(engine_configs_path):
+            for filename in os.listdir(engine_configs_path):
+                if filename.endswith('.json'):
+                    file_path = os.path.join(engine_configs_path, filename)
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        engine_data = json.load(f)
+                        engine_name = filename[:-5]  # Remove .json extension
+                        engines[engine_name] = engine_data
+        return engines
+    except Exception:
+        return {}
+
 def load_rocket_configs():
     """Carga todas las configuraciones de cohetes desde la nueva estructura"""
     rockets = {}
@@ -60,8 +77,9 @@ def delete_rocket_config(rocket_name):
     except Exception as e:
         return False, f"Error eliminando cohete: {str(e)}"
 
-# Cargar configuraciones de cohetes
+# Cargar configuraciones de cohetes y motores
 rockets = load_rocket_configs()
+available_engines = load_engine_configs()
 
 sim_rocket = st.selectbox('Rocket Selection', options=list(rockets.keys()) + ["Manual"], index=0, key="sim_rocket")
 
@@ -87,6 +105,7 @@ if sim_rocket != "Manual":
     mass_flux_edit = rocket_settings["engine"]["mass_flux"]
     gas_speed_edit = rocket_settings["engine"]["gas_speed"]
     exit_pressure_edit = rocket_settings["engine"]["exit_pressure"]
+    engine_config_name_edit = rocket_settings["engine"].get("config_name", None)
     len_warhead_edit = rocket_settings["nosecone"]["length"]
     nosecone_shape = rocket_settings["nosecone"]["shape"]
     len_nosecone_fins_edit = rocket_settings["geometry"]["length nosecone fins"]
@@ -122,6 +141,7 @@ else:
     mass_flux_edit = 0.0
     gas_speed_edit = 0.0
     exit_pressure_edit = 0.0
+    engine_config_name_edit = None
     len_warhead_edit = 0.0
     len_nosecone_fins_edit = 0.0
     len_bodytube_wo_rear_edit = 0.0
@@ -183,11 +203,53 @@ CoM_after_burn_y = k.number_input("Y", min_value=0.0, value=float(CoM_after_burn
 CoM_after_burn_z = l.number_input("Z", min_value=0.0, value=float(CoM_after_burn_z_edit), step=0.01, key="CoM_after_burn_z")
 
 tab2.subheader("Engine Properties")
-burn_time = tab2.number_input("Burn Time [s]", min_value=0.0, value=float(burn_time_edit), step=0.1, key="burn_time")
-nozzle_exit_diameter= tab2.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
-mass_flux = tab2.number_input("Mass Flux ", min_value=0.0, value=float(mass_flux_edit), step=0.1, key="mass_flux")
-gas_speed = tab2.number_input("Gas Speed", min_value=0.0, value=float(gas_speed_edit), step=0.1, key="gas_speed")
-exit_pressure = tab2.number_input("Exit Pressure", min_value=0.0, value=float(exit_pressure_edit), step=0.1, key="exit_pressure")
+
+# Engine selection
+engine_options = list(available_engines.keys()) + ["Manual Configuration"]
+
+# Determine default selection based on loaded rocket
+if engine_config_name_edit and engine_config_name_edit in available_engines:
+    default_index = engine_options.index(engine_config_name_edit)
+else:
+    default_index = len(engine_options) - 1  # Default to "Manual Configuration"
+
+selected_engine = tab2.selectbox("Select Engine Configuration", engine_options, index=default_index, key="selected_engine")
+
+if selected_engine != "Manual Configuration" and selected_engine in available_engines:
+    # Load engine data
+    engine_data = available_engines[selected_engine]
+    tab2.info(f"Using saved engine configuration: {selected_engine}")
+    
+    # Display engine information
+    col_eng1, col_eng2 = tab2.columns(2)
+    with col_eng1:
+        tab2.write(f"**Mode:** {engine_data.get('mode', 'simple')}")
+        tab2.write(f"**Burn Time:** {engine_data.get('burn_time', 0):.1f} s")
+        tab2.write(f"**Max Mass Flux:** {engine_data.get('mass_flux_max', 0):.2f} kg/s")
+    with col_eng2:
+        tab2.write(f"**Exit Diameter:** {engine_data.get('nozzle_exit_diameter', 0)*1000:.1f} mm")
+        tab2.write(f"**Gas Speed:** {engine_data.get('gas_speed', 0):.0f} m/s")
+        tab2.write(f"**Exit Pressure:** {engine_data.get('exit_pressure', 0):.0f} Pa")
+    
+    # Use engine data for rocket configuration
+    burn_time = engine_data.get('burn_time', 10.0)
+    nozzle_exit_diameter = engine_data.get('nozzle_exit_diameter', 0.1) * 1000  # Convert to mm
+    mass_flux = engine_data.get('mass_flux_max', 1.0)
+    gas_speed = engine_data.get('gas_speed', 2000.0)
+    exit_pressure = engine_data.get('exit_pressure', 101325.0)
+    
+    # Store engine configuration name for saving
+    engine_config_name = selected_engine
+else:
+    # Manual configuration
+    tab2.write("**Manual Engine Configuration**")
+    burn_time = tab2.number_input("Burn Time [s]", min_value=0.0, value=float(burn_time_edit), step=0.1, key="burn_time")
+    nozzle_exit_diameter= tab2.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
+    mass_flux = tab2.number_input("Mass Flux ", min_value=0.0, value=float(mass_flux_edit), step=0.1, key="mass_flux")
+    gas_speed = tab2.number_input("Gas Speed", min_value=0.0, value=float(gas_speed_edit), step=0.1, key="gas_speed")
+    exit_pressure = tab2.number_input("Exit Pressure", min_value=0.0, value=float(exit_pressure_edit), step=0.1, key="exit_pressure")
+    
+    engine_config_name = None
 
 tab4.subheader("Fins")
 N_fins = tab4.number_input('Number of fins [-]', min_value=0, value=N_fins_edit, step=1, key="N_fins")
@@ -305,7 +367,8 @@ if submitted:
                 "nozzle_exit_diameter": nozzle_exit_diameter,
                 "mass_flux": mass_flux,
                 "gas_speed": gas_speed,
-                "exit_pressure": exit_pressure
+                "exit_pressure": exit_pressure,
+                "config_name": engine_config_name  # Store reference to saved engine config
             },
             "geometry": {
                 "length nosecone fins": len_nosecone_fins,

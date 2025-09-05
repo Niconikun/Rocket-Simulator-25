@@ -1,0 +1,18 @@
+{
+    "burn_time": 5.0,
+    "nozzle_exit_diameter": 0.05,
+    "mass_flux_max": 0.5,
+    "gas_speed": 1800.0,
+    "exit_pressure": 80000.0,
+    "mode": "simple",
+    "srm_parameters": {
+        "length_chamber": 0.5,
+        "diameter_chamber": 0.08,
+        "grain_outer_diameter": 0.06,
+        "grain_length": 0.3,
+        "grain_inner_diameter": 0.01,
+        "N_grains": 1,
+        "rho_grain": 1700,
+        "rho_percentage": 0.8
+    }
+}
