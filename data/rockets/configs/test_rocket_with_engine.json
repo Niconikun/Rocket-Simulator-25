@@ -1,0 +1,57 @@
+{
+    "name": "Test_Rocket_with_Engine",
+    "initial_mass": 50.0,
+    "reference_area": 2000.0,
+    "I_before_burn": {
+        "x": 0.5,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "CoM_before_burn": {
+        "x": 0.08,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "I_after_burn": {
+        "x": 0.5,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "CoM_after_burn": {
+        "x": 0.08,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "engine": {
+        "burn_time": 15.0,
+        "nozzle_exit_diameter": 100.0,
+        "mass_flux": 2.0,
+        "gas_speed": 2200.0,
+        "exit_pressure": 120000.0,
+        "config_name": "medium_solid_motor"
+    },
+    "geometry": {
+        "length nosecone fins": 1800.0,
+        "len_nosecone_rear": 2200.0
+    },
+    "fins": {
+        "span": 60.0,
+        "chord_root": 60.0,
+        "chord_tip": 15.0,
+        "mid_chord": 40.0,
+        "N_fins": 3
+    },
+    "nosecone": {
+        "length": 300.0,
+        "diameter": 100.0,
+        "shape": "Conical"
+    },
+    "fuselage": {
+        "length": 1800.0,
+        "diameter": 100.0
+    },
+    "rear_section": {
+        "length": 100.0,
+        "diameter": 80.0
+    }
+}
