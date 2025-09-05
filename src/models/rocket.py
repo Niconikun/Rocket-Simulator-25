@@ -386,16 +386,57 @@ class Rocket(object):
         with open('data/rockets/configs/'+ rocket_name +'.json', 'r') as file:
             rocket_settings = json.load(file)
 
+        # Check if the rocket references a saved engine configuration
+        engine_config_name = rocket_settings['engine'].get('config_name')
+        
+        if engine_config_name:
+            # Load from saved engine configuration
+            try:
+                engine_config_path = f'data/rockets/engines/{engine_config_name}.json'
+                with open(engine_config_path, 'r') as f:
+                    engine_config = json.load(f)
+                
+                # Use enhanced engine with full configuration
+                Eng = Engine(
+                    time=self.time,
+                    ambient_pressure=self.press_amb,
+                    burn_time=engine_config['burn_time'],
+                    nozzle_exit_diameter=engine_config['nozzle_exit_diameter'],
+                    mass_flux_max=engine_config['mass_flux_max'],
+                    gas_speed=engine_config['gas_speed'],
+                    exit_pressure=engine_config['exit_pressure'],
+                    mode=engine_config.get('mode', 'simple'),
+                    **engine_config.get('srm_parameters', {})
+                )
+                
+            except FileNotFoundError:
+                # Fall back to rocket engine configuration if saved config not found
+                st.warning(f"Engine configuration '{engine_config_name}' not found. Using rocket engine settings.")
+                Eng = self._create_engine_from_rocket_config(rocket_settings)
+        else:
+            # Use legacy rocket engine configuration
+            Eng = self._create_engine_from_rocket_config(rocket_settings)
+
+        self.mass_flux = Eng.mass_flux              # [kg/s] # Engine mass flux
+        self.thrust = Eng.thrust                    # [N]    # Engine thrust
+
+    def _create_engine_from_rocket_config(self, rocket_settings):
+        """Helper method to create engine from rocket configuration (backward compatibility)."""
         burn_time = rocket_settings['engine']["burn_time"]
         nozzle_exit_diameter = rocket_settings['engine']["nozzle_exit_diameter"]
         mass_flux = rocket_settings['engine']["mass_flux"]
         gas_speed = rocket_settings['engine']["gas_speed"]
         exit_pressure = rocket_settings['engine']["exit_pressure"]
 
-        "Updates engine performance characteristics from Engine Module"
-        Eng=Engine(self.time,self.press_amb, burn_time, nozzle_exit_diameter, mass_flux, gas_speed, exit_pressure)      # Engine instance
-        self.mass_flux=Eng.mass_flux              # [kg/s] # Engine mass flux
-        self.thrust=Eng.thrust                    # [N]    # Engine thrust
+        return Engine(
+            time=self.time,
+            ambient_pressure=self.press_amb,
+            burn_time=burn_time,
+            nozzle_exit_diameter=nozzle_exit_diameter,
+            mass_flux_max=mass_flux,
+            gas_speed=gas_speed,
+            exit_pressure=exit_pressure
+        )
 
 
     def update_forces_aero(self, reference_area):
