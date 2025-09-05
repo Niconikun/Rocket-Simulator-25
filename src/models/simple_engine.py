@@ -58,8 +58,9 @@ class Engine:
     
     def __init__(self, time, ambient_pressure, burn_time, nozzle_exit_diameter, 
                  mass_flux_max, gas_speed, exit_pressure,
-                 length_chamber, diameter_chamber,
-                 grain_outer_diameter, grain_length, grain_inner_diameter, N_grains, rho_grain, rho_percentage):
+                 length_chamber=1.0, diameter_chamber=0.1,
+                 grain_outer_diameter=0.08, grain_length=0.5, grain_inner_diameter=0.02, 
+                 N_grains=1, rho_grain=1800, rho_percentage=0.85):
         """
         Inicializa el motor cohete.
 
