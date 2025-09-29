@@ -25,6 +25,13 @@
     "engine": {
         "burn_time": 2.39,
         "nozzle_exit_diameter": 0.032,
+        "propellant_mass": 1.50,
+        "specific_impulse": 125,
+        "mean_thrust": 770,
+        "max_thrust": 924,
+        "mean_chamber_pressure": 1784800,
+        "max_chamber_pressure": 2141760,
+        "thrust_to_weight_ratio": 11.2,
         "mass_flux": 0.629,
         "gas_speed": 1225.98, 
         "exit_pressure": 178480

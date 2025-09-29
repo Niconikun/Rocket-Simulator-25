@@ -386,16 +386,34 @@ class Rocket(object):
         with open('data/rockets/configs/'+ rocket_name +'.json', 'r') as file:
             rocket_settings = json.load(file)
 
+        # Nuevos parámetros requeridos por Engine
         burn_time = rocket_settings['engine']["burn_time"]
         nozzle_exit_diameter = rocket_settings['engine']["nozzle_exit_diameter"]
-        mass_flux = rocket_settings['engine']["mass_flux"]
-        gas_speed = rocket_settings['engine']["gas_speed"]
-        exit_pressure = rocket_settings['engine']["exit_pressure"]
+        propellant_mass = rocket_settings['engine'].get("propellant_mass", 0.0)
+        specific_impulse = rocket_settings['engine'].get("specific_impulse", 0.0)
+        mean_thrust = rocket_settings['engine'].get("mean_thrust", 0.0)
+        max_thrust = rocket_settings['engine'].get("max_thrust", 0.0)
+        mean_chamber_pressure = rocket_settings['engine'].get("mean_chamber_pressure", 0.0)
+        max_chamber_pressure = rocket_settings['engine'].get("max_chamber_pressure", 0.0)
+        thrust_to_weight_ratio = rocket_settings['engine'].get("thrust_to_weight_ratio", 0.0)
+        ambient_pressure = self.press_amb
 
-        "Updates engine performance characteristics from Engine Module"
-        Eng=Engine(self.time,self.press_amb, burn_time, nozzle_exit_diameter, mass_flux, gas_speed, exit_pressure)      # Engine instance
-        self.mass_flux=Eng.mass_flux              # [kg/s] # Engine mass flux
-        self.thrust=Eng.thrust                    # [N]    # Engine thrust
+        # Llamada al nuevo constructor de Engine
+        Eng = Engine(
+            self.time,
+            burn_time,
+            ambient_pressure,
+            nozzle_exit_diameter,
+            propellant_mass,
+            specific_impulse,
+            mean_thrust,
+            max_thrust,
+            mean_chamber_pressure,
+            max_chamber_pressure,
+            thrust_to_weight_ratio
+        )
+        self.mass_flux = Eng.mass_flux
+        self.thrust = Eng.thrust
 
 
     def update_forces_aero(self, reference_area):
