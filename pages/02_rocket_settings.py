@@ -84,9 +84,14 @@ if sim_rocket != "Manual":
     CoM_after_burn_y_edit = rocket_settings["CoM_after_burn"]["y"]
     CoM_after_burn_z_edit = rocket_settings["CoM_after_burn"]["z"]
     nozzle_exit_diameter_edit = rocket_settings["engine"]["nozzle_exit_diameter"]
-    mass_flux_edit = rocket_settings["engine"]["mass_flux"]
-    gas_speed_edit = rocket_settings["engine"]["gas_speed"]
-    exit_pressure_edit = rocket_settings["engine"]["exit_pressure"]
+    # Nuevos parámetros del motor
+    propellant_mass_edit = rocket_settings["engine"].get("propellant_mass", 0.0)
+    specific_impulse_edit = rocket_settings["engine"].get("specific_impulse", 0.0)
+    mean_thrust_edit = rocket_settings["engine"].get("mean_thrust", 0.0)
+    max_thrust_edit = rocket_settings["engine"].get("max_thrust", 0.0)
+    mean_chamber_pressure_edit = rocket_settings["engine"].get("mean_chamber_pressure", 0.0)
+    max_chamber_pressure_edit = rocket_settings["engine"].get("max_chamber_pressure", 0.0)
+    thrust_to_weight_ratio_edit = rocket_settings["engine"].get("thrust_to_weight_ratio", 0.0)
     len_warhead_edit = rocket_settings["nosecone"]["length"]
     nosecone_shape = rocket_settings["nosecone"]["shape"]
     len_nosecone_fins_edit = rocket_settings["geometry"]["length nosecone fins"]
@@ -119,9 +124,13 @@ else:
     CoM_after_burn_y_edit = 0.0
     CoM_after_burn_z_edit = 0.0
     nozzle_exit_diameter_edit = 0.0
-    mass_flux_edit = 0.0
-    gas_speed_edit = 0.0
-    exit_pressure_edit = 0.0
+    propellant_mass_edit = 0.0
+    specific_impulse_edit = 0.0
+    mean_thrust_edit = 0.0
+    max_thrust_edit = 0.0
+    mean_chamber_pressure_edit = 0.0
+    max_chamber_pressure_edit = 0.0
+    thrust_to_weight_ratio_edit = 0.0
     len_warhead_edit = 0.0
     len_nosecone_fins_edit = 0.0
     len_bodytube_wo_rear_edit = 0.0
@@ -184,10 +193,15 @@ CoM_after_burn_z = l.number_input("Z", min_value=0.0, value=float(CoM_after_burn
 
 tab2.subheader("Engine Properties")
 burn_time = tab2.number_input("Burn Time [s]", min_value=0.0, value=float(burn_time_edit), step=0.1, key="burn_time")
-nozzle_exit_diameter= tab2.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
-mass_flux = tab2.number_input("Mass Flux ", min_value=0.0, value=float(mass_flux_edit), step=0.1, key="mass_flux")
-gas_speed = tab2.number_input("Gas Speed", min_value=0.0, value=float(gas_speed_edit), step=0.1, key="gas_speed")
-exit_pressure = tab2.number_input("Exit Pressure", min_value=0.0, value=float(exit_pressure_edit), step=0.1, key="exit_pressure")
+nozzle_exit_diameter = tab2.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
+propellant_mass = tab2.number_input("Propellant Mass [kg]", min_value=0.0, value=float(propellant_mass_edit), step=0.1, key="propellant_mass")
+specific_impulse = tab2.number_input("Specific Impulse [s]", min_value=0.0, value=float(specific_impulse_edit), step=0.1, key="specific_impulse")
+mean_thrust = tab2.number_input("Mean Thrust [N]", min_value=0.0, value=float(mean_thrust_edit), step=0.1, key="mean_thrust")
+max_thrust = tab2.number_input("Max Thrust [N]", min_value=0.0, value=float(max_thrust_edit), step=0.1, key="max_thrust")
+mean_chamber_pressure = tab2.number_input("Mean Chamber Pressure [Pa]", min_value=0.0, value=float(mean_chamber_pressure_edit), step=0.1, key="mean_chamber_pressure")
+max_chamber_pressure = tab2.number_input("Max Chamber Pressure [Pa]", min_value=0.0, value=float(max_chamber_pressure_edit), step=0.1, key="max_chamber_pressure")
+thrust_to_weight_ratio = tab2.number_input("Thrust to Weight Ratio [-]", min_value=0.0, value=float(thrust_to_weight_ratio_edit), step=0.01, key="thrust_to_weight_ratio")
+# ...campos legacy opcionales...
 
 tab4.subheader("Fins")
 N_fins = tab4.number_input('Number of fins [-]', min_value=0, value=N_fins_edit, step=1, key="N_fins")
@@ -300,9 +314,13 @@ if submitted:
             'engine': {
                 "burn_time": burn_time,
                 "nozzle_exit_diameter": nozzle_exit_diameter,
-                "mass_flux": mass_flux,
-                "gas_speed": gas_speed,
-                "exit_pressure": exit_pressure
+                "propellant_mass": propellant_mass,
+                "specific_impulse": specific_impulse,
+                "mean_thrust": mean_thrust,
+                "max_thrust": max_thrust,
+                "mean_chamber_pressure": mean_chamber_pressure,
+                "max_chamber_pressure": max_chamber_pressure,
+                "thrust_to_weight_ratio": thrust_to_weight_ratio,
             },
             "geometry": {
                 "length nosecone fins": len_nosecone_fins,
