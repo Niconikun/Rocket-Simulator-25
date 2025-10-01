@@ -3,6 +3,16 @@ import pandas as pd
 import numpy as np
 from streamlit_keplergl import keplergl_static
 from keplergl import KeplerGl
+import matplotlib.pyplot as plt
+import json
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+import io
+import base64
+from math import cos, pi
 
 # Configuración de la página
 st.set_page_config(page_title="Rocket Simulator Dashboard", page_icon=":rocket:", layout="wide")
@@ -27,23 +37,188 @@ def compress_data(data, compression_factor=50):
 @st.cache_data
 def calculate_metrics(data):
     """Calcula métricas principales de la simulación"""
-    accel_magnitudes = [np.linalg.norm(np.array(acc)) for acc in data["Acceleration in bodyframe"]]
-    max_accel_gs = max(accel_magnitudes) / 9.81  # Convertir a G's
-    return {
-        "total_time": round(data["Simulation time"].iloc[-1], 2),
-        "max_range": round(data["Range"].iloc[-1] / 1000, 2),
-        "max_alt": round(data["Up coordinate"].max() / 1000, 3),
-        "max_speed": round(data["Velocity norm"].max(), 2),
-        "max_mach": round(data["Mach number"].max(), 2),
-        "initial_mass": round(data["Mass of the rocket"].iloc[0], 3),
-        "final_mass": round(data["Mass of the rocket"].iloc[-1], 3),
-        "max_accel_g": round(max_accel_gs, 2)
+    try:
+        accel_magnitudes = [np.linalg.norm(np.array(acc)) if isinstance(acc, (list, np.ndarray)) else 0 for acc in data["Acceleration in bodyframe"]]
+        max_accel_gs = max(accel_magnitudes) / 9.81 if accel_magnitudes else 0  # Convertir a G's
         
+        # Calculate propellant used
+        initial_mass = data["Mass of the rocket"].iloc[0]
+        final_mass = data["Mass of the rocket"].iloc[-1]
+        propellant_used = initial_mass - final_mass
+        
+        return {
+            "total_time": round(data["Simulation time"].iloc[-1], 2),
+            "max_range": round(data["Range"].iloc[-1] / 1000, 2),
+            "max_alt": round(data["Up coordinate"].max() / 1000, 3),
+            "max_speed": round(data["Velocity norm"].max(), 2),
+            "max_mach": round(data["Mach number"].max(), 2),
+            "initial_mass": round(initial_mass, 3),
+            "final_mass": round(final_mass, 3),
+            "propellant_used": round(propellant_used, 3),
+            "max_accel_g": round(max_accel_gs, 2)
+        }
+    except Exception as e:
+        st.error(f"Error calculating metrics: {e}")
+        return {}
+
+def generate_pdf_report(chart_data, metrics, stability_df, title, include_plots=True, include_analysis=True):
+    """Generate a comprehensive PDF report"""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Title
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        spaceAfter=30,
+        alignment=1
+    )
+    story.append(Paragraph(title, title_style))
+    
+    # Simulation Overview
+    story.append(Paragraph("Simulation Overview", styles['Heading2']))
+    
+    # Key metrics table
+    overview_data = [
+        ['Parameter', 'Value', 'Parameter', 'Value'],
+        ['Rocket', chart_data['Rocket name'].iloc[0], 'Location', chart_data['Location name'].iloc[0]],
+        ['Total Time', f"{metrics['total_time']} s", 'Max Altitude', f"{metrics['max_alt']} km"],
+        ['Max Range', f"{metrics['max_range']} km", 'Max Speed', f"{metrics['max_speed']} m/s"],
+        ['Max Mach', f"{metrics['max_mach']}", 'Max G-Force', f"{metrics['max_accel_g']} G"],
+        ['Initial Mass', f"{metrics['initial_mass']} kg", 'Final Mass', f"{metrics['final_mass']} kg"],
+        ['Propellant Used', f"{metrics['propellant_used']} kg", 'Launch Site', f"{chart_data['Location Latitude'].iloc[0]:.3f}°S, {chart_data['Location Longitude'].iloc[0]:.3f}°W"],
+    ]
+    
+    overview_table = Table(overview_data, colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+    overview_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    story.append(overview_table)
+    story.append(Spacer(1, 0.3*inch))
+    
+    if include_analysis:
+        # Stability Analysis Section
+        story.append(Paragraph("Stability Analysis", styles['Heading2']))
+        
+        stability_data = [
+            ['Stability Metric', 'Value', 'Status'],
+            ['Minimum Stability', f"{stability_df['stability_calibers'].min():.2f} calibers", 
+             stability_df.loc[stability_df['stability_calibers'].idxmin(), 'status']],
+            ['Maximum Stability', f"{stability_df['stability_calibers'].max():.2f} calibers", 
+             stability_df.loc[stability_df['stability_calibers'].idxmax(), 'status']],
+            ['Average Stability', f"{stability_df['stability_calibers'].mean():.2f} calibers", 
+             'N/A'],
+            ['Final Stability', f"{stability_df['stability_calibers'].iloc[-1]:.2f} calibers", 
+             stability_df['status'].iloc[-1]],
+        ]
+        
+        stability_table = Table(stability_data, colWidths=[2*inch, 1.5*inch, 1.5*inch])
+        stability_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.lightblue),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(stability_table)
+        story.append(Spacer(1, 0.3*inch))
+        
+        # Stability guidelines
+        guidelines = """
+        <b>Stability Guidelines:</b><br/>
+        • 2.0+ calibers: Very Stable<br/>
+        • 1.5-2.0 calibers: Stable<br/>
+        • 1.0-1.5 calibers: Marginal Stability<br/>
+        • <1.0 calibers: Unstable<br/>
+        <br/>
+        <i>Target 1.5-2.0 calibers for optimal performance and safety.</i>
+        """
+        story.append(Paragraph(guidelines, styles['Normal']))
+        story.append(Spacer(1, 0.3*inch))
+    
+    # Risk Assessment
+    story.append(Paragraph("Risk Assessment", styles['Heading2']))
+    
+    max_range_km = metrics['max_range']
+    max_alt_km = metrics['max_alt']
+    
+    risk_assessment = []
+    if max_range_km > 5:
+        risk_assessment.append("⚠️ High range - ensure adequate safety zone")
+    if max_alt_km > 2:
+        risk_assessment.append("⚠️ High altitude - consider airspace regulations")
+    if stability_df['stability_calibers'].min() < 1.0:
+        risk_assessment.append("🚨 Stability margin below safe minimum")
+    if metrics['max_accel_g'] > 15:
+        risk_assessment.append("⚠️ High acceleration - verify structural integrity")
+    
+    if not risk_assessment:
+        risk_assessment.append("✅ All parameters within safe limits")
+    
+    for risk in risk_assessment:
+        story.append(Paragraph(f"• {risk}", styles['Normal']))
+    
+    story.append(Spacer(1, 0.3*inch))
+    
+    # Footer
+    story.append(Paragraph(f"Report generated on {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}", 
+                          styles['Italic']))
+    
+    # Build PDF
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+def generate_csv_export(chart_data, stability_df):
+    """Generate CSV export of simulation data"""
+    # Combine main data with stability metrics
+    export_data = chart_data.copy()
+    
+    # Add stability columns
+    export_data['stability_calibers'] = stability_df['stability_calibers']
+    export_data['stability_status'] = stability_df['status']
+    export_data['cm_cp_distance'] = stability_df['cm_cp_distance']
+    
+    return export_data.to_csv(index=False)
+
+def generate_json_summary(metrics, stability_df):
+    """Generate JSON summary of key results"""
+    summary = {
+        'simulation_metrics': metrics,
+        'stability_analysis': {
+            'min_stability': float(stability_df['stability_calibers'].min()),
+            'max_stability': float(stability_df['stability_calibers'].max()),
+            'avg_stability': float(stability_df['stability_calibers'].mean()),
+            'final_stability': float(stability_df['stability_calibers'].iloc[-1]),
+            'min_stability_status': stability_df.loc[stability_df['stability_calibers'].idxmin(), 'status'],
+            'stability_timeline': stability_df[['time', 'stability_calibers']].to_dict('records')
+        },
+        'export_info': {
+            'timestamp': pd.Timestamp.now().isoformat(),
+            'version': '1.0'
+        }
     }
+    
+    return json.dumps(summary, indent=2)
 
 # Cargar y preparar datos
 try:
     chart_data = load_simulation_data()
+    if chart_data.empty:
+        st.error("No simulation data found. Please run a simulation first.")
+        st.stop()
+        
     chart_data_compressed = compress_data(chart_data)
     metrics = calculate_metrics(chart_data)
 
@@ -96,24 +271,23 @@ try:
     col_landing = st.columns(1)
 
     # Primera fila de métricas
-    col1.metric("Total Flight Time", f"{metrics['total_time']}s", border=True)
-    col2.metric("Max Range", f"{metrics['max_range']}km", border=True)
-    col3.metric("Max Altitude", f"{metrics['max_alt']}km", border=True)
+    col1.metric("Total Flight Time", f"{metrics['total_time']}s")
+    col2.metric("Max Range", f"{metrics['max_range']}km")
+    col3.metric("Max Altitude", f"{metrics['max_alt']}km")
 
     # Segunda fila de métricas
-    col4.metric("Initial Mass", f"{metrics['initial_mass']}kg", border=True)
-    col5.metric("Final Mass", f"{metrics['final_mass']}kg", border=True)
-    col6.metric("Mass Delta", f"{round(metrics['initial_mass'] - metrics['final_mass'],3)}kg", border=True)
+    col4.metric("Initial Mass", f"{metrics['initial_mass']}kg")
+    col5.metric("Final Mass", f"{metrics['final_mass']}kg")
+    col6.metric("Propellant Used", f"{metrics['propellant_used']}kg")
 
     # Tercera fila de métricas
-    col7.metric("Max Speed", f"{metrics['max_speed']}m/s", border=True)
-    col8.metric("Max Mach", f"{metrics['max_mach']}", border=True)
-    col9.metric("Max G-Force", f"{metrics['max_accel_g']}G", border=True)
+    col7.metric("Max Speed", f"{metrics['max_speed']}m/s")
+    col8.metric("Max Mach", f"{metrics['max_mach']}")
+    col9.metric("Max G-Force", f"{metrics['max_accel_g']}G")
 
     # Coordenadas de aterrizaje
     col_landing[0].metric("Landing Coordinates", 
-                         f"{abs(round(chart_data['Latitude'].iloc[-1], 1))}° S, {abs(round(chart_data['Longitude'].iloc[-1], 1))}° W",
-                         border=True)
+                         f"{abs(round(chart_data['Latitude'].iloc[-1], 1))}° S, {abs(round(chart_data['Longitude'].iloc[-1], 1))}° W")
 
     # Mapa de trayectoria
     st.subheader("Trajectory Overview")
@@ -207,65 +381,181 @@ try:
                      x="Simulation time",
                      y=["Drag coefficient", "Lift coefficient"])
 
+    # Enhanced Stability Analysis
+    st.subheader("🚀 Advanced Stability Analysis")
 
-    # Análisis de estabilidad
-    st.subheader("Stability Analysis")
+    # Calculate stability metrics
+    stability_metrics = []
 
-    # Preparar datos para el gráfico de barras
-    stability_data = {
-        'Parameter': ['CM X', 'CM Y', 'CM Z',
-                     'CP X', 'CP Y', 'CP Z'],
-        'Initial [m]': [
-            chart_data['Center of mass in bodyframe'].iloc[0][0],
-            chart_data['Center of mass in bodyframe'].iloc[0][1],
-            chart_data['Center of mass in bodyframe'].iloc[0][2],
-            chart_data['Center of pressure in bodyframe'].iloc[0][0],
-            chart_data['Center of pressure in bodyframe'].iloc[0][1],
-            chart_data['Center of pressure in bodyframe'].iloc[0][2]
-        ],
-        'Final [m]': [
-            chart_data['Center of mass in bodyframe'].iloc[-1][0],
-            chart_data['Center of mass in bodyframe'].iloc[-1][1],
-            chart_data['Center of mass in bodyframe'].iloc[-1][2],
-            chart_data['Center of pressure in bodyframe'].iloc[-1][0],
-            chart_data['Center of pressure in bodyframe'].iloc[-1][1],
-            chart_data['Center of pressure in bodyframe'].iloc[-1][2]
-        ]
-    }
+    for i in range(len(chart_data)):
+        try:
+            cm = np.array(chart_data['Center of mass in bodyframe'].iloc[i])
+            cp = np.array(chart_data['Center of pressure in bodyframe'].iloc[i])
+            time = chart_data['Simulation time'].iloc[i]
+            
+            # Calculate distance between CM and CP
+            cm_cp_distance = np.linalg.norm(cp - cm)
+            
+            # Calculate stability margin in calibers (rocket diameters)
+            rocket_diameter = 0.103  # meters from your rocket config
+            stability_calibers = cm_cp_distance / rocket_diameter
+            
+            # Determine stability status
+            if stability_calibers > 2.0:
+                status = "Very Stable"
+                color = "green"
+            elif stability_calibers > 1.5:
+                status = "Stable"
+                color = "blue"
+            elif stability_calibers > 1.0:
+                status = "Marginally Stable"
+                color = "orange"
+            else:
+                status = "Unstable"
+                color = "red"
+            
+            stability_metrics.append({
+                'time': time,
+                'cm_cp_distance': cm_cp_distance,
+                'stability_calibers': stability_calibers,
+                'status': status,
+                'color': color,
+                'cm_x': cm[0],
+                'cp_x': cp[0]
+            })
+        except Exception as e:
+            # Skip this data point if there's an error
+            continue
 
-    # Crear DataFrame para el gráfico
-    stability_df = pd.DataFrame(stability_data)
+    if not stability_metrics:
+        st.error("No stability data available. Please check your simulation data.")
+        st.stop()
+        
+    stability_df = pd.DataFrame(stability_metrics)
+    stability_compressed = compress_data(stability_df)
 
-    # Calcular la distancia total entre CM y CP
-    initial_distance = np.linalg.norm(
-        np.array(stability_data['Initial [m]'][:3]) - 
-        np.array(stability_data['Initial [m]'][3:])
-    )
-    final_distance = np.linalg.norm(
-        np.array(stability_data['Final [m]'][:3]) - 
-        np.array(stability_data['Final [m]'][3:])
-    )
-
-    # Crear dos columnas
-    stab_col1, stab_col2 = st.columns([2, 1])
+    # Create columns for stability display
+    stab_col1, stab_col2, stab_col3 = st.columns([2, 1, 1])
 
     with stab_col1:
-        # Crear gráfico de barras
-        st.bar_chart(
-            stability_df,
-            x='Parameter',
-            y=['Initial [m]', 'Final [m]'],
-            height=400,
-            stack=False
-        )
+        st.write("**Stability Margin Evolution**")
+        
+        # Create a more informative stability chart
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        
+        # Plot stability margin
+        color = 'tab:blue'
+        ax1.set_xlabel('Time [s]')
+        ax1.set_ylabel('Stability Margin [calibers]', color=color)
+        line1 = ax1.plot(stability_compressed['time'], stability_compressed['stability_calibers'], 
+                         color=color, label='Stability Margin', linewidth=2)
+        ax1.tick_params(axis='y', labelcolor=color)
+        
+        # Add stability regions
+        ax1.axhspan(2.0, 4.0, alpha=0.2, color='green', label='Very Stable')
+        ax1.axhspan(1.5, 2.0, alpha=0.2, color='blue', label='Stable')
+        ax1.axhspan(1.0, 1.5, alpha=0.2, color='orange', label='Marginal')
+        ax1.axhspan(0.0, 1.0, alpha=0.2, color='red', label='Unstable')
+        
+        ax1.set_ylim(0, max(4, stability_df['stability_calibers'].max() * 1.1))
+        ax1.legend(loc='upper left')
+        
+        # Second y-axis for CM-CP positions
+        ax2 = ax1.twinx()
+        color = 'tab:red'
+        ax2.set_ylabel('Position [m]', color=color)
+        line2 = ax2.plot(stability_compressed['time'], stability_compressed['cm_x'], 
+                         color='purple', label='CM Position', linestyle='--', linewidth=2)
+        line3 = ax2.plot(stability_compressed['time'], stability_compressed['cp_x'], 
+                         color='brown', label='CP Position', linestyle='--', linewidth=2)
+        ax2.tick_params(axis='y', labelcolor=color)
+        
+        # Combine legends
+        lines = line1 + line2 + line3
+        labels = [l.get_label() for l in lines]
+        ax1.legend(lines, labels, loc='upper right')
+        
+        plt.title('Rocket Stability Analysis')
+        plt.tight_layout()
+        st.pyplot(fig)
 
     with stab_col2:
-        st.write("Stability Metrics")
-        st.info(f"**Initial CM-CP Distance**: {initial_distance:.3f} m")
-        st.info(f"**Final CM-CP Distance**: {final_distance:.3f} m")
-        st.info(f"**Distance Change**: {(final_distance - initial_distance):.3f} m")
-        st.info("A positive CM-CP distance indicates static stability.Greater distance means more stability.")
-        st.info("A negative distance indicates instability, which can lead to loss of control during flight.")
+        st.write("**Stability Summary**")
+        
+        # Calculate key stability metrics
+        min_stability = stability_df['stability_calibers'].min()
+        max_stability = stability_df['stability_calibers'].max()
+        avg_stability = stability_df['stability_calibers'].mean()
+        final_stability = stability_df['stability_calibers'].iloc[-1]
+        
+        # Determine overall stability rating
+        if min_stability > 1.5:
+            overall_rating = "Excellent"
+            rating_color = "🟢"  # Using emoji instead of color parameter
+        elif min_stability > 1.0:
+            overall_rating = "Good"
+            rating_color = "🔵"
+        elif min_stability > 0.5:
+            overall_rating = "Marginal"
+            rating_color = "🟠"
+        else:
+            overall_rating = "Poor"
+            rating_color = "🔴"
+        
+        # Display overall rating with emoji
+        st.write(f"**Overall Rating:** {rating_color} {overall_rating}")
+        st.metric("Min Stability", f"{min_stability:.2f} cal")
+        st.metric("Max Stability", f"{max_stability:.2f} cal")
+        st.metric("Final Stability", f"{final_stability:.2f} cal")
+
+    with stab_col3:
+        st.write("**Stability Guidelines**")
+        
+        stability_info = """
+        **Stability Margins:**
+        - 🟢 2.0+ cal: Very Stable
+        - 🔵 1.5-2.0 cal: Stable  
+        - 🟠 1.0-1.5 cal: Marginal
+        - 🔴 <1.0 cal: Unstable
+        
+        **Recommendations:**
+        - Target 1.5-2.0 cal for safety
+        - <1.0 cal risks instability
+        - >2.5 cal may be overstable
+        """
+        
+        st.info(stability_info)
+
+    # Add CM/CP position analysis
+    st.write("**Center of Mass & Pressure Analysis**")
+    cm_cp_col1, cm_cp_col2 = st.columns(2)
+
+    with cm_cp_col1:
+        st.write("CM and CP Position vs Time")
+        position_data = pd.DataFrame({
+            'Time': stability_compressed['time'],
+            'CM Position': stability_compressed['cm_x'],
+            'CP Position': stability_compressed['cp_x'],
+            'Separation': stability_compressed['cm_cp_distance']
+        })
+        st.line_chart(position_data, x='Time', y=['CM Position', 'CP Position', 'Separation'])
+
+    with cm_cp_col2:
+        st.write("Stability Statistics")
+        
+        stats_data = {
+            'Metric': ['Minimum Separation', 'Maximum Separation', 'Average Separation', 
+                      'Initial Separation', 'Final Separation', 'Separation Change'],
+            'Value': [
+                f"{stability_df['cm_cp_distance'].min():.3f} m",
+                f"{stability_df['cm_cp_distance'].max():.3f} m", 
+                f"{stability_df['cm_cp_distance'].mean():.3f} m",
+                f"{stability_df['cm_cp_distance'].iloc[0]:.3f} m",
+                f"{stability_df['cm_cp_distance'].iloc[-1]:.3f} m",
+                f"{(stability_df['cm_cp_distance'].iloc[-1] - stability_df['cm_cp_distance'].iloc[0]):.3f} m"
+            ]
+        }
+        st.dataframe(pd.DataFrame(stats_data), use_container_width=True)
 
     # Línea divisoria
     st.markdown("---")
@@ -296,9 +586,6 @@ try:
     # Crear área de seguridad para el mapa
     center_lat = chart_data['Location Latitude'].iloc[0]
     center_lon = chart_data['Location Longitude'].iloc[0]
-    
-    # Crear polígono de área segura
-    from math import cos, pi
     
     def create_safety_box(center_lat, center_lon, width_km, length_km):
         """Crea un polígono rectangular para el área segura"""
@@ -394,8 +681,81 @@ try:
         }
         keplergl_static(risk_map, height=600, width=1000, center_map=True)
 
+    # PDF Export Section
+    st.markdown("---")
+    st.subheader("📊 Export Report")
+
+    # Create export columns
+    export_col1, export_col2, export_col3 = st.columns([1, 1, 1])
+
+    with export_col1:
+        st.write("**Export Options**")
+        export_format = st.selectbox(
+            "Select Export Format",
+            ["PDF Report", "CSV Data", "Summary JSON"]
+        )
+
+    with export_col2:
+        st.write("**Report Content**")
+        include_plots = st.checkbox("Include Plots", value=True)
+        include_raw_data = st.checkbox("Include Raw Data", value=False)
+        include_analysis = st.checkbox("Include Analysis", value=True)
+
+    with export_col3:
+        st.write("**Generate Report**")
+        report_title = st.text_input("Report Title", "Rocket Simulation Report")
+        
+        if st.button("📥 Generate Export", use_container_width=True):
+            with st.spinner("Generating report..."):
+                try:
+                    if export_format == "PDF Report":
+                        pdf_buffer = generate_pdf_report(
+                            chart_data, 
+                            metrics, 
+                            stability_df,
+                            report_title,
+                            include_plots,
+                            include_analysis
+                        )
+                        
+                        st.success("PDF report generated successfully!")
+                        
+                        st.download_button(
+                            label="📄 Download PDF Report",
+                            data=pdf_buffer,
+                            file_name=f"rocket_simulation_report_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                        
+                    elif export_format == "CSV Data":
+                        csv_data = generate_csv_export(chart_data, stability_df)
+                        
+                        st.download_button(
+                            label="📊 Download CSV Data",
+                            data=csv_data,
+                            file_name=f"rocket_simulation_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                        
+                    elif export_format == "Summary JSON":
+                        json_data = generate_json_summary(metrics, stability_df)
+                        
+                        st.download_button(
+                            label="📋 Download JSON Summary",
+                            data=json_data,
+                            file_name=f"rocket_simulation_summary_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.json",
+                            mime="application/json",
+                            use_container_width=True
+                        )
+                        
+                except Exception as e:
+                    st.error(f"Error generating report: {str(e)}")
+
 except KeyError as e:
     st.error(f"Error: Columna no encontrada - {e}")
-    st.write("Columnas disponibles:", list(chart_data.columns))
+    if 'chart_data' in locals():
+        st.write("Columnas disponibles:", list(chart_data.columns))
 except Exception as e:
     st.error(f"Error inesperado: {e}")
