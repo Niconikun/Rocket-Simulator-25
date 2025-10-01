@@ -31,10 +31,7 @@
         "max_thrust": 1670.465,
         "mean_chamber_pressure": 3191000,
         "max_chamber_pressure": 9010000,
-        "thrust_to_weight_ratio": 11.2,
-        "mass_flux": 0.629,
-        "gas_speed": 1225.98, 
-        "exit_pressure": 178480
+        "thrust_to_weight_ratio": 11.2
     },
     "geometry": {
         "length nosecone fins": 1000,
