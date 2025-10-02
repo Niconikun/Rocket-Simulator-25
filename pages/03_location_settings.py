@@ -124,7 +124,7 @@ with st.form("location_settings"):
         map_1 = KeplerGl()
         map_1.config = config
         map_1.add_data(data=position_data, name="position")
-        keplergl_static(map_1, center_map=True)
+        keplergl_static(map_1, center_map=True, read_only=True)
 
     # Botones de acción
     col1, col2 = st.columns(2)

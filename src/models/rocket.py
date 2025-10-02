@@ -430,34 +430,38 @@ class Rocket(object):
             self.cp_b = np.array([0.5, 0, 0])
 
     def update_engine(self, rocket_name):
-        """
-        Enhanced engine update with comprehensive performance tracking.
-        """
+        """Enhanced engine update with thrust curve validation"""
         try:
             with open('data/rockets/configs/' + rocket_name + '.json', 'r') as file:
                 rocket_settings = json.load(file)
 
             engine_data = rocket_settings['engine']
             
-            # Use enhanced engine model
+            # Create enhanced engine with validation
             Eng = EnhancedEngine(
                 time=self.time,
                 burn_time=engine_data["burn_time"],
                 ambient_pressure=self.press_amb,
                 nozzle_exit_diameter=engine_data["nozzle_exit_diameter"],
-                propellant_mass=engine_data.get("propellant_mass", 0.0),
-                specific_impulse=engine_data.get("specific_impulse", 0.0),
-                mean_thrust=engine_data.get("mean_thrust", 0.0),
-                max_thrust=engine_data.get("max_thrust", 0.0),
-                mean_chamber_pressure=engine_data.get("mean_chamber_pressure", 0.0),
-                max_chamber_pressure=engine_data.get("max_chamber_pressure", 0.0),
-                thrust_to_weight_ratio=engine_data.get("thrust_to_weight_ratio", 0.0)
+                propellant_mass=engine_data["propellant_mass"],
+                specific_impulse=engine_data["specific_impulse"],
+                mean_thrust=engine_data["mean_thrust"],
+                max_thrust=engine_data["max_thrust"],
+                mean_chamber_pressure=engine_data["mean_chamber_pressure"],
+                max_chamber_pressure=engine_data["max_chamber_pressure"],
+                thrust_to_weight_ratio=engine_data["thrust_to_weight_ratio"]
             )
             
-            # Get comprehensive performance metrics
+            # Validate thrust curve on first call
+            if not hasattr(self, '_thrust_curve_validated'):
+                validation = Eng.validate_thrust_curve()
+                if not validation['valid']:
+                    logging.warning(f"Thrust curve validation issues: {validation}")
+                self._thrust_curve_validated = True
+            
+            # Update performance metrics
             metrics = Eng.get_performance_metrics()
             
-            # Update primary engine parameters
             self.mass_flux = metrics['mass_flow']
             self.thrust = metrics['thrust']
             
@@ -469,20 +473,13 @@ class Rocket(object):
             self.thrust_coefficient = metrics['thrust_coefficient']
             self.exit_pressure = metrics['exit_pressure']
             
-            # Performance logging (reduced frequency to avoid spam)
-            if not hasattr(self, '_last_engine_log_time'):
-                self._last_engine_log_time = 0
-                
-            if self.time - self._last_engine_log_time >= 0.2:  # Log every 0.2 seconds
-                logging.debug(
-                    f"Engine Performance - "
-                    f"Time: {self.time:.2f}s, "
-                    f"Thrust: {self.thrust:.1f}N, "
-                    f"Mass Flow: {self.mass_flux:.3f}kg/s, "
-                    f"Isp: {self.engine_isp:.1f}s, "
-                    f"Chamber P: {self.chamber_pressure/1e6:.1f}MPa"
+            # Performance logging at key points
+            if self.time <= Eng.burn_time and int(self.time * 10) % 2 == 0:  # Log every 0.2s during burn
+                logging.info(
+                    f"Engine: t={self.time:.2f}s, "
+                    f"Thrust={self.thrust:.0f}N, "
+                    f"MassFlow={self.mass_flux:.3f}kg/s"
                 )
-                self._last_engine_log_time = self.time
 
         except FileNotFoundError:
             logging.error(f"Rocket configuration file not found: {rocket_name}")

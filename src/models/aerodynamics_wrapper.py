@@ -100,6 +100,64 @@ class AerodynamicsWrapper:
         except Exception as e:
             logging.error(f"Drag calculation error: {e}")
             return 0.5  # Fallback value
+    def _calculate_fin_parameters(self):
+        """Calculate fin parameters based on fin type"""
+        try:
+            g = self.geometry
+            fin_type = g.get('fin_type', 'Trapezoidal')
+            span = g['fins_span'] / 1000.0
+            root_chord = g['fins_chord_root'] / 1000.0
+            tip_chord = g['fins_chord_tip'] / 1000.0
+            n_fins = g['N_fins']
+            
+            if fin_type == "Trapezoidal":
+                # Standard trapezoidal fin calculations
+                fin_area = 0.5 * (root_chord + tip_chord) * span
+                aspect_ratio = (span ** 2) / fin_area
+                mean_chord = (root_chord + tip_chord) / 2
+                
+            elif fin_type == "Delta":
+                # Delta fin (triangular)
+                fin_area = 0.5 * root_chord * span
+                aspect_ratio = (span ** 2) / fin_area
+                mean_chord = root_chord * 2/3  # Mean aerodynamic chord for delta
+                
+            elif fin_type == "Tapered Swept":
+                # Tapered swept fin
+                fin_area = 0.5 * (root_chord + tip_chord) * span
+                aspect_ratio = (span ** 2) / fin_area
+                sweep_angle = g.get('sweep_angle', 30.0)
+                mean_chord = (root_chord + tip_chord) / 2
+                
+            elif fin_type == "Elliptical":
+                # Elliptical fin
+                fin_area = (np.pi * root_chord * span) / 4
+                aspect_ratio = (span ** 2) / fin_area
+                mean_chord = root_chord * 0.848  # Mean chord for ellipse
+                
+            else:  # Custom or fallback
+                fin_area = 0.5 * (root_chord + tip_chord) * span
+                aspect_ratio = (span ** 2) / fin_area
+                mean_chord = g.get('fins_mid_chord', (root_chord + tip_chord) / 2) / 1000.0
+            
+            return {
+                'fin_area': fin_area,
+                'total_fin_area': fin_area * n_fins,
+                'aspect_ratio': aspect_ratio,
+                'mean_chord': mean_chord,
+                'fin_type': fin_type
+            }
+            
+        except Exception as e:
+            logging.warning(f"Fin parameter calculation issue: {e}")
+            # Fallback values
+            return {
+                'fin_area': 0.01,
+                'total_fin_area': 0.01 * g.get('N_fins', 4),
+                'aspect_ratio': 5.0,
+                'mean_chord': 0.05,
+                'fin_type': 'Trapezoidal'
+            }
 
     def _calculate_skin_friction(self):
         """Calculate skin friction drag component"""
@@ -115,41 +173,84 @@ class AerodynamicsWrapper:
         return Cf * wetted_area_ratio * 0.1
 
     def _calculate_pressure_drag(self):
-        """Calculate pressure drag from nose cone"""
-        nose_length = self.geometry['len_warhead'] / 1000.0
-        nose_diameter = self.geometry['diameter_warhead_base'] / 1000.0
+        """Enhanced pressure drag calculation with nosecone type consideration"""
+        nosecone_drag = self._calculate_nosecone_drag()
         
-        if nose_length <= 0 or nose_diameter <= 0:
-            return 0.05
+        # Add base drag component
+        base_drag = self._calculate_base_drag()
+        
+        return nosecone_drag + base_drag
+    
+    def _calculate_center_of_pressure_nosecone(self):
+        """Calculate nosecone contribution to center of pressure"""
+        try:
+            g = self.geometry
+            nosecone_type = g.get('nosecone_type', 'Conical')
+            nose_length = g['len_warhead'] / 1000.0
             
-        fineness_ratio = nose_length / nose_diameter
-        
-        # Pressure drag coefficient based on fineness ratio
-        if fineness_ratio > 0:
-            return 0.1 / np.sqrt(fineness_ratio)
-        else:
-            return 0.08
+            # CP position as fraction of nosecone length from tip
+            # Based on Barrowman theory and empirical data
+            if nosecone_type == "Conical":
+                cp_fraction = 0.666  # 2/3 of length from tip
+            elif nosecone_type == "Ogival":
+                cp_fraction = 0.466
+            elif nosecone_type == "Elliptical":
+                cp_fraction = 0.500
+            elif nosecone_type == "Parabolic":
+                parabolic_param = g.get('parabolic_parameter', 0.5)
+                cp_fraction = 0.500 + 0.1 * parabolic_param
+            elif nosecone_type == "Power Series":
+                power_val = g.get('power_value', 0.5)
+                cp_fraction = 0.466 + 0.1 * power_val
+            elif nosecone_type == "Von Kármán":
+                cp_fraction = 0.450
+            elif nosecone_type == "Haack Series":
+                cp_fraction = 0.455
+            else:
+                cp_fraction = 0.500
+                
+            return cp_fraction * nose_length
+            
+        except Exception as e:
+            logging.error(f"Nosecone CP calculation error: {e}")
+            return 0.0
 
     def _calculate_fin_drag(self):
-        """Calculate drag contribution from fins"""
+        """Calculate drag contribution from fins considering fin type"""
         try:
+            fin_params = self._calculate_fin_parameters()
             n_fins = self.geometry['N_fins']
-            span = self.geometry['fins_span'] / 1000.0
-            root_chord = self.geometry['fins_chord_root'] / 1000.0
-            tip_chord = self.geometry['fins_chord_tip'] / 1000.0
             
-            # Fin planform area (one fin)
-            fin_area = 0.5 * (root_chord + tip_chord) * span
+            # Base fin drag coefficient
+            if fin_params['fin_type'] == "Delta":
+                base_cd_fin = 0.008
+            elif fin_params['fin_type'] == "Elliptical":
+                base_cd_fin = 0.006
+            elif fin_params['fin_type'] == "Tapered Swept":
+                base_cd_fin = 0.007
+            else:  # Trapezoidal and Custom
+                base_cd_fin = 0.01
+                
+            # Aspect ratio correction
+            ar_correction = 1.0 / np.sqrt(fin_params['aspect_ratio'])
             
+            # Mach correction for fins
+            if self.mach < 0.8:
+                mach_correction = 1.0
+            elif self.mach <= 1.2:
+                mach_correction = 1.0 + 0.5 * ((self.mach - 0.8) / 0.4)
+            else:
+                mach_correction = 1.2
+                
             # Total fin area relative to reference area
             ref_diameter = self.geometry['diameter_bodytube'] / 1000.0
             ref_area = np.pi * (ref_diameter/2)**2
             
             if ref_area > 0:
-                fin_area_ratio = (n_fins * fin_area) / ref_area
-                return 0.01 * fin_area_ratio * n_fins
+                fin_area_ratio = fin_params['total_fin_area'] / ref_area
+                return base_cd_fin * fin_area_ratio * ar_correction * mach_correction
             else:
-                return 0.02 * n_fins
+                return base_cd_fin * n_fins * 0.1
                 
         except Exception as e:
             logging.warning(f"Fin drag calculation issue: {e}")
@@ -179,21 +280,26 @@ class AerodynamicsWrapper:
         return 1.0 + 0.5 * alpha_rad**2
 
     def _calculate_lift_coefficient(self):
-        """Robust lift coefficient calculation"""
-        if abs(self.alpha) < 0.1:  # Near zero angle of attack
+        """Enhanced lift coefficient calculation with fin type consideration"""
+        if abs(self.alpha) < 0.1:
             return 0.0
             
         try:
             alpha_rad = np.radians(self.alpha)
+            fin_params = self._calculate_fin_parameters()
             
-            # Lift curve slope (simplified)
-            cl_alpha = 2.0 * np.pi
+            # Lift curve slope varies by fin type
+            if fin_params['fin_type'] == "Delta":
+                cl_alpha = 2.5 * np.pi  # Higher lift slope for delta wings
+            elif fin_params['fin_type'] == "Elliptical":
+                cl_alpha = 2.2 * np.pi  # Elliptical has good lift characteristics
+            else:
+                cl_alpha = 2.0 * np.pi  # Standard for trapezoidal
+                
+            # Aspect ratio effect
+            ar_factor = fin_params['aspect_ratio'] / (2 + fin_params['aspect_ratio'])
             
-            # Fin contribution multiplier
-            n_fins = self.geometry['N_fins']
-            fin_factor = 0.1 * n_fins
-            
-            cl = cl_alpha * alpha_rad * fin_factor
+            cl = cl_alpha * alpha_rad * ar_factor
             
             # Mach correction
             if self.mach < 0.8:
@@ -201,14 +307,14 @@ class AerodynamicsWrapper:
             elif self.mach > 1.2:
                 cl /= math.sqrt(self.mach**2 - 1)
                 
-            return cl * 0.5  # Scale factor for model rockets
+            return cl * 0.3  # Scale factor for model rockets
             
         except Exception as e:
             logging.error(f"Lift calculation error: {e}")
             return 0.0
 
     def _calculate_pressure_center(self):
-        """Robust center of pressure calculation"""
+        """Robust center of pressure calculation with nosecone consideration"""
         try:
             g = self.geometry
             
@@ -217,8 +323,8 @@ class AerodynamicsWrapper:
             body_length = g['len_bodytube_wo_rear'] / 1000.0
             fin_position = g['len_nosecone_fins'] / 1000.0
             
-            # Nose cone CP (Barrowman)
-            cp_nose = 0.466 * nose_length
+            # Nose cone CP (type-specific)
+            cp_nose = self._calculate_center_of_pressure_nosecone()
             
             # Body tube CP (midpoint)
             cp_body = nose_length + 0.5 * body_length
@@ -227,8 +333,19 @@ class AerodynamicsWrapper:
             root_chord = g['fins_chord_root'] / 1000.0
             x_fin_cp = fin_position + 0.6 * root_chord  # 60% of root chord
             
-            # Weighted average (typical for stable rockets)
-            xcp_total = (0.2 * cp_nose + 0.1 * cp_body + 0.7 * x_fin_cp)
+            # Weighted average based on component areas
+            # Nosecone has less influence than fins for stability
+            ref_diameter = g['diameter_bodytube'] / 1000.0
+            ref_area = np.pi * (ref_diameter/2)**2
+            
+            # Approximate relative influence (simplified)
+            nosecone_weight = 0.15
+            body_weight = 0.10
+            fins_weight = 0.75
+            
+            xcp_total = (nosecone_weight * cp_nose + 
+                        body_weight * cp_body + 
+                        fins_weight * x_fin_cp)
             
             return np.array([xcp_total, 0, 0])
             
