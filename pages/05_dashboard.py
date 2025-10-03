@@ -5,12 +5,12 @@ from streamlit_keplergl import keplergl_static
 from keplergl import KeplerGl
 import matplotlib.pyplot as plt
 import json
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib import colors
-from reportlab.platypus import Image
+from reportlab.lib.pagesizes import letter, A4 # type: ignore
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer # type: ignore
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle # type: ignore
+from reportlab.lib.units import inch # type: ignore
+from reportlab.lib import colors # type: ignore
+from reportlab.platypus import Image # type: ignore
 import io
 import base64
 from math import cos, pi

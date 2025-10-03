@@ -1,5 +1,5 @@
 {
-    "name": "Campanil 1-A",
+    "name": "Campanil 1-A v2",
     "initial_mass": 7.8,
     "reference_area": 0.033,
     "I_before_burn": {
@@ -35,23 +35,25 @@
     },
     "geometry": {
         "length nosecone fins": 1055.0,
-        "total length": 1190.0
+        "total length": 1160.0
     },
     "fins": {
         "fin_type": "Tapered Swept",
         "span": 139.119,
         "chord_root": 130.0,
         "chord_tip": 43.92,
-        "mid_chord": 86.96,
+        "mid_chord": 86.96000000000001,
         "N_fins": 4,
-        "sweep_angle": 10.0
+        "sweep_angle": 30.0
     },
     "nosecone": {
         "type": "Parabolic",
-        "length": 200,
-        "diameter": 103,
+        "length": 200.0,
+        "diameter": 103.0,
+        "ogive_radius": 0.0,
         "parabolic_parameter": 0.5,
-        "shape": "parabolic"
+        "power_value": 0.5,
+        "haack_type": "LV-Haack"
     },
     "fuselage": {
         "length": 960.0,

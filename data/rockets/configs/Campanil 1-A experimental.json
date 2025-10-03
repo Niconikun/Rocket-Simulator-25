@@ -1,5 +1,5 @@
 {
-    "name": "Campanil 1-A",
+    "name": "Campanil 1-A Experimental",
     "initial_mass": 7.8,
     "reference_area": 0.033,
     "I_before_burn": {
@@ -37,7 +37,7 @@
     },
     "geometry": {
         "length nosecone fins": 1055.0,
-        "len_nosecone_rear": 1190.0
+        "total length": 1190.0
     },
     "fins": {
         "fin_type": "Tapered Swept",
@@ -59,7 +59,7 @@
         "diameter": 103.0
     },
     "rear_section": {
-        "length": 0.0,
-        "diameter": 71.7
+        "length": 1.0,
+        "diameter": 103.0
     }
 }

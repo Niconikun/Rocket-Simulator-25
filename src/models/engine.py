@@ -29,6 +29,9 @@ References:
 import numpy as np
 import logging
 from math import sqrt, exp, sin, pi
+import pandas as pd
+from scipy.interpolate import interp1d
+import os
 
 class EnhancedEngine:
     """
@@ -49,11 +52,12 @@ class EnhancedEngine:
     """
     
     def __init__(self, time, burn_time, ambient_pressure, nozzle_exit_diameter,
-             propellant_mass, specific_impulse, mean_thrust, max_thrust,
-             mean_chamber_pressure, max_chamber_pressure, thrust_to_weight_ratio,
-             chamber_temperature=3000.0, gas_constant=287.0, gamma=1.2):
+                 propellant_mass, specific_impulse, mean_thrust, max_thrust,
+                 mean_chamber_pressure, max_chamber_pressure, thrust_to_weight_ratio,
+                 thrust_curve_file=None, thrust_curve_data=None,
+                 chamber_temperature=3000.0, gas_constant=287.0, gamma=1.2):
         """
-        Initialize enhanced rocket engine model.
+        Enhanced rocket engine model with experimental thrust curve support.
         
         Args:
             time (float): Current time [s]
@@ -70,6 +74,8 @@ class EnhancedEngine:
             chamber_temperature (float): Chamber temperature [K], default 3000
             gas_constant (float): Gas constant [J/(kg·K)], default 287
             gamma (float): Specific heat ratio, default 1.2
+            thrust_curve_file (str): Path to CSV file with thrust curve data
+            thrust_curve_data (dict): Pre-loaded thrust curve data {'time': [], 'thrust': []}
         """
         # Input validation
         self._validate_inputs(time, burn_time, ambient_pressure, nozzle_exit_diameter,
@@ -107,6 +113,15 @@ class EnhancedEngine:
         self.thrust_coefficient = 0.0
         self.actual_isp = 0.0
         
+        # Enhanced thrust curve handling
+        self.thrust_curve_file = thrust_curve_file
+        self.thrust_curve_data = thrust_curve_data
+        self.thrust_interpolator = None
+        self.use_experimental_thrust = False
+        
+        # Load and process thrust curve data
+        self._load_thrust_curve()
+        
         # Initialize performance
         self._calculate_nozzle_performance()
         self._calculate_performance()
@@ -139,6 +154,90 @@ class EnhancedEngine:
         
         if max_thrust < mean_thrust:
             logging.warning("Max thrust is less than mean thrust - this may indicate data issues")
+        
+    def _load_thrust_curve(self):
+        """Load and process experimental thrust curve data"""
+        try:
+            thrust_data = None
+            
+            # Load from file if provided
+            if self.thrust_curve_file and os.path.exists(self.thrust_curve_file):
+                thrust_data = pd.read_csv(self.thrust_curve_file)
+                logging.info(f"Loaded thrust curve from {self.thrust_curve_file}")
+            
+            # Use provided data if available
+            elif self.thrust_curve_data:
+                thrust_data = pd.DataFrame(self.thrust_curve_data)
+                logging.info("Using provided thrust curve data")
+            
+            if thrust_data is not None:
+                # Detect column names (handle different formats)
+                time_col = None
+                thrust_col = None
+                
+                for col in thrust_data.columns:
+                    col_lower = col.lower()
+                    if 'time' in col_lower or 'tiempo' in col_lower:
+                        time_col = col
+                    elif 'thrust' in col_lower or 'force' in col_lower or 'fuerza' in col_lower:
+                        thrust_col = col
+                
+                if time_col and thrust_col:
+                    # Convert thrust from kg-f to Newtons if needed
+                    thrust_values = thrust_data[thrust_col].values
+                    
+                    # Detect if thrust is in kg-f (typical values around 0-200)
+                    if np.max(np.abs(thrust_values)) < 1000:  # Likely kg-f
+                        thrust_values = thrust_values * 9.80665  # Convert kg-f to N
+                        logging.info("Converted thrust from kg-f to Newtons")
+                    
+                    # Create time array
+                    time_values = thrust_data[time_col].values
+                    
+                    # Ensure time starts at 0
+                    time_values = time_values - time_values[0]
+                    
+                    # Create interpolator
+                    self.thrust_interpolator = interp1d(
+                        time_values, thrust_values, 
+                        kind='linear', 
+                        bounds_error=False, 
+                        fill_value=(thrust_values[0], 0.0)
+                    )
+                    
+                    # Update burn time based on thrust curve
+                    actual_burn_time = time_values[-1]
+                    if abs(actual_burn_time - self.burn_time) > 0.1:
+                        logging.info(f"Updating burn time from {self.burn_time}s to {actual_burn_time}s based on thrust curve")
+                        self.burn_time = actual_burn_time
+                    
+                    self.use_experimental_thrust = True
+                    logging.info(f"Experimental thrust curve loaded: {len(time_values)} points, {actual_burn_time:.2f}s duration")
+                    
+                else:
+                    logging.warning("Could not identify time and thrust columns in thrust curve data")
+            
+        except Exception as e:
+            logging.error(f"Error loading thrust curve: {e}")
+            self.use_experimental_thrust = False
+
+    def _calculate_experimental_thrust(self):
+        """Calculate thrust using experimental data"""
+        if self.thrust_interpolator is None:
+            return 0.0
+        
+        try:
+            # Get thrust from interpolator
+            thrust = float(self.thrust_interpolator(self.time))
+            
+            # Ensure thrust is non-negative
+            thrust = max(0.0, thrust)
+            
+            return thrust
+            
+        except Exception as e:
+            logging.error(f"Error in experimental thrust calculation: {e}")
+            return 0.0
 
     def _calculate_nozzle_performance(self):
         """Calculate nozzle performance using isentropic flow relations"""
@@ -171,6 +270,7 @@ class EnhancedEngine:
     def _calculate_performance(self):
         """Calculate current engine performance"""
         
+        """Calculate current engine performance with experimental thrust support"""
         try:
             # Reset values
             self._mass_flux = 0.0
@@ -180,62 +280,85 @@ class EnhancedEngine:
             self.actual_isp = 0.0
 
             if 0 <= self.time <= self.burn_time:
-                # Calculate thrust curve
-                thrust_vacuum = self._calculate_thrust_curve()
-                
-                # Use provided mass flux from JSON or calculate from propellant mass
-                if hasattr(self, 'provided_mass_flux') and self.provided_mass_flux > 0:
-                    self._mass_flux = self.provided_mass_flux
-                else:
-                    # Fallback: calculate from propellant mass and burn time
-                    self._mass_flux = self.propellant_mass / self.burn_time
-                
-                # Calculate mass flow rate from chamber conditions
-                if self.characteristic_velocity > 0:
-                    self._mass_flux = (self.mean_chamber_pressure * self.throat_area / 
-                                     self.characteristic_velocity)
-                
-                # Calculate exit conditions using isentropic relations
-                if self._mass_flux > 0:
-                    # Exit Mach number estimation
-                    pressure_ratio = self.mean_chamber_pressure / self.ambient_pressure
-                    exit_mach = sqrt(2 / (self.gamma - 1) * 
-                                   (pressure_ratio ** ((self.gamma - 1) / self.gamma) - 1))
-                    exit_mach = min(exit_mach, 5.0)  # Limit Mach number
+                # Use experimental thrust curve if available
+                if self.use_experimental_thrust:
+                    self._thrust = self._calculate_experimental_thrust()
                     
-                    # Exit velocity
-                    self.gas_speed = exit_mach * sqrt(self.gamma * self.gas_constant * 
-                                                    self.chamber_temperature)
-                    
-                    # Exit pressure
-                    self.exit_pressure = self.mean_chamber_pressure / (
-                        (1 + (self.gamma - 1) / 2 * exit_mach ** 2) ** (self.gamma / (self.gamma - 1))
-                    )
-                    
-                    # Thrust components
-                    momentum_thrust = self._mass_flux * self.gas_speed
-                    pressure_thrust = (self.exit_pressure - self.ambient_pressure) * self.exit_area
-                    
-                    # Total thrust
-                    calculated_thrust = momentum_thrust + pressure_thrust
-                    
-                    # Scale to match provided thrust data (if available)
-                    if thrust_vacuum > 0 and calculated_thrust > 0:
-                        # Calculate vacuum thrust for scaling
-                        vacuum_pressure_thrust = self.exit_pressure * self.exit_area
-                        vacuum_thrust_calc = momentum_thrust + vacuum_pressure_thrust
+                    # Calculate mass flux based on experimental thrust
+                    if self._thrust > 0:
+                        # Estimate mass flux from thrust and specific impulse
+                        g0 = 9.80665
+                        self._mass_flux = self._thrust / (self.specific_impulse * g0)
                         
-                        if vacuum_thrust_calc > 0:
-                            scale_factor = thrust_vacuum / vacuum_thrust_calc
-                            self._thrust = calculated_thrust * scale_factor
-                            self._mass_flux *= scale_factor
+                        # Calculate exit velocity for consistency
+                        self.gas_speed = self.specific_impulse * g0
+                        self.exit_pressure = self.ambient_pressure  # Simplified
+                        
+                        # Calculate actual specific impulse
+                        self.actual_isp = self.specific_impulse
                     else:
-                        self._thrust = calculated_thrust
+                        self._mass_flux = 0.0
+                        self.gas_speed = 0.0
+                        self.exit_pressure = 0.0
+                        self.actual_isp = 0.0
+                        
+                else:
+                    # Use analytical model (existing code)
+                    thrust_vacuum = self._calculate_thrust_curve()
                     
-                    # Calculate actual specific impulse
-                    g0 = 9.80665
-                    self.actual_isp = self._thrust / (self._mass_flux * g0) if self._mass_flux > 0 else 0
+                    # Use provided mass flux from JSON or calculate from propellant mass
+                    if hasattr(self, 'provided_mass_flux') and self.provided_mass_flux > 0:
+                        self._mass_flux = self.provided_mass_flux
+                    else:
+                        # Fallback: calculate from propellant mass and burn time
+                        self._mass_flux = self.propellant_mass / self.burn_time
                     
+                    # Calculate mass flow rate from chamber conditions
+                    if self.characteristic_velocity > 0:
+                        self._mass_flux = (self.mean_chamber_pressure * self.throat_area / 
+                                        self.characteristic_velocity)
+                    
+                    # Calculate exit conditions using isentropic relations
+                    if self._mass_flux > 0:
+                        # Exit Mach number estimation
+                        pressure_ratio = self.mean_chamber_pressure / self.ambient_pressure
+                        exit_mach = sqrt(2 / (self.gamma - 1) * 
+                                    (pressure_ratio ** ((self.gamma - 1) / self.gamma) - 1))
+                        exit_mach = min(exit_mach, 5.0)  # Limit Mach number
+                        
+                        # Exit velocity
+                        self.gas_speed = exit_mach * sqrt(self.gamma * self.gas_constant * 
+                                                        self.chamber_temperature)
+                        
+                        # Exit pressure
+                        self.exit_pressure = self.mean_chamber_pressure / (
+                            (1 + (self.gamma - 1) / 2 * exit_mach ** 2) ** (self.gamma / (self.gamma - 1))
+                        )
+                        
+                        # Thrust components
+                        momentum_thrust = self._mass_flux * self.gas_speed
+                        pressure_thrust = (self.exit_pressure - self.ambient_pressure) * self.exit_area
+                        
+                        # Total thrust
+                        calculated_thrust = momentum_thrust + pressure_thrust
+                        
+                        # Scale to match provided thrust data (if available)
+                        if thrust_vacuum > 0 and calculated_thrust > 0:
+                            # Calculate vacuum thrust for scaling
+                            vacuum_pressure_thrust = self.exit_pressure * self.exit_area
+                            vacuum_thrust_calc = momentum_thrust + vacuum_pressure_thrust
+                            
+                            if vacuum_thrust_calc > 0:
+                                scale_factor = thrust_vacuum / vacuum_thrust_calc
+                                self._thrust = calculated_thrust * scale_factor
+                                self._mass_flux *= scale_factor
+                        else:
+                            self._thrust = calculated_thrust
+                        
+                        # Calculate actual specific impulse
+                        g0 = 9.80665
+                        self.actual_isp = self._thrust / (self._mass_flux * g0) if self._mass_flux > 0 else 0
+                        
             else:
                 # Engine off
                 self._mass_flux = 0.0
@@ -243,7 +366,7 @@ class EnhancedEngine:
                 self.gas_speed = 0.0
                 self.exit_pressure = 0.0
                 self.actual_isp = 0.0
-                
+                    
         except Exception as e:
             logging.error(f"Performance calculation error: {e}")
             # Fallback to simple model
@@ -342,21 +465,6 @@ class EnhancedEngine:
         else:
             return self.max_thrust * (0.25 - 0.25 * ((t_norm - 0.95) / 0.05))  # Ramp down to 0
 
-    def _fallback_thrust_curve(self, t_norm):
-        """Fallback thrust curve that guarantees mean thrust conservation"""
-        # Simple piecewise linear function that conserves mean thrust
-        if t_norm < 0.1:
-            return self.max_thrust * (t_norm / 0.1) * 0.8
-        elif t_norm < 0.2:
-            return self.max_thrust * (0.8 + 0.2 * ((t_norm - 0.1) / 0.1))
-        elif t_norm < 0.8:
-            # Main sustain phase - adjusted to conserve mean
-            return self.max_thrust * 0.9
-        elif t_norm < 0.9:
-            return self.max_thrust * (0.9 - 0.4 * ((t_norm - 0.8) / 0.1))
-        else:
-            return self.max_thrust * (0.5 - 0.5 * ((t_norm - 0.9) / 0.1))
-
     def validate_thrust_curve(self):
         """Validate that thrust curve produces correct mean thrust and starts from 0"""
         # Test the thrust curve at multiple points to verify mean
@@ -413,6 +521,28 @@ class EnhancedEngine:
             'throat_area': self.throat_area,
             'exit_area': self.exit_area
         }
+
+    def get_thrust_curve_info(self):
+        """Get information about the loaded thrust curve"""
+        if not self.use_experimental_thrust:
+            return {"available": False}
+        
+        try:
+            # Sample the thrust curve to get statistics
+            sample_times = np.linspace(0, self.burn_time, 100)
+            thrust_samples = [self._calculate_experimental_thrust(t) for t in sample_times]
+            
+            return {
+                "available": True,
+                "data_points": len(self.thrust_interpolator.x) if hasattr(self.thrust_interpolator, 'x') else 0,
+                "burn_time": self.burn_time,
+                "max_thrust": max(thrust_samples),
+                "total_impulse": np.trapezoid(thrust_samples, sample_times),
+                "source": self.thrust_curve_file or "provided_data"
+            }
+        except Exception as e:
+            logging.error(f"Error getting thrust curve info: {e}")
+            return {"available": False}
 
     def update(self, time=None, ambient_pressure=None):
         """

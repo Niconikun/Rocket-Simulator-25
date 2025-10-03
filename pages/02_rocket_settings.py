@@ -5,6 +5,10 @@ import numpy as np
 import pyvista as pv # type: ignore
 from stpyvista import stpyvista # type: ignore
 import os
+import pandas as pd
+import tempfile
+import matplotlib.pyplot as plt
+
 
 def load_rocket_configs():
     """Carga todas las configuraciones de cohetes desde la nueva estructura"""
@@ -93,7 +97,7 @@ if sim_rocket != "Manual":
     max_chamber_pressure_edit = rocket_settings["engine"].get("max_chamber_pressure", 0.0)
     thrust_to_weight_ratio_edit = rocket_settings["engine"].get("thrust_to_weight_ratio", 0.0)
     len_warhead_edit = rocket_settings["nosecone"]["length"]
-    nosecone_shape = rocket_settings["nosecone"]["shape"]
+    nosecone_type = rocket_settings["nosecone"]["type"]
     len_nosecone_fins_edit = rocket_settings["geometry"]["length nosecone fins"]
     len_bodytube_wo_rear_edit = rocket_settings["fuselage"]["length"]
     fins_chord_root_edit = rocket_settings["fins"]["chord_root"]
@@ -192,16 +196,88 @@ CoM_after_burn_y = k.number_input("Y", min_value=0.0, value=float(CoM_after_burn
 CoM_after_burn_z = l.number_input("Z", min_value=0.0, value=float(CoM_after_burn_z_edit), step=0.01, key="CoM_after_burn_z")
 
 tab2.subheader("Engine Properties")
-burn_time = tab2.number_input("Burn Time [s]", min_value=0.0, value=float(burn_time_edit), step=0.1, key="burn_time")
-nozzle_exit_diameter = tab2.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
-propellant_mass = tab2.number_input("Propellant Mass [kg]", min_value=0.0, value=float(propellant_mass_edit), step=0.1, key="propellant_mass")
-specific_impulse = tab2.number_input("Specific Impulse [s]", min_value=0.0, value=float(specific_impulse_edit), step=0.1, key="specific_impulse")
-mean_thrust = tab2.number_input("Mean Thrust [N]", min_value=0.0, value=float(mean_thrust_edit), step=0.1, key="mean_thrust")
-max_thrust = tab2.number_input("Max Thrust [N]", min_value=0.0, value=float(max_thrust_edit), step=0.1, key="max_thrust")
-mean_chamber_pressure = tab2.number_input("Mean Chamber Pressure [Pa]", min_value=0.0, value=float(mean_chamber_pressure_edit), step=0.1, key="mean_chamber_pressure")
-max_chamber_pressure = tab2.number_input("Max Chamber Pressure [Pa]", min_value=0.0, value=float(max_chamber_pressure_edit), step=0.1, key="max_chamber_pressure")
-thrust_to_weight_ratio = tab2.number_input("Thrust to Weight Ratio [-]", min_value=0.0, value=float(thrust_to_weight_ratio_edit), step=0.01, key="thrust_to_weight_ratio")
-# ...campos legacy opcionales...
+# Add this import at the top
+
+
+# In the Engine tab, add thrust curve upload section
+tab2.subheader("Thrust Curve")
+
+# Thrust curve selection
+thrust_curve_mode = tab2.radio(
+    "Thrust Curve Mode",
+    ["Analytical Model", "Experimental Data"],
+    index=0,
+    key="thrust_curve_mode"
+)
+
+if thrust_curve_mode == "Experimental Data":
+    uploaded_file = tab2.file_uploader(
+        "Upload Thrust Curve CSV", 
+        type=['csv'],
+        key="thrust_curve_upload"
+    )
+    
+    if uploaded_file is not None:
+        try:
+            # Read and display the CSV
+            df = pd.read_csv(uploaded_file)
+            tab2.write("Thrust Curve Preview:")
+            tab2.dataframe(df.head(10))
+            
+            # Show basic statistics
+            time_col = None
+            thrust_col = None
+            
+            for col in df.columns:
+                col_lower = col.lower()
+                if 'time' in col_lower or 'tiempo' in col_lower:
+                    time_col = col
+                elif 'thrust' in col_lower or 'force' in col_lower or 'fuerza' in col_lower:
+                    thrust_col = col
+            
+            if time_col and thrust_col:
+                # Convert to numeric and clean
+                df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
+                df[thrust_col] = pd.to_numeric(df[thrust_col], errors='coerce')
+                df = df.dropna()
+                
+                # Show statistics
+                tab2.write(f"**Statistics:**")
+                tab2.write(f"- Duration: {df[time_col].max():.2f} s")
+                tab2.write(f"- Max Thrust: {df[thrust_col].max():.2f} units")
+                tab2.write(f"- Data Points: {len(df)}")
+                
+                # Show plot
+                fig, ax = plt.subplots()
+                ax.plot(df[time_col], df[thrust_col])
+                ax.set_xlabel('Time (s)')
+                ax.set_ylabel('Thrust')
+                ax.set_title('Thrust Curve')
+                ax.grid(True)
+                tab2.pyplot(fig)
+                
+                # Store thrust curve data in session state
+                st.session_state.thrust_curve_data = {
+                    'time': df[time_col].tolist(),
+                    'thrust': df[thrust_col].tolist()
+                }
+                
+            else:
+                tab2.error("Could not identify time and thrust columns. Please check CSV format.")
+                
+        except Exception as e:
+            tab2.error(f"Error reading CSV file: {e}")
+else:
+    burn_time = tab2.number_input("Burn Time [s]", min_value=0.0, value=float(burn_time_edit), step=0.1, key="burn_time")
+    nozzle_exit_diameter = tab2.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
+    propellant_mass = tab2.number_input("Propellant Mass [kg]", min_value=0.0, value=float(propellant_mass_edit), step=0.1, key="propellant_mass")
+    specific_impulse = tab2.number_input("Specific Impulse [s]", min_value=0.0, value=float(specific_impulse_edit), step=0.1, key="specific_impulse")
+    mean_thrust = tab2.number_input("Mean Thrust [N]", min_value=0.0, value=float(mean_thrust_edit), step=0.1, key="mean_thrust")
+    max_thrust = tab2.number_input("Max Thrust [N]", min_value=0.0, value=float(max_thrust_edit), step=0.1, key="max_thrust")
+    mean_chamber_pressure = tab2.number_input("Mean Chamber Pressure [Pa]", min_value=0.0, value=float(mean_chamber_pressure_edit), step=0.1, key="mean_chamber_pressure")
+    max_chamber_pressure = tab2.number_input("Max Chamber Pressure [Pa]", min_value=0.0, value=float(max_chamber_pressure_edit), step=0.1, key="max_chamber_pressure")
+    thrust_to_weight_ratio = tab2.number_input("Thrust to Weight Ratio [-]", min_value=0.0, value=float(thrust_to_weight_ratio_edit), step=0.01, key="thrust_to_weight_ratio")
+
 
 tab4.subheader("Fins")
 # In the Fins tab section, replace the current fin inputs with
@@ -501,7 +577,7 @@ if submitted:
             },
             "geometry": {
                 "length nosecone fins": len_nosecone_fins,
-                "len_nosecone_rear": len_warhead + len_bodytube_wo_rear + len_rear,
+                "total length": len_warhead + len_bodytube_wo_rear + len_rear,
             },
             "fins": {
                 "fin_type": fin_type,
