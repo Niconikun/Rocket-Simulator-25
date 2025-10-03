@@ -100,6 +100,100 @@ def load_thrust_curve(rocket_name):
         logging.error(f"Error loading thrust curve: {e}")
         return None
 
+def prepare_data_for_storage(data):
+    """Convert data to storage-friendly format"""
+    if isinstance(data, (list, np.ndarray)):
+        # Convert numpy arrays to lists for JSON serialization
+        return data.tolist() if hasattr(data, 'tolist') else list(data)
+    elif isinstance(data, (int, float, str, bool)):
+        return data
+    else:
+        # Convert other types to string representation
+        return str(data)
+
+def save_simulation_data(sim_params, Sistema, min_length):
+    """Save simulation data to parquet file for dashboard"""
+    try:
+        sim_rocket = sim_params['rocket']
+        sim_location = sim_params['location']
+        Latitude = location_settings[sim_location]['latitude']
+        Longitude = location_settings[sim_location]['longitude']
+        
+        # Create data dictionary in the exact format expected by dashboard
+        df_data = {
+            "Rocket name": [sim_rocket] * min_length,
+            "Location name": [sim_location] * min_length,
+            "Location Latitude": [float(Latitude)] * min_length,
+            "Location Longitude": [float(Longitude)] * min_length,
+            # Simulation data, coordinates and velocity
+            "Simulation time": prepare_data_for_storage(np.array(Sistema.hist_time[:min_length])),
+            "Greenwich Mean Sidereal Time": prepare_data_for_storage(np.array(Sistema.hist_gmst[:min_length])),
+            "Range": prepare_data_for_storage(np.array(Sistema.hist_range[:min_length])),
+            "East coordinate": prepare_data_for_storage(np.array(Sistema.hist_east[:min_length])),
+            "North coordinate": prepare_data_for_storage(np.array(Sistema.hist_north[:min_length])),
+            "Up coordinate": prepare_data_for_storage(np.array(Sistema.hist_up[:min_length])),
+            "Velocity norm": prepare_data_for_storage(np.array(Sistema.hist_v_norm[:min_length])),
+            "Latitude": prepare_data_for_storage(np.array(Sistema.hist_lat[:min_length])),
+            "Longitude": prepare_data_for_storage(np.array(Sistema.hist_long[:min_length])),
+            "Altitude": prepare_data_for_storage(np.array(Sistema.hist_alt[:min_length])),
+            "East-North-Up location from platform": prepare_data_for_storage(Sistema.hist_r_enu[:min_length]),
+            "East-North-Up velocity from platform": prepare_data_for_storage(Sistema.hist_v_enu[:min_length]),
+            "Pitch Angle": prepare_data_for_storage(np.array(Sistema.hist_pitch[:min_length])),
+            "Yaw Angle": prepare_data_for_storage(np.array(Sistema.hist_yaw[:min_length])),
+            "Roll Angle": prepare_data_for_storage(np.array(Sistema.hist_roll[:min_length])),
+            "Angle of attack": prepare_data_for_storage(np.array(Sistema.hist_alpha[:min_length])),
+            "v_bx": prepare_data_for_storage(np.array(Sistema.hist_v_bx[:min_length])),
+            "v_by": prepare_data_for_storage(np.array(Sistema.hist_v_by[:min_length])),
+            "v_bz": prepare_data_for_storage(np.array(Sistema.hist_v_bz[:min_length])),
+            "Rotational velocity in East-North-Up": prepare_data_for_storage(np.array(Sistema.hist_w_enu[:min_length])),
+            
+            # Atmosphere
+            "Density of the atmosphere": prepare_data_for_storage(np.array(Sistema.hist_density[:min_length])),
+            "Ambient pressure": prepare_data_for_storage(np.array(Sistema.hist_press_amb[:min_length])),
+            "Speed of sound": prepare_data_for_storage(np.array(Sistema.hist_v_sonic[:min_length])),
+            "Mach number": prepare_data_for_storage(np.array(Sistema.hist_mach[:min_length])),
+
+            # Forces and torques
+            "Mass of the rocket": prepare_data_for_storage(np.array(Sistema.hist_mass[:min_length])),
+            "Drag coefficient": prepare_data_for_storage(np.array(Sistema.hist_drag_coeff[:min_length])),
+            "Lift coefficient": prepare_data_for_storage(np.array(Sistema.hist_lift_coeff[:min_length])),
+            "Thrust": prepare_data_for_storage(np.array(Sistema.hist_thrust[:min_length])),
+            "Inertia matrix in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_inertia_b[:min_length])),
+            "Center of mass in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm_b[:min_length])),
+            "Center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cp_b[:min_length])),
+            "Mass flux": prepare_data_for_storage(np.array(Sistema.hist_mass_flux[:min_length])),
+            "Drag force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_drag[:min_length])),
+            "Lift force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_lift[:min_length])),
+            "Center of mass to center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm2cp_b[:min_length])),
+            "Aerodynamic forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_aero_b[:min_length])),
+            "Aerodynamic torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_aero_b[:min_length])),
+            "Engine forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_engine_b[:min_length])),
+            "Engine torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_engine_b[:min_length])),
+            "Acceleration in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_accel_b[:min_length])),
+            
+            # Separate quaternion components into individual columns
+            "Quaternion_1": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_1[:min_length])),
+            "Quaternion_2": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_2[:min_length])),
+            "Quaternion_3": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_3[:min_length])),
+            "Quaternion_4": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_4[:min_length])),
+        }
+        
+        # Create DataFrame
+        simulation_df = pd.DataFrame(df_data)
+        
+        # Ensure directory exists
+        os.makedirs('data/simulation', exist_ok=True)
+        
+        # Save to parquet
+        simulation_df.to_parquet('data/simulation/sim_data.parquet', index=False)
+        
+        logger.info(f"Simulation data saved to parquet file with {min_length} data points")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error saving simulation data: {e}")
+        return False
+
 def run_simulation_direct(sim_params):
     """Run simulation directly in the main thread with progress updates"""
     try:
@@ -323,7 +417,28 @@ def run_simulation_direct(sim_params):
         # Final progress update
         st.session_state.simulation_progress = 1.0
         
-        # Store results
+        # Determine minimum length of history arrays
+        hist_arrays = [
+            Sistema.hist_time, Sistema.hist_gmst, Sistema.hist_range, Sistema.hist_east,
+            Sistema.hist_north, Sistema.hist_up, Sistema.hist_v_norm, Sistema.hist_lat,
+            Sistema.hist_long, Sistema.hist_alt, Sistema.hist_r_enu, Sistema.hist_v_enu,
+            Sistema.hist_pitch, Sistema.hist_yaw, Sistema.hist_roll, Sistema.hist_alpha,
+            Sistema.hist_v_bx, Sistema.hist_v_by, Sistema.hist_v_bz, Sistema.hist_w_enu,
+            Sistema.hist_density, Sistema.hist_press_amb, Sistema.hist_v_sonic, Sistema.hist_mach,
+            Sistema.hist_mass, Sistema.hist_drag_coeff, Sistema.hist_lift_coeff, Sistema.hist_thrust,
+            Sistema.hist_inertia_b, Sistema.hist_cm_b, Sistema.hist_cp_b, Sistema.hist_mass_flux,
+            Sistema.hist_drag, Sistema.hist_lift, Sistema.hist_cm2cp_b, Sistema.hist_forces_aero_b,
+            Sistema.hist_torques_aero_b, Sistema.hist_forces_engine_b, Sistema.hist_torques_engine_b,
+            Sistema.hist_accel_b, Sistema.hist_q_enu2b_1, Sistema.hist_q_enu2b_2, 
+            Sistema.hist_q_enu2b_3, Sistema.hist_q_enu2b_4
+        ]
+        
+        min_length = min(len(arr) for arr in hist_arrays if hasattr(arr, '__len__'))
+        
+        # Save simulation data to parquet file
+        save_success = save_simulation_data(sim_params, Sistema, min_length)
+        
+        # Store results in session state
         if hasattr(Sistema, 'hist_up') and Sistema.hist_up:
             max_alt = max(Sistema.hist_up)
         else:
@@ -339,7 +454,8 @@ def run_simulation_direct(sim_params):
             'simulation_time': Sistema.time,
             'max_altitude': max_alt,
             'max_velocity': max_vel,
-            'final_altitude': Sistema.r_enu[2] if hasattr(Sistema, 'r_enu') else 0
+            'final_altitude': Sistema.r_enu[2] if hasattr(Sistema, 'r_enu') else 0,
+            'data_saved': save_success
         }
         
         # Store simulation data for plotting
@@ -440,6 +556,12 @@ with action_col1:
                 st.metric("Max Velocity", f"{results['max_velocity']:.1f} m/s")
             with col4:
                 st.metric("Final Altitude", f"{results['final_altitude']:.1f} m")
+            
+            # Add data saving status
+            if results.get('data_saved'):
+                st.success("✅ Simulation data saved successfully! You can now view the dashboard.")
+            else:
+                st.warning("⚠️ Simulation data may not have been saved properly.")
             
             # Add simple plot if data is available
             if st.session_state.simulation_data:

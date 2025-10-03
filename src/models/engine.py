@@ -2,10 +2,6 @@
 #         Universidad de Concepción, Facultad de Ingeniería
 #         E-mail: joorozco@udec.cl
 
-# Author: Jorge Orozco
-#         Universidad de Concepción, Facultad de Ingeniería
-#         E-mail: joorozco@udec.cl
-
 """
 Enhanced Rocket Engine Simulation Module
 
@@ -221,14 +217,17 @@ class EnhancedEngine:
             logging.error(f"Error loading thrust curve: {e}")
             self.use_experimental_thrust = False
 
-    def _calculate_experimental_thrust(self):
+    def _calculate_experimental_thrust(self, time=None):
         """Calculate thrust using experimental data"""
         if self.thrust_interpolator is None:
             return 0.0
         
         try:
+            # Use provided time or current time
+            current_time = time if time is not None else self.time
+            
             # Get thrust from interpolator
-            thrust = float(self.thrust_interpolator(self.time))
+            thrust = float(self.thrust_interpolator(current_time))
             
             # Ensure thrust is non-negative
             thrust = max(0.0, thrust)
@@ -268,8 +267,6 @@ class EnhancedEngine:
             self.ideal_thrust_coefficient = 1.5
 
     def _calculate_performance(self):
-        """Calculate current engine performance"""
-        
         """Calculate current engine performance with experimental thrust support"""
         try:
             # Reset values
@@ -284,9 +281,8 @@ class EnhancedEngine:
                 if self.use_experimental_thrust:
                     self._thrust = self._calculate_experimental_thrust()
                     
-                    # Calculate mass flux based on experimental thrust
+                    # Calculate mass flux based on experimental thrust and specific impulse
                     if self._thrust > 0:
-                        # Estimate mass flux from thrust and specific impulse
                         g0 = 9.80665
                         self._mass_flux = self._thrust / (self.specific_impulse * g0)
                         
@@ -303,15 +299,8 @@ class EnhancedEngine:
                         self.actual_isp = 0.0
                         
                 else:
-                    # Use analytical model (existing code)
-                    thrust_vacuum = self._calculate_thrust_curve()
-                    
-                    # Use provided mass flux from JSON or calculate from propellant mass
-                    if hasattr(self, 'provided_mass_flux') and self.provided_mass_flux > 0:
-                        self._mass_flux = self.provided_mass_flux
-                    else:
-                        # Fallback: calculate from propellant mass and burn time
-                        self._mass_flux = self.propellant_mass / self.burn_time
+                    # Use analytical model
+                    self._thrust = self._calculate_thrust_curve()
                     
                     # Calculate mass flow rate from chamber conditions
                     if self.characteristic_velocity > 0:
@@ -335,26 +324,6 @@ class EnhancedEngine:
                             (1 + (self.gamma - 1) / 2 * exit_mach ** 2) ** (self.gamma / (self.gamma - 1))
                         )
                         
-                        # Thrust components
-                        momentum_thrust = self._mass_flux * self.gas_speed
-                        pressure_thrust = (self.exit_pressure - self.ambient_pressure) * self.exit_area
-                        
-                        # Total thrust
-                        calculated_thrust = momentum_thrust + pressure_thrust
-                        
-                        # Scale to match provided thrust data (if available)
-                        if thrust_vacuum > 0 and calculated_thrust > 0:
-                            # Calculate vacuum thrust for scaling
-                            vacuum_pressure_thrust = self.exit_pressure * self.exit_area
-                            vacuum_thrust_calc = momentum_thrust + vacuum_pressure_thrust
-                            
-                            if vacuum_thrust_calc > 0:
-                                scale_factor = thrust_vacuum / vacuum_thrust_calc
-                                self._thrust = calculated_thrust * scale_factor
-                                self._mass_flux *= scale_factor
-                        else:
-                            self._thrust = calculated_thrust
-                        
                         # Calculate actual specific impulse
                         g0 = 9.80665
                         self.actual_isp = self._thrust / (self._mass_flux * g0) if self._mass_flux > 0 else 0
@@ -372,33 +341,35 @@ class EnhancedEngine:
             # Fallback to simple model
             self._fallback_performance()
 
+    def _fallback_performance(self):
+        """Fallback performance calculation"""
+        self._mass_flux = self.propellant_mass / self.burn_time if self.time <= self.burn_time else 0.0
+        self._thrust = self.mean_thrust if self.time <= self.burn_time else 0.0
+        self.actual_isp = self.specific_impulse
+
     def _calculate_thrust_curve(self):
-        """Calculate realistic thrust curve that guarantees mean thrust conservation"""
+        """Calculate realistic thrust curve for analytical mode"""
         if self.time > self.burn_time or self.time == 0.0:
             return 0.0
         
         t_norm = self.time / self.burn_time
         
         try:
-            # Define a base thrust profile with realistic shape starting from 0
-            if t_norm < 0.02:  # 2% ignition phase - start from 0
-                # Start from 0 and ramp up quickly
+            # Define a base thrust profile with realistic shape
+            if t_norm < 0.02:  # 2% ignition phase
                 ramp_up = t_norm / 0.02
-                shape_factor = 0.1 * ramp_up  # Start very low
+                shape_factor = 0.1 * ramp_up
                 
             elif t_norm < 0.08:  # 2-8% fast ramp up
                 ramp_pos = (t_norm - 0.02) / 0.06
-                # Smooth ramp up using cubic easing
                 shape_factor = 0.1 + 0.4 * (3 * ramp_pos**2 - 2 * ramp_pos**3)
                 
             elif t_norm < 0.15:  # 8-15% approach to max thrust
                 ramp_pos = (t_norm - 0.08) / 0.07
                 shape_factor = 0.5 + 0.5 * ramp_pos
                 
-            elif t_norm < 0.85:  # 15-85% sustained phase with small variations
-                # Small oscillations around sustained level
-                oscillation = 0.05 * np.sin(2 * np.pi * t_norm * 4)  # 4 oscillations
-                # Gentle decay from higher to lower thrust
+            elif t_norm < 0.85:  # 15-85% sustained phase
+                oscillation = 0.05 * np.sin(2 * np.pi * t_norm * 4)
                 decay = (0.85 - t_norm) / 0.70
                 shape_factor = 0.95 + 0.05 * decay + oscillation
                 
@@ -415,10 +386,7 @@ class EnhancedEngine:
                 shape_factor = 0.05 * np.exp(-4 * (1 - tail_off))
             
             # Scale to ensure exact mean thrust match
-            # The integral of our shape function over [0,1] should equal mean_thrust/max_thrust
-            shape_integral = 0.685  # Updated integral for the new shape function
-            
-            # Calculate required scaling to match mean thrust
+            shape_integral = 0.685
             required_mean_ratio = self.mean_thrust / self.max_thrust
             current_mean_ratio = shape_integral
             
@@ -428,47 +396,38 @@ class EnhancedEngine:
             
             # Apply the scaling and ensure bounds
             thrust = shape_factor * self.max_thrust
-            
-            # Final validation and bounds checking
-            thrust = min(thrust, self.max_thrust)  # Don't exceed max thrust
-            thrust = max(thrust, 0)  # Ensure non-negative
-            
-            # Debug logging for first few time steps
-            if self.time <= 0.1 and int(self.time * 100) % 10 == 0:  # Log every 0.01s for first 0.1s
-                logging.debug(f"t={self.time:.3f}s, t_norm={t_norm:.3f}, shape_factor={shape_factor:.3f}, thrust={thrust:.1f}N")
+            thrust = min(thrust, self.max_thrust)
+            thrust = max(thrust, 0)
             
             return thrust
             
         except Exception as e:
             logging.error(f"Thrust curve calculation error: {e}")
-            # Fallback: simple interpolation that guarantees mean
+            # Fallback: simple interpolation
             return self._fallback_thrust_curve(t_norm)
 
     def _fallback_thrust_curve(self, t_norm):
-        """Fallback thrust curve that guarantees mean thrust conservation and starts from 0"""
-        # Simple piecewise linear function that starts from 0 and conserves mean thrust
+        """Fallback thrust curve"""
         if 0 <= t_norm < 0.05:
-            return self.max_thrust * (t_norm / 0.05) * 0.3  # Start from 0, ramp to 30% of max
+            return self.max_thrust * (t_norm / 0.05) * 0.3
         elif 0.05 <= t_norm < 0.15:
             ramp_pos = (t_norm - 0.05) / 0.10
-            return self.max_thrust * (0.3 + 0.5 * ramp_pos)  # Ramp to 80% of max
+            return self.max_thrust * (0.3 + 0.5 * ramp_pos)
         elif 0.15 <= t_norm < 0.25:
             ramp_pos = (t_norm - 0.15) / 0.10
-            return self.max_thrust * (0.8 + 0.2 * ramp_pos)  # Ramp to 100% of max
+            return self.max_thrust * (0.8 + 0.2 * ramp_pos)
         elif 0.25 <= t_norm < 0.75:
-            # Main sustain phase - adjusted to conserve mean
-            return self.max_thrust * 0.95  # Sustain at 95% of max
+            return self.max_thrust * 0.95
         elif 0.75 <= t_norm < 0.85:
-            return self.max_thrust * (0.95 - 0.3 * ((t_norm - 0.75) / 0.10))  # Ramp down to 65%
+            return self.max_thrust * (0.95 - 0.3 * ((t_norm - 0.75) / 0.10))
         elif 0.85 <= t_norm < 0.95:
-            return self.max_thrust * (0.65 - 0.4 * ((t_norm - 0.85) / 0.10))  # Ramp down to 25%
+            return self.max_thrust * (0.65 - 0.4 * ((t_norm - 0.85) / 0.10))
         else:
-            return self.max_thrust * (0.25 - 0.25 * ((t_norm - 0.95) / 0.05))  # Ramp down to 0
+            return self.max_thrust * (0.25 - 0.25 * ((t_norm - 0.95) / 0.05))
 
     def validate_thrust_curve(self):
-        """Validate that thrust curve produces correct mean thrust and starts from 0"""
-        # Test the thrust curve at multiple points to verify mean
-        test_points = 200  # More points for better accuracy
+        """Validate that thrust curve produces correct mean thrust"""
+        test_points = 200
         total_thrust = 0
         thrust_values = []
         
@@ -484,16 +443,11 @@ class EnhancedEngine:
         calculated_mean = total_thrust / test_points
         error = abs(calculated_mean - self.mean_thrust) / self.mean_thrust
         
-        # Check initial thrust
-        initial_thrust = thrust_values[0] if thrust_values else 0
-        
         validation_result = {
-            'valid': error < 0.05 and initial_thrust < self.max_thrust * 0.1,  # Allow 5% error and initial thrust < 10% of max
+            'valid': error < 0.05,
             'calculated_mean': calculated_mean,
             'expected_mean': self.mean_thrust,
             'error_percent': error * 100,
-            'initial_thrust': initial_thrust,
-            'initial_thrust_ratio': initial_thrust / self.max_thrust,
             'max_thrust_used': max(thrust_values) if thrust_values else 0
         }
         

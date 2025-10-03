@@ -437,6 +437,12 @@ class Rocket(object):
 
             engine_data = rocket_settings['engine']
             
+            # Check if we are using experimental thrust curve
+            thrust_curve_file = None
+            if engine_data.get('thrust_curve_mode') == 'experimental':
+                thrust_curve_file = engine_data.get('thrust_curve_file')
+                logging.info(f"Using experimental thrust curve: {thrust_curve_file}")
+            
             # Create enhanced engine with validation
             Eng = EnhancedEngine(
                 time=self.time,
@@ -449,14 +455,22 @@ class Rocket(object):
                 max_thrust=engine_data["max_thrust"],
                 mean_chamber_pressure=engine_data["mean_chamber_pressure"],
                 max_chamber_pressure=engine_data["max_chamber_pressure"],
-                thrust_to_weight_ratio=engine_data["thrust_to_weight_ratio"]
+                thrust_to_weight_ratio=engine_data["thrust_to_weight_ratio"],
+                thrust_curve_file=thrust_curve_file  # Pass the thrust curve file if experimental
             )
             
             # Validate thrust curve on first call
             if not hasattr(self, '_thrust_curve_validated'):
-                validation = Eng.validate_thrust_curve()
-                if not validation['valid']:
-                    logging.warning(f"Thrust curve validation issues: {validation}")
+                if thrust_curve_file:
+                    curve_info = Eng.get_thrust_curve_info()
+                    if curve_info['available']:
+                        logging.info(f"Experimental thrust curve: {curve_info['data_points']} points, max thrust: {curve_info['max_thrust']:.1f}N")
+                    else:
+                        logging.warning("Experimental thrust curve not available, falling back to analytical")
+                else:
+                    validation = Eng.validate_thrust_curve()
+                    if not validation['valid']:
+                        logging.warning(f"Thrust curve validation issues: {validation}")
                 self._thrust_curve_validated = True
             
             # Update performance metrics
