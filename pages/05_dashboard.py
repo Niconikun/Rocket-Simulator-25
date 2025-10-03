@@ -10,6 +10,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+from reportlab.platypus import Image
 import io
 import base64
 from math import cos, pi
@@ -62,7 +63,7 @@ def calculate_metrics(data):
         return {}
 
 def generate_pdf_report(chart_data, metrics, stability_df, title, include_plots=True, include_analysis=True):
-    """Generate a comprehensive PDF report"""
+    """Generate a comprehensive PDF report with plots"""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch)
     story = []
@@ -105,6 +106,16 @@ def generate_pdf_report(chart_data, metrics, stability_df, title, include_plots=
     ]))
     story.append(overview_table)
     story.append(Spacer(1, 0.3*inch))
+    
+    if include_plots:
+        # Add main performance plots
+        story.append(Paragraph("Performance Plots", styles['Heading2']))
+        
+        # Create and add plots
+        plots = generate_performance_plots(chart_data, stability_df)
+        for plot_buffer in plots:
+            story.append(Image(plot_buffer, width=6*inch, height=4*inch))
+            story.append(Spacer(1, 0.2*inch))
     
     if include_analysis:
         # Stability Analysis Section
@@ -179,6 +190,126 @@ def generate_pdf_report(chart_data, metrics, stability_df, title, include_plots=
     doc.build(story)
     buffer.seek(0)
     return buffer
+
+def generate_performance_plots(chart_data, stability_df):
+    """Generate matplotlib plots for PDF export"""
+    plot_buffers = []
+    
+    # Compress data for plotting
+    chart_data_compressed = compress_data(chart_data)
+    stability_compressed = compress_data(stability_df)
+    
+    # Plot 1: Altitude and Speed vs Time
+    fig1, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+    
+    # Altitude
+    ax1.plot(chart_data_compressed["Simulation time"], chart_data_compressed["Up coordinate"], 'b-', linewidth=2)
+    ax1.set_ylabel('Altitude [m]', color='b')
+    ax1.tick_params(axis='y', labelcolor='b')
+    ax1.grid(True, alpha=0.3)
+    
+    # Speed on second y-axis
+    ax1_twin = ax1.twinx()
+    ax1_twin.plot(chart_data_compressed["Simulation time"], chart_data_compressed["Velocity norm"], 'r-', linewidth=2)
+    ax1_twin.set_ylabel('Speed [m/s]', color='r')
+    ax1_twin.tick_params(axis='y', labelcolor='r')
+    
+    ax1.set_title('Altitude and Speed vs Time')
+    
+    # Mach number and AoA
+    ax2.plot(chart_data_compressed["Simulation time"], chart_data_compressed["Mach number"], 'g-', linewidth=2, label='Mach')
+    ax2_twin = ax2.twinx()
+    ax2_twin.plot(chart_data_compressed["Simulation time"], chart_data_compressed["Angle of attack"], 'm-', linewidth=2, label='AoA')
+    ax2.set_ylabel('Mach Number', color='g')
+    ax2_twin.set_ylabel('Angle of Attack [°]', color='m')
+    ax2.tick_params(axis='y', labelcolor='g')
+    ax2_twin.tick_params(axis='y', labelcolor='m')
+    ax2.grid(True, alpha=0.3)
+    ax2.set_xlabel('Time [s]')
+    ax2.set_title('Mach Number and Angle of Attack')
+    
+    plt.tight_layout()
+    buf1 = io.BytesIO()
+    plt.savefig(buf1, format='png', dpi=150, bbox_inches='tight')
+    buf1.seek(0)
+    plot_buffers.append(buf1)
+    plt.close(fig1)
+    
+    # Plot 2: Flight Path
+    fig2, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(chart_data_compressed["Range"], chart_data_compressed["Up coordinate"], 'b-', linewidth=2)
+    ax.set_xlabel('Range [m]')
+    ax.set_ylabel('Altitude [m]')
+    ax.set_title('Flight Path - Altitude vs Range')
+    ax.grid(True, alpha=0.3)
+    
+    buf2 = io.BytesIO()
+    plt.savefig(buf2, format='png', dpi=150, bbox_inches='tight')
+    buf2.seek(0)
+    plot_buffers.append(buf2)
+    plt.close(fig2)
+    
+    # Plot 3: Forces Analysis
+    fig3, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(chart_data_compressed["Simulation time"], chart_data_compressed["Thrust"], 'r-', label='Thrust', linewidth=2)
+    ax.plot(chart_data_compressed["Simulation time"], chart_data_compressed["Lift force in bodyframe"], 'g-', label='Lift', linewidth=2)
+    ax.plot(chart_data_compressed["Simulation time"], chart_data_compressed["Drag force in bodyframe"], 'b-', label='Drag', linewidth=2)
+    ax.set_xlabel('Time [s]')
+    ax.set_ylabel('Force [N]')
+    ax.set_title('Forces Analysis')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    buf3 = io.BytesIO()
+    plt.savefig(buf3, format='png', dpi=150, bbox_inches='tight')
+    buf3.seek(0)
+    plot_buffers.append(buf3)
+    plt.close(fig3)
+    
+    # Plot 4: Stability Analysis
+    fig4, ax1 = plt.subplots(figsize=(10, 6))
+    
+    # Plot stability margin
+    color = 'tab:blue'
+    ax1.set_xlabel('Time [s]')
+    ax1.set_ylabel('Stability Margin [calibers]', color=color)
+    line1 = ax1.plot(stability_compressed['time'], stability_compressed['stability_calibers'], 
+                     color=color, label='Stability Margin', linewidth=2)
+    ax1.tick_params(axis='y', labelcolor=color)
+    
+    # Add stability regions
+    ax1.axhspan(2.0, 4.0, alpha=0.2, color='green', label='Very Stable')
+    ax1.axhspan(1.5, 2.0, alpha=0.2, color='blue', label='Stable')
+    ax1.axhspan(1.0, 1.5, alpha=0.2, color='orange', label='Marginal')
+    ax1.axhspan(0.0, 1.0, alpha=0.2, color='red', label='Unstable')
+    
+    ax1.set_ylim(0, max(4, stability_df['stability_calibers'].max() * 1.1))
+    
+    # Second y-axis for CM-CP positions
+    ax2 = ax1.twinx()
+    color = 'tab:red'
+    ax2.set_ylabel('Position [m]', color=color)
+    line2 = ax2.plot(stability_compressed['time'], stability_compressed['cm_x'], 
+                     color='purple', label='CM Position', linestyle='--', linewidth=2)
+    line3 = ax2.plot(stability_compressed['time'], stability_compressed['cp_x'], 
+                     color='brown', label='CP Position', linestyle='--', linewidth=2)
+    ax2.tick_params(axis='y', labelcolor=color)
+    
+    # Combine legends
+    lines = line1 + line2 + line3
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper right')
+    
+    plt.title('Rocket Stability Analysis')
+    plt.tight_layout()
+    
+    buf4 = io.BytesIO()
+    plt.savefig(buf4, format='png', dpi=150, bbox_inches='tight')
+    buf4.seek(0)
+    plot_buffers.append(buf4)
+    plt.close(fig4)
+    
+    return plot_buffers
 
 def generate_csv_export(chart_data, stability_df):
     """Generate CSV export of simulation data"""
