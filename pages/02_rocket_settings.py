@@ -382,23 +382,40 @@ with right_column:
     
     p = pv.Plotter(window_size=[300, 500])
     
+    # Use current values from the form, not _edit variables
+    current_diameter_bodytube = st.session_state.get("diameter_bodytube", diameter_bodytube_edit)
+    current_len_bodytube_wo_rear = st.session_state.get("len_bodytube_wo_rear", len_bodytube_wo_rear_edit)
+    current_len_warhead = st.session_state.get("len_warhead", len_warhead_edit)
+    current_diameter_warhead_base = st.session_state.get("diameter_warhead_base", diameter_warhead_base_edit)
+    current_len_rear = st.session_state.get("len_rear", len_rear_edit)
+    current_end_diam_rear = st.session_state.get("end_diam_rear", end_diam_rear_edit)
+    current_N_fins = st.session_state.get("N_fins", N_fins_edit)
+    current_fin_type = st.session_state.get("fin_type", "Trapezoidal")
+    
+    # Get current fin dimensions
+    current_fins_chord_root = st.session_state.get("fins_chord_root", fins_chord_root_edit)
+    current_fins_chord_tip = st.session_state.get("fins_chord_tip", fins_chord_tip_edit)
+    current_fins_mid_chord = st.session_state.get("fins_mid_chord", fins_mid_chord_edit)
+    current_fins_span = st.session_state.get("fins_span", fins_span_edit)
+    current_sweep_angle = st.session_state.get("sweep_angle", 0.0)
+    
     # Create fuselage (body tube)
     body_tube = pv.Cylinder(
         center=(0, 0, 0),
         direction=(0, 1, 0),
-        radius=diameter_bodytube_edit/2000,  # Convert mm to meters for better scaling
-        height=len_bodytube_wo_rear_edit/1000,
+        radius=current_diameter_bodytube/2000,
+        height=current_len_bodytube_wo_rear/1000,
         resolution=30,
         capping=True
     )
     
     # Create nosecone based on type
-    nosecone_length = len_warhead_edit/1000
-    nosecone_radius = diameter_warhead_base_edit/2000
+    nosecone_length = current_len_warhead/1000
+    nosecone_radius = current_diameter_warhead_base/2000
     
     if nosecone_type == "Conical":
         nosecone = pv.Cone(
-            center=(0, len_bodytube_wo_rear_edit/2000 + nosecone_length/2, 0),
+            center=(0, current_len_bodytube_wo_rear/2000 + nosecone_length/2, 0),
             direction=(0, 1, 0),
             height=nosecone_length,
             radius=nosecone_radius,
@@ -406,26 +423,26 @@ with right_column:
             capping=True
         )
     elif nosecone_type == "Ogival":
-        # Simplified ogive - create a pointed shape
-        cone = pv.Cone(
-            center=(0, len_bodytube_wo_rear_edit/2000 + nosecone_length/2, 0),
+        # For ogive, use a more pointed cone
+        nosecone = pv.Cone(
+            center=(0, current_len_bodytube_wo_rear/2000 + nosecone_length/2, 0),
             direction=(0, 1, 0),
             height=nosecone_length,
             radius=nosecone_radius,
-            resolution=30
+            resolution=30,
+            capping=False
         )
-        # Scale the tip to make it more ogive-like
-        nosecone = cone.scale([1, 1.2, 1], inplace=False)
     elif nosecone_type == "Elliptical":
         # Create elliptical shape using parametric ellipsoid
         ellipsoid = pv.ParametricEllipsoid(
-            nosecone_radius, nosecone_radius, nosecone_length
+            nosecone_radius, nosecone_length/2, nosecone_radius
         )
-        nosecone = ellipsoid.translate([0, len_bodytube_wo_rear_edit/2000 + nosecone_length, 0])
+        nosecone = ellipsoid.translate([0, current_len_bodytube_wo_rear/2000 + nosecone_length/2, 0])
+        nosecone = nosecone.scale([1, 2, 1])  # Stretch to make it elliptical
     else:
         # Default to conical for other types
         nosecone = pv.Cone(
-            center=(0, len_bodytube_wo_rear_edit/2000 + nosecone_length/2, 0),
+            center=(0, current_len_bodytube_wo_rear/2000 + nosecone_length/2, 0),
             direction=(0, 1, 0),
             height=nosecone_length,
             radius=nosecone_radius,
@@ -435,79 +452,79 @@ with right_column:
     
     # Create rear section
     rear = pv.Cylinder(
-        center=(0, -len_bodytube_wo_rear_edit/2000 - len_rear_edit/2000/2, 0),
+        center=(0, -current_len_bodytube_wo_rear/2000 - current_len_rear/2000/2, 0),
         direction=(0, 1, 0),
-        radius=end_diam_rear_edit/2000,
-        height=len_rear_edit/1000,
+        radius=current_end_diam_rear/2000,
+        height=current_len_rear/1000,
         resolution=30,
         capping=True
     )
     
-    # Create fins
+    # Create fins - FIXED LOGIC
     fins_mesh = pv.PolyData()
-    if N_fins_edit > 0:
+    if current_N_fins > 0:
         # Define fin points based on fin type
-        if fin_type == "Trapezoidal":
+        if current_fin_type == "Trapezoidal":
             fin_points = np.array([
                 [0, 0, 0],
-                [fins_chord_root_edit/1000, 0, 0],
-                [fins_chord_tip_edit/1000, fins_span_edit/1000, 0],
-                [0, fins_span_edit/1000, 0]
+                [0, current_fins_chord_root/1000, 0],
+                [current_fins_span/1000, current_fins_chord_tip/1000,  0],
+                [current_fins_span/1000, 0, 0]
             ])
-        elif fin_type == "Delta":
+        elif current_fin_type == "Delta":
             fin_points = np.array([
                 [0, 0, 0],
-                [fins_chord_root_edit/1000, 0, 0],
-                [0, fins_span_edit/1000, 0]
+                [0, current_fins_chord_root/1000, 0],
+                [current_fins_span/1000, 0, 0]
             ])
-        elif fin_type == "Tapered Swept":
-            sweep_distance = fins_span_edit/1000 * np.tan(np.radians(sweep_angle))
+        elif current_fin_type == "Tapered Swept":
+            sweep_distance = current_fins_span/1000 * np.tan(np.radians(current_sweep_angle))
             fin_points = np.array([
                 [0, 0, 0],
-                [fins_chord_root_edit/1000, 0, 0],
-                [fins_chord_tip_edit/1000 + sweep_distance, fins_span_edit/1000, 0],
-                [sweep_distance, fins_span_edit/1000, 0]
+                [ 0, current_fins_chord_root/1000, 0],
+                [current_fins_span/1000, current_fins_chord_tip/1000 + sweep_distance, 0],
+                [current_fins_span/1000, sweep_distance, 0]
             ])
-        elif fin_type == "Elliptical":
+        elif current_fin_type == "Elliptical":
             # Create elliptical fin with multiple points
             t = np.linspace(0, np.pi, 8)
-            x_points = fins_chord_root_edit/1000 * (1 - np.cos(t)) / 2
-            y_points = fins_span_edit/1000 * np.sin(t)
+            x_points = current_fins_chord_root/1000 * (1 - np.cos(t)) / 2
+            y_points = current_fins_span/1000 * np.sin(t)
             fin_points = np.column_stack([x_points, y_points, np.zeros_like(x_points)])
         else:  # Custom
             fin_points = np.array([
                 [0, 0, 0],
-                [fins_chord_root_edit/1000, 0, 0],
-                [fins_mid_chord_edit/1000, fins_span_edit/1000/2, 0],
-                [fins_chord_tip_edit/1000, fins_span_edit/1000, 0],
-                [0, fins_span_edit/1000, 0]
+                [ 0, current_fins_chord_root/1000, 0],
+                [current_fins_span/1000/2, current_fins_mid_chord/1000,  0],
+                [current_fins_span/1000, current_fins_chord_tip/1000, 0],
+                [ current_fins_span/1000, 0, 0]
             ])
         
         # Create fin base mesh
         if len(fin_points) == 3:
             # Triangle
-            faces = [3, 0, 1, 2]
+            faces = np.array([3, 0, 1, 2])
+            fin_base = pv.PolyData(fin_points, faces=faces)
         elif len(fin_points) == 4:
             # Quad
-            faces = [4, 0, 1, 2, 3]
+            faces = np.array([4, 0, 1, 2, 3])
+            fin_base = pv.PolyData(fin_points, faces=faces)
         else:
             # Polygon - triangulate
             fin_poly = pv.PolyData(fin_points)
-            fin_poly.faces = np.array([len(fin_points)] + list(range(len(fin_points))))
+            fin_poly.faces = np.hstack([len(fin_points), np.arange(len(fin_points))])
             fin_base = fin_poly.triangulate()
-    else:
-        fin_base = pv.PolyData(fin_points, faces=faces)
         
         # Extrude fin to give it thickness
         fin_thickness = 0.002  # 2mm thickness
         fin_3d = fin_base.extrude((0, 0, fin_thickness))
         
         # Position and create all fins
-        fin_position_y = -len_bodytube_wo_rear_edit/2000 - len_rear_edit/2000/2
-        body_radius = diameter_bodytube_edit/2000
+        fin_position_y = -current_len_bodytube_wo_rear/2000 - current_len_rear/2000/2
+        body_radius = current_diameter_bodytube/2000
         
-        for i in range(int(N_fins_edit)):
-            angle = i * (360 / N_fins_edit)
+        for i in range(int(current_N_fins)):
+            angle = i * (360 / current_N_fins)
             
             # Create fin instance
             fin = fin_3d.copy()
@@ -516,7 +533,7 @@ with right_column:
             fin.translate([body_radius, fin_position_y, 0], inplace=True)
             
             # Rotate around rocket axis
-            fin.rotate_z(angle, inplace=True)
+            fin.rotate_y(angle, inplace=True)
             
             # Add to fins mesh
             if fins_mesh.n_points == 0:
@@ -533,15 +550,13 @@ with right_column:
         rocket_mesh = rocket_mesh.merge(fins_mesh)
     
     # Add the rocket mesh to the plotter
-    p.add_mesh(rocket_mesh, color='lightgray', specular=0.5, specular_power=15)
+    p.add_mesh(rocket_mesh, name='rocket', style='wireframe', color='white', specular=0.5, specular_power=15)
     p.add_axes(line_width=5, labels_off=False)
     p.set_background('#111111')
     p.view_isometric()
     
     # Display in Streamlit
     stpyvista(p, key="rocket_viz")
-
-#right_column.line_chart(bodytube, x="x",y="y", use_container_width=True)
 
     # Add a submit button
 submitted = rock_set.form_submit_button("Save Settings")
