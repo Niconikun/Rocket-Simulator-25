@@ -1,0 +1,65 @@
+{
+    "name": "Campanil 1-A Experimental",
+    "initial_mass": 7.8,
+    "reference_area": 0.033,
+    "I_before_burn": {
+        "x": 0.008879229,
+        "y": 0.520127852,
+        "z": 0.520199542
+    },
+    "CoM_before_burn": {
+        "x": 0.84957,
+        "y": 0.0,
+        "z": 0.00012
+    },
+    "I_after_burn": {
+        "x": 0.008879229,
+        "y": 0.486941936,
+        "z": 0.487079846
+    },
+    "CoM_after_burn": {
+        "x": 0.82877,
+        "y": 1e-05,
+        "z": 0.00016
+    },
+    "engine": {
+        "burn_time": 2.79,
+        "nozzle_exit_diameter": 0.032,
+        "propellant_mass": 1.5,
+        "specific_impulse": 106.25,
+        "mean_thrust": 544.36,
+        "max_thrust": 2104.115,
+        "mean_chamber_pressure": 3191000.0,
+        "max_chamber_pressure": 9010000.0,
+        "thrust_to_weight_ratio": 11.2,
+        "thrust_curve_mode": "experimental",
+        "thrust_curve_file": "data/thrust_curves/load_cell_1.csv"
+    },
+    "geometry": {
+        "length nosecone fins": 1055.0,
+        "total length": 1190.0
+    },
+    "fins": {
+        "fin_type": "Tapered Swept",
+        "span": 139.119,
+        "chord_root": 130.0,
+        "chord_tip": 43.92,
+        "mid_chord": 86.96,
+        "N_fins": 4,
+        "sweep_angle": 20.0
+    },
+    "nosecone": {
+        "type": "Elliptical",
+        "length": 200,
+        "diameter": 103,
+        "parabolic_parameter": 0.5
+    },
+    "fuselage": {
+        "length": 960.0,
+        "diameter": 103.0
+    },
+    "rear_section": {
+        "length": 1.0,
+        "diameter": 103.0
+    }
+}

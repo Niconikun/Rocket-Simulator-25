@@ -42,8 +42,8 @@ from cmath import pi
 import json
 import streamlit as st
 import logging
-from src.models.engine import Engine
-from src.models.aerodynamics import Aerodynamics
+from src.models.engine import EnhancedEngine
+from src.models.aerodynamics_wrapper import AerodynamicsWrapper
 from src.utils.mattools import MatTools as Mat
 from src.utils.geotools import GeoTools as Geo
 
@@ -73,7 +73,9 @@ class Rocket(object):
         self.q_enu2b=q_enu2b_0    # [-]       # Quaternion that rotates from launching platform in East-North-Up to bodyframe
         self.w_enu=w_enu_0        # [rad/s]   # East-North-Up rotational velocity from launching platform
 
-        self.mass= initial_mass           # [kg]      # Initial total mass
+         # Initialize propellant mass (you'll need to load this from rocket config)
+        self.propellant_mass_initial = 1.50  # Default value, should come from config
+        self.initial_mass = initial_mass           # [kg]      # Initial total mass
 
         self.time=0               # [s]       # Initial time of simulation
 
@@ -151,6 +153,33 @@ class Rocket(object):
         self.hist_parachute_state = []
         self.hist_parachute_force = []
 
+        self.drag_coeff = 0.0
+        self.lift_coeff = 0.0
+        self.cp_b = np.array([0.0, 0.0, 0.0])
+        self.mach = 0.0
+        self.drag = 0.0
+        self.lift = 0.0
+        self.forces_drag_b = np.zeros(3)
+        self.forces_lift_b = np.zeros(3)
+
+        # Enhanced engine tracking attributes
+        self.engine_isp = 0.0
+        self.chamber_pressure = 0.0
+        self.exit_velocity = 0.0
+        self.characteristic_velocity = 0.0
+        self.thrust_coefficient = 0.0
+        self.exit_pressure = 0.0
+        self.propellant_mass_remaining = 0.0
+        
+        # Add to historical data tracking
+        self.hist_engine_isp = []
+        self.hist_chamber_pressure = []
+        self.hist_exit_velocity = []
+        self.hist_characteristic_velocity = []
+        self.hist_thrust_coefficient = []
+        self.hist_exit_pressure = []
+        self.hist_propellant_mass = []
+
         # Preallocate historical arrays
         self._initialize_history_arrays()
     
@@ -218,27 +247,70 @@ class Rocket(object):
         """
         self.gmst=gmst  # [rad]    # Greenwich Mean Sidereal Time (rotation of Earth Centered-Earth Fixed from Earth Centered Inertial systems)
 
-    def update_mass_related(self, burn_time, cm_before_x, cm_before_y, cm_before_z, I_before_x, I_before_y, I_before_z, cm_after_x, cm_after_y, cm_after_z, I_after_x, I_after_y, I_after_z):
+    def update_mass_related(self, burn_time, cm_before_x, cm_before_y, cm_before_z, 
+                       I_before_x, I_before_y, I_before_z, 
+                       cm_after_x, cm_after_y, cm_after_z, 
+                       I_after_x, I_after_y, I_after_z):
         """
-        Actualiza propiedades relacionadas con la masa del cohete.
-
-        Args:
-            burn_time (float): Tiempo total de quemado [s]
-            cm_before_x/y/z (float): Posición del centro de masa antes del quemado [m]
-            I_before_x/y/z (float): Momentos de inercia antes del quemado [kg·m²]
-            cm_after_x/y/z (float): Posición del centro de masa después del quemado [m]
-            I_after_x/y/z (float): Momentos de inercia después del quemado [kg·m²]
-
-        Notas:
-            Los valores se obtienen de Autodesk Inventor.
+        Enhanced mass update with realistic propellant consumption and continuous interpolation.
         """
-        self.burn_time=burn_time    # [s]    # Propellant total burning time                                                  
-        if self.time<=self.burn_time:
-            self.cm_b=np.array([cm_before_x,cm_before_y,cm_before_z])                                 # [m]        # Centre of Mass before burning obtained via Autodesk Inventor
-            self.inertia_b=np.array([I_before_x, I_before_y, I_before_z])   # [kg m2]    # Inertia before burning obtained via Autodesk Inventor
-        else: 
-            self.cm_b=np.array([cm_after_x, cm_after_y, cm_after_z])                                # [m]        # Centre of Mass after burning obtained via Autodesk Inventor
-            self.inertia_b=np.array([I_after_x, I_after_y, I_after_z])     # [kg m2]    # Inertia after burning obtained via Autodesk Inventor 
+        self.burn_time = burn_time
+        
+        try:
+            # Calculate propellant mass remaining with realistic consumption
+            if self.time <= self.burn_time:
+                # More realistic burn profile (slightly faster initial burn)
+                burn_fraction = (self.time / self.burn_time) ** 0.9
+                self.propellant_mass_remaining = self.propellant_mass_initial * (1 - burn_fraction)
+                
+                # Continuous interpolation of mass properties
+                mass_fraction = 1 - burn_fraction
+                
+                # Smooth interpolation using cubic easing for more realistic transitions
+                ease_factor = 3 * mass_fraction ** 2 - 2 * mass_fraction ** 3
+                
+                # Interpolate center of mass
+                self.cm_b = np.array([
+                    cm_before_x * ease_factor + cm_after_x * (1 - ease_factor),
+                    cm_before_y * ease_factor + cm_after_y * (1 - ease_factor),
+                    cm_before_z * ease_factor + cm_after_z * (1 - ease_factor)
+                ])
+                
+                # Interpolate moments of inertia
+                self.inertia_b = np.array([
+                    I_before_x * ease_factor + I_after_x * (1 - ease_factor),
+                    I_before_y * ease_factor + I_after_y * (1 - ease_factor),
+                    I_before_z * ease_factor + I_after_z * (1 - ease_factor)
+                ])
+                
+                # Update current mass based on propellant consumption
+                self.mass = self.initial_mass - (self.propellant_mass_initial - self.propellant_mass_remaining)
+                
+            else:
+                # Post-burnout state
+                self.propellant_mass_remaining = 0.0
+                self.cm_b = np.array([cm_after_x, cm_after_y, cm_after_z])
+                self.inertia_b = np.array([I_after_x, I_after_y, I_after_z])
+                self.mass = self.initial_mass - self.propellant_mass_initial
+                
+        except Exception as e:
+            logging.error(f"Mass properties update error: {str(e)}")
+            # Fallback to simple interpolation
+            if self.time <= self.burn_time:
+                burn_fraction = self.time / self.burn_time
+                self.cm_b = np.array([
+                    cm_before_x * (1 - burn_fraction) + cm_after_x * burn_fraction,
+                    cm_before_y * (1 - burn_fraction) + cm_after_y * burn_fraction,
+                    cm_before_z * (1 - burn_fraction) + cm_after_z * burn_fraction
+                ])
+                self.inertia_b = np.array([
+                    I_before_x * (1 - burn_fraction) + I_after_x * burn_fraction,
+                    I_before_y * (1 - burn_fraction) + I_after_y * burn_fraction,
+                    I_before_z * (1 - burn_fraction) + I_after_z * burn_fraction
+                ])
+            else:
+                self.cm_b = np.array([cm_after_x, cm_after_y, cm_after_z])
+                self.inertia_b = np.array([I_after_x, I_after_y, I_after_z])     # [kg m2]    # Inertia after burning obtained via Autodesk Inventor 
 
     def update_pos_vel(self,coordinates):
         """
@@ -308,20 +380,9 @@ class Rocket(object):
     def update_aerodynamics(self, rocket_name):
         """
         Actualiza las características aerodinámicas del cohete.
-
-        Args:
-            rocket_name (str): Nombre del cohete para cargar su configuración
-
-        Cálculos:
-            1. Número Mach
-            2. Coeficientes aerodinámicos (CD, CL)
-            3. Centro de presión
-
-        Referencias:
-            [Barro67] Método de Barrowman para coeficientes
         """
         # Calcular número Mach
-        self.mach = 0 if self.v_norm == 0 else self.v_norm/self.v_sonic
+        self.mach = 0.0 if self.v_norm == 0 else self.v_norm / self.v_sonic
 
         try:
             # Cargar configuración del cohete
@@ -347,73 +408,110 @@ class Rocket(object):
                 'N_fins': rocket_settings['fins']['N_fins']
             }
 
-            # Crear instancia de Aerodynamics con validación
-            try:
-                aero = Aerodynamics(self.mach, self.alpha, geometry)
-                self.drag_coeff = aero.cd
-                self.lift_coeff = aero.cl
-                self.cp_b = aero.xcp
-            except ValueError as e:
-                logging.error(f"Error en cálculo aerodinámico: {str(e)}")
-                st.error(f"Error en cálculos aerodinámicos: {str(e)}")
-                # Usar valores por defecto seguros
-                self.drag_coeff = 0.5
-                self.lift_coeff = 0.0
-                self.cp_b = np.array([0.5, 0, 0])
+            # Crear instancia de aerodinámica
+            aero = AerodynamicsWrapper(
+                mach=self.mach,
+                angle_attack=self.alpha,
+                geometry=geometry,
+                height=self.r_enu[2],
+                density=self.density
+            )
+            
+            # Assign the calculated values
+            self.drag_coeff = aero.cd
+            self.lift_coeff = aero.cl
+            self.cp_b = aero.xcp
 
-        except FileNotFoundError:
-            logging.error(f"No se encontró el archivo de configuración para {rocket_name}")
-            st.error(f"No se encontró la configuración del cohete {rocket_name}")
         except Exception as e:
-            logging.error(f"Error cargando configuración: {str(e)}")
-            st.error(f"Error en la configuración aerodinámica: {str(e)}")
+            logging.error(f"Aerodynamics error: {str(e)}")
+            # Safe fallback values
+            self.drag_coeff = 0.5
+            self.lift_coeff = 0.0
+            self.cp_b = np.array([0.5, 0, 0])
 
     def update_engine(self, rocket_name):
-        """
-        Actualiza las características del motor.
+        """Enhanced engine update with thrust curve validation"""
+        try:
+            with open('data/rockets/configs/' + rocket_name + '.json', 'r') as file:
+                rocket_settings = json.load(file)
 
-        Args:
-            rocket_name (str): Nombre del cohete para cargar configuración del motor
+            engine_data = rocket_settings['engine']
+            
+            # Check if we are using experimental thrust curve
+            thrust_curve_file = None
+            if engine_data.get('thrust_curve_mode') == 'experimental':
+                thrust_curve_file = engine_data.get('thrust_curve_file')
+                logging.info(f"Using experimental thrust curve: {thrust_curve_file}")
+            
+            # Create enhanced engine with validation
+            Eng = EnhancedEngine(
+                time=self.time,
+                burn_time=engine_data["burn_time"],
+                ambient_pressure=self.press_amb,
+                nozzle_exit_diameter=engine_data["nozzle_exit_diameter"],
+                propellant_mass=engine_data["propellant_mass"],
+                specific_impulse=engine_data["specific_impulse"],
+                mean_thrust=engine_data["mean_thrust"],
+                max_thrust=engine_data["max_thrust"],
+                mean_chamber_pressure=engine_data["mean_chamber_pressure"],
+                max_chamber_pressure=engine_data["max_chamber_pressure"],
+                thrust_to_weight_ratio=engine_data["thrust_to_weight_ratio"],
+                thrust_curve_file=thrust_curve_file  # Pass the thrust curve file if experimental
+            )
+            
+            # Validate thrust curve on first call
+            if not hasattr(self, '_thrust_curve_validated'):
+                if thrust_curve_file:
+                    curve_info = Eng.get_thrust_curve_info()
+                    if curve_info['available']:
+                        logging.info(f"Experimental thrust curve: {curve_info['data_points']} points, max thrust: {curve_info['max_thrust']:.1f}N")
+                    else:
+                        logging.warning("Experimental thrust curve not available, falling back to analytical")
+                else:
+                    validation = Eng.validate_thrust_curve()
+                    if not validation['valid']:
+                        logging.warning(f"Thrust curve validation issues: {validation}")
+                self._thrust_curve_validated = True
+            
+            # Update performance metrics
+            metrics = Eng.get_performance_metrics()
+            
+            self.mass_flux = metrics['mass_flow']
+            self.thrust = metrics['thrust']
+            
+            # Store enhanced performance metrics
+            self.engine_isp = metrics['specific_impulse']
+            self.chamber_pressure = metrics['chamber_pressure']
+            self.exit_velocity = metrics['exit_velocity']
+            self.characteristic_velocity = metrics['characteristic_velocity']
+            self.thrust_coefficient = metrics['thrust_coefficient']
+            self.exit_pressure = metrics['exit_pressure']
+            
+            # Performance logging at key points
+            if self.time <= Eng.burn_time and int(self.time * 10) % 2 == 0:  # Log every 0.2s during burn
+                logging.info(
+                    f"Engine: t={self.time:.2f}s, "
+                    f"Thrust={self.thrust:.0f}N, "
+                    f"MassFlow={self.mass_flux:.3f}kg/s"
+                )
 
-        Cálculos:
-            1. Flujo másico
-            2. Empuje total considerando presión ambiente
-        
-        Referencias:
-            - Sutton, G. P., & Biblarz, O. (2016). Rocket propulsion elements
-        """
-        
-        with open('data/rockets/configs/'+ rocket_name +'.json', 'r') as file:
-            rocket_settings = json.load(file)
+        except FileNotFoundError:
+            logging.error(f"Rocket configuration file not found: {rocket_name}")
+            self._set_engine_fallback_values()
+        except Exception as e:
+            logging.error(f"Engine update error: {str(e)}")
+            self._set_engine_fallback_values()
 
-        # Nuevos parámetros requeridos por Engine
-        burn_time = rocket_settings['engine']["burn_time"]
-        nozzle_exit_diameter = rocket_settings['engine']["nozzle_exit_diameter"]
-        propellant_mass = rocket_settings['engine'].get("propellant_mass", 0.0)
-        specific_impulse = rocket_settings['engine'].get("specific_impulse", 0.0)
-        mean_thrust = rocket_settings['engine'].get("mean_thrust", 0.0)
-        max_thrust = rocket_settings['engine'].get("max_thrust", 0.0)
-        mean_chamber_pressure = rocket_settings['engine'].get("mean_chamber_pressure", 0.0)
-        max_chamber_pressure = rocket_settings['engine'].get("max_chamber_pressure", 0.0)
-        thrust_to_weight_ratio = rocket_settings['engine'].get("thrust_to_weight_ratio", 0.0)
-        ambient_pressure = self.press_amb
-
-        # Llamada al nuevo constructor de Engine
-        Eng = Engine(
-            self.time,
-            burn_time,
-            ambient_pressure,
-            nozzle_exit_diameter,
-            propellant_mass,
-            specific_impulse,
-            mean_thrust,
-            max_thrust,
-            mean_chamber_pressure,
-            max_chamber_pressure,
-            thrust_to_weight_ratio
-        )
-        self.mass_flux = Eng.mass_flux
-        self.thrust = Eng.thrust
+    def _set_engine_fallback_values(self):
+        """Set fallback values when engine calculation fails"""
+        self.mass_flux = 0.0
+        self.thrust = 0.0
+        self.engine_isp = 0.0
+        self.chamber_pressure = 0.0
+        self.exit_velocity = 0.0
+        self.characteristic_velocity = 0.0
+        self.thrust_coefficient = 0.0
+        self.exit_pressure = 0.0
 
 
     def update_forces_aero(self, reference_area):
@@ -720,6 +818,15 @@ class Rocket(object):
             self.hist_lat.append(float(self.coord[0]))
             self.hist_long.append(float(self.coord[1]))
             self.hist_alt.append(float(self.coord[2]))
+
+            self.hist_engine_isp.append(float(self.engine_isp))
+            self.hist_chamber_pressure.append(float(self.chamber_pressure))
+            self.hist_exit_velocity.append(float(self.exit_velocity))
+            self.hist_characteristic_velocity.append(float(self.characteristic_velocity))
+            self.hist_thrust_coefficient.append(float(self.thrust_coefficient))
+            self.hist_exit_pressure.append(float(self.exit_pressure))
+            self.hist_propellant_mass.append(float(self.propellant_mass_remaining))
+            
 
         except Exception as e:
             logging.error(f"Error en save_data: {str(e)}")

@@ -18,3 +18,4 @@ fastparquet
 fluids
 ephem
 mathlib
+reportlab>=4.0.0

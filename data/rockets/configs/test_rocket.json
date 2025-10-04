@@ -38,7 +38,7 @@
     },
     "geometry": {
         "length nosecone fins": 2600.0,
-        "len_nosecone_rear": 3150.0
+        "total length": 3150.0
     },
     "fins": {
         "span": 80.0,

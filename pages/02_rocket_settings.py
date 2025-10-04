@@ -5,6 +5,10 @@ import numpy as np
 import pyvista as pv # type: ignore
 from stpyvista import stpyvista # type: ignore
 import os
+import pandas as pd
+import tempfile
+import matplotlib.pyplot as plt
+
 
 def load_rocket_configs():
     """Carga todas las configuraciones de cohetes desde la nueva estructura"""
@@ -93,7 +97,7 @@ if sim_rocket != "Manual":
     max_chamber_pressure_edit = rocket_settings["engine"].get("max_chamber_pressure", 0.0)
     thrust_to_weight_ratio_edit = rocket_settings["engine"].get("thrust_to_weight_ratio", 0.0)
     len_warhead_edit = rocket_settings["nosecone"]["length"]
-    nosecone_shape = rocket_settings["nosecone"]["shape"]
+    nosecone_type = rocket_settings["nosecone"]["type"]
     len_nosecone_fins_edit = rocket_settings["geometry"]["length nosecone fins"]
     len_bodytube_wo_rear_edit = rocket_settings["fuselage"]["length"]
     fins_chord_root_edit = rocket_settings["fins"]["chord_root"]
@@ -158,7 +162,7 @@ rock_set.title("Rocket Settings")
     
 left_column, right_column = rock_set.columns([4, 2])
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = left_column.tabs(["Properties", "Engine", "Fuselage", "Fins", "Nosecone", "Rear Section", "Aerodynamics [soon]", "Others"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = left_column.tabs(["Properties", "Engine", "Fuselage", "Fins", "Nosecone", "Rear Section", "Others"])
         # Add input fields for rocket properties
 rocket_name = tab1.text_input("Rocket Name", value=rocket_name_edit, key="rocket_name")
 initial_mass = tab1.number_input("Initial Mass (kg)", min_value=0.0, value=float(initial_mass_edit), step=0.1,key="initial_mass")
@@ -192,30 +196,176 @@ CoM_after_burn_y = k.number_input("Y", min_value=0.0, value=float(CoM_after_burn
 CoM_after_burn_z = l.number_input("Z", min_value=0.0, value=float(CoM_after_burn_z_edit), step=0.01, key="CoM_after_burn_z")
 
 tab2.subheader("Engine Properties")
-burn_time = tab2.number_input("Burn Time [s]", min_value=0.0, value=float(burn_time_edit), step=0.1, key="burn_time")
-nozzle_exit_diameter = tab2.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
-propellant_mass = tab2.number_input("Propellant Mass [kg]", min_value=0.0, value=float(propellant_mass_edit), step=0.1, key="propellant_mass")
-specific_impulse = tab2.number_input("Specific Impulse [s]", min_value=0.0, value=float(specific_impulse_edit), step=0.1, key="specific_impulse")
-mean_thrust = tab2.number_input("Mean Thrust [N]", min_value=0.0, value=float(mean_thrust_edit), step=0.1, key="mean_thrust")
-max_thrust = tab2.number_input("Max Thrust [N]", min_value=0.0, value=float(max_thrust_edit), step=0.1, key="max_thrust")
-mean_chamber_pressure = tab2.number_input("Mean Chamber Pressure [Pa]", min_value=0.0, value=float(mean_chamber_pressure_edit), step=0.1, key="mean_chamber_pressure")
-max_chamber_pressure = tab2.number_input("Max Chamber Pressure [Pa]", min_value=0.0, value=float(max_chamber_pressure_edit), step=0.1, key="max_chamber_pressure")
-thrust_to_weight_ratio = tab2.number_input("Thrust to Weight Ratio [-]", min_value=0.0, value=float(thrust_to_weight_ratio_edit), step=0.01, key="thrust_to_weight_ratio")
-# ...campos legacy opcionales...
+# Add this import at the top
+
+
+# In the Engine tab, add thrust curve upload section
+tab2.subheader("Thrust Curve")
+
+# Thrust curve selection
+thrust_curve_mode = tab2.radio(
+    "Thrust Curve Mode",
+    ["Analytical Model", "Experimental Data"],
+    index=0,
+    key="thrust_curve_mode"
+)
+
+if thrust_curve_mode == "Experimental Data":
+    uploaded_file = tab2.file_uploader(
+        "Upload Thrust Curve CSV", 
+        type=['csv'],
+        key="thrust_curve_upload"
+    )
+    
+    if uploaded_file is not None:
+        try:
+            # Read and display the CSV
+            df = pd.read_csv(uploaded_file)
+            tab2.write("Thrust Curve Preview:")
+            tab2.dataframe(df.head(10))
+            
+            # Show basic statistics
+            time_col = None
+            thrust_col = None
+            
+            for col in df.columns:
+                col_lower = col.lower()
+                if 'time' in col_lower or 'tiempo' in col_lower:
+                    time_col = col
+                elif 'thrust' in col_lower or 'force' in col_lower or 'fuerza' in col_lower:
+                    thrust_col = col
+            
+            if time_col and thrust_col:
+                # Convert to numeric and clean
+                df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
+                df[thrust_col] = pd.to_numeric(df[thrust_col], errors='coerce')
+                df = df.dropna()
+                
+                # Show statistics
+                tab2.write(f"**Statistics:**")
+                tab2.write(f"- Duration: {df[time_col].max():.2f} s")
+                tab2.write(f"- Max Thrust: {df[thrust_col].max():.2f} units")
+                tab2.write(f"- Data Points: {len(df)}")
+                
+                # Show plot
+                fig, ax = plt.subplots()
+                ax.plot(df[time_col], df[thrust_col])
+                ax.set_xlabel('Time (s)')
+                ax.set_ylabel('Thrust')
+                ax.set_title('Thrust Curve')
+                ax.grid(True)
+                tab2.pyplot(fig)
+                
+                # Store thrust curve data in session state
+                st.session_state.thrust_curve_data = {
+                    'time': df[time_col].tolist(),
+                    'thrust': df[thrust_col].tolist()
+                }
+                
+            else:
+                tab2.error("Could not identify time and thrust columns. Please check CSV format.")
+                
+        except Exception as e:
+            tab2.error(f"Error reading CSV file: {e}")
+else:
+    burn_time = tab2.number_input("Burn Time [s]", min_value=0.0, value=float(burn_time_edit), step=0.1, key="burn_time")
+    nozzle_exit_diameter = tab2.number_input("Nozzle Exit Diameter [mm]", min_value=0.0, value=float(nozzle_exit_diameter_edit), step=0.1, key="nozzle_exit_diameter")
+    propellant_mass = tab2.number_input("Propellant Mass [kg]", min_value=0.0, value=float(propellant_mass_edit), step=0.1, key="propellant_mass")
+    specific_impulse = tab2.number_input("Specific Impulse [s]", min_value=0.0, value=float(specific_impulse_edit), step=0.1, key="specific_impulse")
+    mean_thrust = tab2.number_input("Mean Thrust [N]", min_value=0.0, value=float(mean_thrust_edit), step=0.1, key="mean_thrust")
+    max_thrust = tab2.number_input("Max Thrust [N]", min_value=0.0, value=float(max_thrust_edit), step=0.1, key="max_thrust")
+    mean_chamber_pressure = tab2.number_input("Mean Chamber Pressure [Pa]", min_value=0.0, value=float(mean_chamber_pressure_edit), step=0.1, key="mean_chamber_pressure")
+    max_chamber_pressure = tab2.number_input("Max Chamber Pressure [Pa]", min_value=0.0, value=float(max_chamber_pressure_edit), step=0.1, key="max_chamber_pressure")
+    thrust_to_weight_ratio = tab2.number_input("Thrust to Weight Ratio [-]", min_value=0.0, value=float(thrust_to_weight_ratio_edit), step=0.01, key="thrust_to_weight_ratio")
+
 
 tab4.subheader("Fins")
+# In the Fins tab section, replace the current fin inputs with
+
+# Add fin type selection
+fin_type = tab4.selectbox("Fin Type", 
+                         options=["Trapezoidal", "Delta", "Tapered Swept", "Elliptical", "Custom"],
+                         index=0, 
+                         key="fin_type")
+
 N_fins = tab4.number_input('Number of fins [-]', min_value=0, value=N_fins_edit, step=1, key="N_fins")
-fins_chord_root = tab4.number_input('Fins aerodynamic chord at root [mm]', min_value=0.0, value=float(fins_chord_root_edit), step=0.1, key="fins_chord_root")
-fins_mid_chord = tab4.number_input('Fins aerodynamic mid-chord [mm]', min_value=0.0, value=float(fins_mid_chord_edit), step=0.1, key="fins_mid_chord")
-fins_chord_tip = tab4.number_input('Fins aerodynamic chord at tip [mm]', min_value=0.0, value=float(fins_chord_tip_edit), step=0.1, key="fins_chord_tip")
-fins_span = tab4.number_input('Fins span [mm]', min_value=0.0, value=float(fins_span_edit), step=0.1, key="fins_span")
-len_nosecone_fins = tab4.number_input('Length between nose cone tip and the point where the fin leading edge meets the body tube [mm]', min_value=0.0, value=float(len_nosecone_fins_edit), step=0.1, key="len_nosecone_fins")
+
+if fin_type == "Trapezoidal":
+    fins_chord_root = tab4.number_input('Root chord [mm]', min_value=0.0, value=float(fins_chord_root_edit), step=0.1, key="fins_chord_root")
+    fins_chord_tip = tab4.number_input('Tip chord [mm]', min_value=0.0, value=float(fins_chord_tip_edit), step=0.1, key="fins_chord_tip")
+    fins_span = tab4.number_input('Span [mm]', min_value=0.0, value=float(fins_span_edit), step=0.1, key="fins_span")
+    # Calculate mid-chord automatically for trapezoidal
+    fins_mid_chord = (fins_chord_root + fins_chord_tip) / 2
+    
+elif fin_type == "Delta":
+    fins_root_length = tab4.number_input('Root length [mm]', min_value=0.0, value=float(fins_chord_root_edit), step=0.1, key="fins_root_length")
+    fins_span = tab4.number_input('Span [mm]', min_value=0.0, value=float(fins_span_edit), step=0.1, key="fins_span")
+    sweep_angle = tab4.number_input('Sweep angle [deg]', min_value=0.0, max_value=80.0, value=45.0, step=1.0, key="sweep_angle")
+    # Delta fins have tip chord = 0
+    fins_chord_root = fins_root_length
+    fins_chord_tip = 0.0
+    fins_mid_chord = fins_root_length / 2
+    
+elif fin_type == "Tapered Swept":
+    fins_chord_root = tab4.number_input('Root chord [mm]', min_value=0.0, value=float(fins_chord_root_edit), step=0.1, key="fins_chord_root")
+    fins_chord_tip = tab4.number_input('Tip chord [mm]', min_value=0.0, value=float(fins_chord_tip_edit), step=0.1, key="fins_chord_tip")
+    fins_span = tab4.number_input('Span [mm]', min_value=0.0, value=float(fins_span_edit), step=0.1, key="fins_span")
+    sweep_angle = tab4.number_input('Sweep angle [deg]', min_value=0.0, max_value=80.0, value=30.0, step=1.0, key="sweep_angle")
+    fins_mid_chord = (fins_chord_root + fins_chord_tip) / 2
+    
+elif fin_type == "Elliptical":
+    fins_chord_root = tab4.number_input('Root chord [mm]', min_value=0.0, value=float(fins_chord_root_edit), step=0.1, key="fins_chord_root")
+    fins_span = tab4.number_input('Span [mm]', min_value=0.0, value=float(fins_span_edit), step=0.1, key="fins_span")
+    # Elliptical fins have specific shape
+    fins_chord_tip = 0.0
+    fins_mid_chord = fins_chord_root * 0.707  # Approximation for elliptical mean chord
+
+elif fin_type == "Custom":
+    fins_chord_root = tab4.number_input('Root chord [mm]', min_value=0.0, value=float(fins_chord_root_edit), step=0.1, key="fins_chord_root")
+    fins_chord_tip = tab4.number_input('Tip chord [mm]', min_value=0.0, value=float(fins_chord_tip_edit), step=0.1, key="fins_chord_tip")
+    fins_mid_chord = tab4.number_input('Mid chord [mm]', min_value=0.0, value=float(fins_mid_chord_edit), step=0.1, key="fins_mid_chord")
+    fins_span = tab4.number_input('Span [mm]', min_value=0.0, value=float(fins_span_edit), step=0.1, key="fins_span")
+
+len_nosecone_fins = tab4.number_input('Length between nose cone tip and fin leading edge [mm]', min_value=0.0, value=float(len_nosecone_fins_edit), step=0.1, key="len_nosecone_fins")
 
 tab5.subheader("Nosecone")
-len_warhead = tab5.number_input('Length of warhead or distance from tip of nose to base of nose [mm]', min_value=0.0, value=float(len_warhead_edit), step=0.1, key="len_warhead")
-diameter_warhead_base = tab5.number_input('Diameter of base of warhead [mm]', min_value=0.0, value=float(diameter_warhead_base_edit), step=0.1, key="diameter_warhead_base")
-nosecone_shape = tab5.selectbox("Nosecone Shape", options=["Conical", "Elliptical", "Parabolic"], index=0, key="nosecone_shape")
 
+nosecone_type = tab5.selectbox("Nosecone Type", 
+                              options=["Conical", "Ogival", "Elliptical", "Parabolic", "Power Series", "Von Kármán", "Haack Series"],
+                              index=0, 
+                              key="nosecone_type")
+
+len_warhead = tab5.number_input('Length of nosecone [mm]', min_value=0.0, value=float(len_warhead_edit), step=0.1, key="len_warhead")
+diameter_warhead_base = tab5.number_input('Base diameter [mm]', min_value=0.0, value=float(diameter_warhead_base_edit), step=0.1, key="diameter_warhead_base")
+
+# Type-specific parameters
+if nosecone_type == "Conical":
+    # No additional parameters needed for conical
+    pass
+    
+elif nosecone_type == "Ogival":
+    ogive_radius = tab5.number_input('Ogive radius [mm]', min_value=0.0, 
+                                   value=float(diameter_warhead_base_edit * 2), 
+                                   step=1.0, key="ogive_radius")
+    
+elif nosecone_type == "Elliptical":
+    # No additional parameters needed
+    pass
+    
+elif nosecone_type == "Parabolic":
+    parabolic_parameter = tab5.number_input('Parabolic parameter (0-1)', min_value=0.0, max_value=1.0, 
+                                          value=0.5, step=0.1, key="parabolic_parameter")
+    
+elif nosecone_type == "Power Series":
+    power_value = tab5.number_input('Power value (n)', min_value=0.0, max_value=1.0, 
+                                  value=0.5, step=0.1, key="power_value")
+    
+elif nosecone_type == "Von Kármán":
+    # No additional parameters needed
+    pass
+    
+elif nosecone_type == "Haack Series":
+    haack_type = tab5.selectbox("Haack Type", options=["LV-Haack", "LD-Haack"], index=0, key="haack_type")
 
 tab3.subheader("Fuselage")
 len_bodytube_wo_rear = tab3.number_input('Length of body tube (not considering rear) [mm]', min_value=0.0, value=float(len_bodytube_wo_rear_edit), step=0.1, key="len_bodytube_wo_rear")
@@ -226,62 +376,187 @@ tab6.subheader("Rear Section")
 len_rear = tab6.number_input('Length of rear [mm]', min_value=0.0, value=float(len_rear_edit), step=0.1, key="len_rear")
 end_diam_rear =  tab6.number_input('End diameter rear [mm]', min_value=0.0, value=float(end_diam_rear_edit), step=0.1, key="end_diam_rear")
 
-tab8.write("Section in progress!")
 
 with right_column:
     right_column.subheader("Rocket Graphics")
     
-    p = pv.Plotter(window_size=[300,500])
-    #pv.set_plot_theme("#111111ff")  
+    p = pv.Plotter(window_size=[300, 500])
     
-    sphere = pv.Cylinder(
+    # Use current values from the form, not _edit variables
+    current_diameter_bodytube = st.session_state.get("diameter_bodytube", diameter_bodytube_edit)
+    current_len_bodytube_wo_rear = st.session_state.get("len_bodytube_wo_rear", len_bodytube_wo_rear_edit)
+    current_len_warhead = st.session_state.get("len_warhead", len_warhead_edit)
+    current_diameter_warhead_base = st.session_state.get("diameter_warhead_base", diameter_warhead_base_edit)
+    current_len_rear = st.session_state.get("len_rear", len_rear_edit)
+    current_end_diam_rear = st.session_state.get("end_diam_rear", end_diam_rear_edit)
+    current_N_fins = st.session_state.get("N_fins", N_fins_edit)
+    current_fin_type = st.session_state.get("fin_type", "Trapezoidal")
+    
+    # Get current fin dimensions
+    current_fins_chord_root = st.session_state.get("fins_chord_root", fins_chord_root_edit)
+    current_fins_chord_tip = st.session_state.get("fins_chord_tip", fins_chord_tip_edit)
+    current_fins_mid_chord = st.session_state.get("fins_mid_chord", fins_mid_chord_edit)
+    current_fins_span = st.session_state.get("fins_span", fins_span_edit)
+    current_sweep_angle = st.session_state.get("sweep_angle", 0.0)
+    
+    # Create fuselage (body tube)
+    body_tube = pv.Cylinder(
         center=(0, 0, 0),
         direction=(0, 1, 0),
-        radius=diameter_bodytube_edit/2,
-        height=len_bodytube_wo_rear_edit,
+        radius=current_diameter_bodytube/2000,
+        height=current_len_bodytube_wo_rear/1000,
         resolution=30,
         capping=True
     )
-    nosecone = pv.Cone(
-        center=(0, len_bodytube_wo_rear_edit/2 + len_warhead_edit/2, 0),
-        direction=(0, 1, 0),
-        radius=diameter_warhead_base_edit/2,
-        height=len_warhead_edit,
-        resolution=30,
-        capping=True
-    )
+    
+    # Create nosecone based on type
+    nosecone_length = current_len_warhead/1000
+    nosecone_radius = current_diameter_warhead_base/2000
+    
+    if nosecone_type == "Conical":
+        nosecone = pv.Cone(
+            center=(0, current_len_bodytube_wo_rear/2000 + nosecone_length/2, 0),
+            direction=(0, 1, 0),
+            height=nosecone_length,
+            radius=nosecone_radius,
+            resolution=30,
+            capping=True
+        )
+    elif nosecone_type == "Ogival":
+        # For ogive, use a more pointed cone
+        nosecone = pv.Cone(
+            center=(0, current_len_bodytube_wo_rear/2000 + nosecone_length/2, 0),
+            direction=(0, 1, 0),
+            height=nosecone_length,
+            radius=nosecone_radius,
+            resolution=30,
+            capping=False
+        )
+    elif nosecone_type == "Elliptical":
+        # Create elliptical shape using parametric ellipsoid
+        ellipsoid = pv.ParametricEllipsoid(
+            nosecone_radius, nosecone_length/2, nosecone_radius
+        )
+        nosecone = ellipsoid.translate([0, current_len_bodytube_wo_rear/2000 + nosecone_length/2, 0])
+        nosecone = nosecone.scale([1, 2, 1])  # Stretch to make it elliptical
+    else:
+        # Default to conical for other types
+        nosecone = pv.Cone(
+            center=(0, current_len_bodytube_wo_rear/2000 + nosecone_length/2, 0),
+            direction=(0, 1, 0),
+            height=nosecone_length,
+            radius=nosecone_radius,
+            resolution=30,
+            capping=True
+        )
+    
+    # Create rear section
     rear = pv.Cylinder(
-        center=(0, -len_bodytube_wo_rear_edit/2 - len_rear_edit/2, 0),
+        center=(0, -current_len_bodytube_wo_rear/2000 - current_len_rear/2000/2, 0),
         direction=(0, 1, 0),
-        radius=end_diam_rear_edit/2,
-        height=len_rear_edit,
+        radius=current_end_diam_rear/2000,
+        height=current_len_rear/1000,
         resolution=30,
         capping=True
     )
-    # Create fins
-    fins_points = np.array([
-    [0.0, diameter_bodytube_edit/2, 0.0],  # 0
-    [0.0, fins_chord_root_edit + diameter_bodytube_edit/2, 0.0],  # 1
-    [fins_span_edit/2, fins_mid_chord_edit+ diameter_bodytube_edit/2, 0.0],  # 2
-    [fins_span_edit, fins_chord_tip_edit+ diameter_bodytube_edit/2, 0.0],  # 2
-    [fins_span_edit, diameter_bodytube_edit/2, 0.0],  # 3
-    ])
-    fins_array = []
-    cell_type = np.array([pv.CellType.POLYGON], dtype=np.uint8)
-    for i in range(N_fins_edit):
-        angle = i * (360 / N_fins_edit)
-        grid = pv.UnstructuredGrid(np.array([5, 0, 1, 2, 3, 4], dtype=np.int64), cell_type, fins_points)
-        fins_array.append(grid.translate((diameter_bodytube_edit/2, len_bodytube_wo_rear_edit/2 + len_warhead_edit - fins_span_edit*1.33 - len_nosecone_fins_edit, 0)).rotate_y(angle, inplace=False))
-    fins = pv.merge(fins_array)
-    # Combine all parts into a single mesh
-    rocket_mesh = sphere + nosecone + rear + fins
+    
+    # Create fins - FIXED LOGIC
+    fins_mesh = pv.PolyData()
+    if current_N_fins > 0:
+        # Define fin points based on fin type
+        if current_fin_type == "Trapezoidal":
+            fin_points = np.array([
+                [0, 0, 0],
+                [0, current_fins_chord_root/1000, 0],
+                [current_fins_span/1000, current_fins_chord_tip/1000,  0],
+                [current_fins_span/1000, 0, 0]
+            ])
+        elif current_fin_type == "Delta":
+            fin_points = np.array([
+                [0, 0, 0],
+                [0, current_fins_chord_root/1000, 0],
+                [current_fins_span/1000, 0, 0]
+            ])
+        elif current_fin_type == "Tapered Swept":
+            sweep_distance = current_fins_span/1000 * np.tan(np.radians(current_sweep_angle))
+            fin_points = np.array([
+                [0, 0, 0],
+                [ 0, current_fins_chord_root/1000, 0],
+                [current_fins_span/1000, current_fins_chord_tip/1000 + sweep_distance, 0],
+                [current_fins_span/1000, sweep_distance, 0]
+            ])
+        elif current_fin_type == "Elliptical":
+            # Create elliptical fin with multiple points
+            t = np.linspace(0, np.pi, 8)
+            x_points = current_fins_chord_root/1000 * (1 - np.cos(t)) / 2
+            y_points = current_fins_span/1000 * np.sin(t)
+            fin_points = np.column_stack([x_points, y_points, np.zeros_like(x_points)])
+        else:  # Custom
+            fin_points = np.array([
+                [0, 0, 0],
+                [ 0, current_fins_chord_root/1000, 0],
+                [current_fins_span/1000/2, current_fins_mid_chord/1000,  0],
+                [current_fins_span/1000, current_fins_chord_tip/1000, 0],
+                [ current_fins_span/1000, 0, 0]
+            ])
+        
+        # Create fin base mesh
+        if len(fin_points) == 3:
+            # Triangle
+            faces = np.array([3, 0, 1, 2])
+            fin_base = pv.PolyData(fin_points, faces=faces)
+        elif len(fin_points) == 4:
+            # Quad
+            faces = np.array([4, 0, 1, 2, 3])
+            fin_base = pv.PolyData(fin_points, faces=faces)
+        else:
+            # Polygon - triangulate
+            fin_poly = pv.PolyData(fin_points)
+            fin_poly.faces = np.hstack([len(fin_points), np.arange(len(fin_points))])
+            fin_base = fin_poly.triangulate()
+        
+        # Extrude fin to give it thickness
+        fin_thickness = 0.002  # 2mm thickness
+        fin_3d = fin_base.extrude((0, 0, fin_thickness))
+        
+        # Position and create all fins
+        fin_position_y = -current_len_bodytube_wo_rear/2000 - current_len_rear/2000/2
+        body_radius = current_diameter_bodytube/2000
+        
+        for i in range(int(current_N_fins)):
+            angle = i * (360 / current_N_fins)
+            
+            # Create fin instance
+            fin = fin_3d.copy()
+            
+            # Position fin at body tube surface
+            fin.translate([body_radius, fin_position_y, 0], inplace=True)
+            
+            # Rotate around rocket axis
+            fin.rotate_y(angle, inplace=True)
+            
+            # Add to fins mesh
+            if fins_mesh.n_points == 0:
+                fins_mesh = fin
+            else:
+                fins_mesh = fins_mesh.merge(fin)
+    
+    # Combine all parts
+    rocket_mesh = body_tube
+    rocket_mesh = rocket_mesh.merge(nosecone)
+    rocket_mesh = rocket_mesh.merge(rear)
+    
+    if fins_mesh.n_points > 0:
+        rocket_mesh = rocket_mesh.merge(fins_mesh)
+    
     # Add the rocket mesh to the plotter
-    p.add_mesh(rocket_mesh, name='rocket', style='wireframe', color='white')
-    p.set_background('#111111ff')
+    p.add_mesh(rocket_mesh, name='rocket', style='wireframe', color='white', specular=0.5, specular_power=15)
+    p.add_axes(line_width=5, labels_off=False)
+    p.set_background('#111111')
     p.view_isometric()
-    stpyvista(p)
-
-#right_column.line_chart(bodytube, x="x",y="y", use_container_width=True)
+    
+    # Display in Streamlit
+    stpyvista(p, key="rocket_viz")
 
     # Add a submit button
 submitted = rock_set.form_submit_button("Save Settings")
@@ -324,19 +599,25 @@ if submitted:
             },
             "geometry": {
                 "length nosecone fins": len_nosecone_fins,
-                "len_nosecone_rear": len_warhead + len_bodytube_wo_rear + len_rear,
+                "total length": len_warhead + len_bodytube_wo_rear + len_rear,
             },
             "fins": {
+                "fin_type": fin_type,
                 "span": fins_span,
                 "chord_root": fins_chord_root,
                 "chord_tip": fins_chord_tip,
                 "mid_chord": fins_mid_chord,
                 "N_fins": N_fins,
+                "sweep_angle": sweep_angle if fin_type in ["Delta", "Tapered Swept"] else 0.0
             },
             "nosecone": {
+                "type": nosecone_type,
                 "length": len_warhead,
                 "diameter": diameter_warhead_base,
-                "shape": nosecone_shape
+                "ogive_radius": ogive_radius if nosecone_type == "Ogival" else 0.0,
+                "parabolic_parameter": parabolic_parameter if nosecone_type == "Parabolic" else 0.5,
+                "power_value": power_value if nosecone_type == "Power Series" else 0.5,
+                "haack_type": haack_type if nosecone_type == "Haack Series" else "LV-Haack"
             },
             "fuselage": {
                 "length": len_bodytube_wo_rear,
