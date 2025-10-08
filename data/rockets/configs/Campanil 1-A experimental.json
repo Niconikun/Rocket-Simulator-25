@@ -3,22 +3,22 @@
     "initial_mass": 7.8,
     "reference_area": 0.033,
     "I_before_burn": {
-        "x": 0.008879229,
-        "y": 0.520127852,
-        "z": 0.520199542
+        "x": 0.010523695,
+        "y": 0.746057106,
+        "z": 0.746176683
     },
     "CoM_before_burn": {
-        "x": 0.84957,
+        "x": 0.786,
         "y": 0.0,
         "z": 0.00012
     },
     "I_after_burn": {
-        "x": 0.008879229,
-        "y": 0.486941936,
-        "z": 0.487079846
+        "x": 0.009666518,
+        "y": 0.697748629,
+        "z": 0.697868157
     },
     "CoM_after_burn": {
-        "x": 0.82877,
+        "x": 0.7537,
         "y": 1e-05,
         "z": 0.00016
     },
@@ -36,17 +36,17 @@
         "thrust_curve_file": "data/thrust_curves/load_cell_1.csv"
     },
     "geometry": {
-        "length nosecone fins": 1055.0,
-        "total length": 1190.0
+        "length nosecone fins": 1039.452,
+        "total length": 1169.0
     },
     "fins": {
         "fin_type": "Tapered Swept",
-        "span": 139.119,
-        "chord_root": 130.0,
-        "chord_tip": 43.92,
+        "span": 138,
+        "chord_root": 127.0,
+        "chord_tip": 75,
         "mid_chord": 86.96,
         "N_fins": 4,
-        "sweep_angle": 20.0
+        "sweep_angle": 15.0
     },
     "nosecone": {
         "type": "Elliptical",
@@ -55,7 +55,7 @@
         "parabolic_parameter": 0.5
     },
     "fuselage": {
-        "length": 960.0,
+        "length": 967.0,
         "diameter": 103.0
     },
     "rear_section": {
