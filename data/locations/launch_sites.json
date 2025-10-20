@@ -3,12 +3,84 @@
         "name": "Club de Aeromodelos de Hualpen",
         "latitude": -36.79572205984051,
         "longitude": -73.1422885358,
-        "altitude": 15.0
+        "altitude": 15.0,
+        "azimuth": 90.0,
+        "max_launch_angle": 80.0,
+        "exclusion_radius": 5.0,
+        "min_altitude": 10000.0,
+        "surface_pressure": 101.3,
+        "description": "Local model rocket club in Hualpen, Chile"
     },
-    "El \u00c1lamo": {
-        "name": "El \u00c1lamo",
+    "El Álamo": {
+        "name": "El Álamo",
         "latitude": -36.67177283344408,
         "longitude": -73.09756887618757,
-        "altitude": 5.0
+        "altitude": 5.0,
+        "azimuth": 90.0,
+        "max_launch_angle": 80.0,
+        "exclusion_radius": 5.0,
+        "min_altitude": 10000.0,
+        "surface_pressure": 101.3,
+        "description": "Launch site in El Álamo, Chile"
+    },
+    "Centro de Lançamento de Alcântara": {
+        "name": "Centro de Lançamento de Alcântara",
+        "latitude": -2.3731,
+        "longitude": -44.3964,
+        "altitude": 45.0,
+        "azimuth": 90.0,
+        "max_launch_angle": 85.0,
+        "exclusion_radius": 20.0,
+        "min_altitude": 50000.0,
+        "surface_pressure": 101.2,
+        "description": "Brazilian spaceport near the equator, ideal for equatorial launches"
+    },
+    "Centro Espacial de Kourou": {
+        "name": "Centro Espacial de Kourou",
+        "latitude": 5.239,
+        "longitude": -52.768,
+        "altitude": 10.0,
+        "azimuth": 90.0,
+        "max_launch_angle": 85.0,
+        "exclusion_radius": 25.0,
+        "min_altitude": 80000.0,
+        "surface_pressure": 101.3,
+        "description": "European Space Agency launch site in French Guiana, South America"
+    },
+    "Base Aérea de Chamical": {
+        "name": "Base Aérea de Chamical",
+        "latitude": -30.345,
+        "longitude": -66.295,
+        "altitude": 461.0,
+        "azimuth": 0.0,
+        "max_launch_angle": 75.0,
+        "exclusion_radius": 15.0,
+        "min_altitude": 30000.0,
+        "surface_pressure": 95.8,
+        "description": "Argentinian air base used for rocket launches and testing"
+    },
+    "Puerto Belgrano Naval Base": {
+        "name": "Puerto Belgrano Naval Base",
+        "latitude": -38.879,
+        "longitude": -62.098,
+        "altitude": 22.0,
+        "azimuth": 90.0,
+        "max_launch_angle": 80.0,
+        "exclusion_radius": 10.0,
+        "min_altitude": 25000.0,
+        "surface_pressure": 101.5,
+        "description": "Argentinian naval base with launch capabilities"
+    },
+    "Punta Lobos": {
+        "name": "Punta Lobos",
+        "latitude": -12.5,
+        "longitude": -76.8,
+        "altitude": 50.0,
+        "azimuth": 90.0,
+        "max_launch_angle": 82.0,
+        "exclusion_radius": 12.0,
+        "min_altitude": 35000.0,
+        "surface_pressure": 100.8,
+        "description": "Peruvian coastal launch site for scientific rockets"
     }
 }

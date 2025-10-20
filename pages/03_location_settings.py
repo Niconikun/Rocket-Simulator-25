@@ -9,9 +9,12 @@ import os
 def load_launch_sites():
     """Carga los sitios de lanzamiento desde el archivo JSON"""
     try:
-        with open("data/locations/launch_sites.json", "r", encoding='utf-8') as f:
+        with open("data/locations/launch_sites.json", "r", encoding='utf-8') as f:  # Ensure UTF-8
             return json.load(f)
     except FileNotFoundError:
+        return {}
+    except UnicodeDecodeError as e:
+        st.error(f"Error de codificación al cargar sitios de lanzamiento: {e}")
         return {}
 
 def load_schema():
@@ -37,8 +40,8 @@ def save_launch_site(site_data):
         
         # Guardar si la validación es exitosa
         os.makedirs("data/locations", exist_ok=True)
-        with open("data/locations/launch_sites.json", "w", encoding='utf-8') as f:
-            json.dump(locations, f, indent=4, ensure_ascii=False)
+        with open("data/locations/launch_sites.json", "w", encoding='utf-8') as f:  # Added encoding
+            json.dump(locations, f, indent=4, ensure_ascii=False)  # ensure_ascii=False to preserve special chars
         return True, "Sitio de lanzamiento guardado exitosamente"
     
     except Exception as e:
@@ -50,8 +53,8 @@ def delete_launch_site(site_name):
         locations = load_launch_sites()
         if site_name in locations:
             del locations[site_name]
-            with open("data/locations/launch_sites.json", "w", encoding='utf-8') as f:
-                json.dump(locations, f, indent=4, ensure_ascii=False)
+            with open("data/locations/launch_sites.json", "w", encoding='utf-8') as f:  # Added encoding
+                json.dump(locations, f, indent=4, ensure_ascii=False)  # ensure_ascii=False to preserve special chars
             return True, f"Sitio {site_name} eliminado"
         return False, "Sitio no encontrado"
     except Exception as e:
