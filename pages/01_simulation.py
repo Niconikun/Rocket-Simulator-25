@@ -6,119 +6,763 @@ import json
 import pandas as pd
 import pytz
 import logging
+import time
 from src.models.rocket import Rocket
 from src.models.atmosphere import Atmosphere
 from src.models.clock import Clock
 from src.models.planet import Planet
 from src.utils.mattools import MatTools as Mat
+from src.utils.thrust_processor import ThrustCurveProcessor
 import os
 
-
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 st.set_page_config(page_title="Rocket Simulator Settings", layout="wide")
 
+# Initialize session state for simulation control and parameters
+if 'simulation_running' not in st.session_state:
+    st.session_state.simulation_running = False
+if 'simulation_progress' not in st.session_state:
+    st.session_state.simulation_progress = 0.0
+if 'simulation_results' not in st.session_state:
+    st.session_state.simulation_results = None
+if 'simulation_error' not in st.session_state:
+    st.session_state.simulation_error = None
+if 'simulation_data' not in st.session_state:
+    st.session_state.simulation_data = None
+
+# Initialize simulation parameters in session state
+if 'sim_runtime' not in st.session_state:
+    st.session_state.sim_runtime = 600
+if 'sim_time_step' not in st.session_state:
+    st.session_state.sim_time_step = 0.001
+if 'sim_date' not in st.session_state:
+    st.session_state.sim_date = datetime.date.today()
+if 'sim_time' not in st.session_state:
+    st.session_state.sim_time = datetime.time(12, 0)
+if 'sim_timezone' not in st.session_state:
+    st.session_state.sim_timezone = "Chile"
+if 'sim_rocket' not in st.session_state:
+    st.session_state.sim_rocket = None
+if 'sim_location' not in st.session_state:
+    st.session_state.sim_location = None
+if 'average_temperature' not in st.session_state:
+    st.session_state.average_temperature = 20.0
+if 'launch_elevation' not in st.session_state:
+    st.session_state.launch_elevation = 60.0
+if 'launch_site_orientation' not in st.session_state:
+    st.session_state.launch_site_orientation = 20.0
+if 'vel_initial' not in st.session_state:
+    st.session_state.vel_initial = 0.0
+if 'average_pressure' not in st.session_state:
+    st.session_state.average_pressure = 101325.0
+if 'conditions' not in st.session_state:
+    st.session_state.conditions = []
+
 def load_json_file(filename):
+    """Load JSON files with enhanced error handling and support for new location structure"""
     try:
-        # Actualizar rutas
         if 'rockets.json' in filename:
             rockets = {}
             configs_path = 'data/rockets/configs/'
             for file in os.listdir(configs_path):
                 if file.endswith('.json'):
-                    with open(os.path.join(configs_path, file), 'r') as f:
+                    with open(os.path.join(configs_path, file), 'r', encoding='utf-8') as f:
                         rocket_data = json.load(f)
                         rockets[rocket_data["name"]] = rocket_data
             return rockets
         elif 'locations.json' in filename:
-            with open('data/locations/launch_sites.json', 'r') as file:
-                return json.load(file)
+            with open('data/locations/launch_sites.json', 'r', encoding='utf-8') as file:
+                locations = json.load(file)
+                # Ensure backward compatibility with old location structure
+                for name, data in locations.items():
+                    if 'azimuth' not in data:
+                        data['azimuth'] = 90.0  # Default equatorial launch
+                    if 'max_launch_angle' not in data:
+                        data['max_launch_angle'] = 80.0
+                    if 'exclusion_radius' not in data:
+                        data['exclusion_radius'] = 5.0
+                    if 'min_altitude' not in data:
+                        data['min_altitude'] = 10000.0
+                    if 'surface_pressure' not in data:
+                        data['surface_pressure'] = 101325.0
+                    if 'description' not in data:
+                        data['description'] = ""
+                return locations
     except FileNotFoundError:
         st.error(f"Error: {filename} no encontrado")
         return {}
     except json.JSONDecodeError:
         st.error(f"Error: {filename} tiene un formato inválido")
         return {}
+    except UnicodeDecodeError as e:
+        st.error(f"Error de codificación en {filename}: {e}")
+        return {}
 
+def validate_simulation_inputs(rocket, location, time_step, runtime, temperature, pressure, elevation, initial_velocity, location_settings):
+    """Validate simulation inputs before running with enhanced location validation"""
+    errors = []
+    
+    if time_step <= 0:
+        errors.append("❌ Time step must be positive")
+    if runtime <= 0:
+        errors.append("❌ Runtime must be positive")
+    if time_step > runtime:
+        errors.append("❌ Time step cannot be larger than runtime")
+    if rocket not in rocket_settings:
+        errors.append("❌ Selected rocket configuration not found")
+    if location not in location_settings:
+        errors.append("❌ Selected location not found")
+    if not (-50 <= temperature <= 50):
+        errors.append("❌ Temperature must be between -50°C and 50°C")
+    if not (80000 <= pressure <= 110000):
+        errors.append("❌ Pressure must be between 80,000 Pa and 110,000 Pa")
+    if not (0 <= elevation <= 180):
+        errors.append("❌ Launch elevation must be between 0° and 180°")
+    if initial_velocity < 0:
+        errors.append("❌ Initial velocity cannot be negative")
+    if initial_velocity > 1000:
+        errors.append("❌ Initial velocity cannot exceed 1000 m/s")
+    
+    # Enhanced location-specific validation
+    if location in location_settings:
+        location_data = location_settings[location]
+        max_launch_angle = location_data.get('max_launch_angle', 90.0)
+        if elevation > max_launch_angle:
+            errors.append(f"❌ Launch elevation exceeds maximum allowed ({max_launch_angle}°) for this location")
+        
+        min_altitude = location_data.get('min_altitude', 0.0)
+        if min_altitude > 0:
+            st.info(f"📍 {location} has minimum safe altitude: {min_altitude:.0f} m")
+    
+    return errors
+
+def load_thrust_curve(rocket_name):
+    """Load thrust curve data for specified rocket"""
+    try:
+        with open(f'data/rockets/configs/{rocket_name}.json', 'r', encoding='utf-8') as f:
+            rocket_config = json.load(f)
+        
+        engine_data = rocket_config.get('engine', {})
+        if engine_data.get('thrust_curve_mode') == 'experimental':
+            thrust_file = engine_data.get('thrust_curve_file')
+            if thrust_file and os.path.exists(thrust_file):
+                processor = ThrustCurveProcessor()
+                return processor.process_csv_file(thrust_file)
+        
+        return None
+    except Exception as e:
+        logging.error(f"Error loading thrust curve: {e}")
+        return None
+
+def prepare_data_for_storage(data):
+    """Convert data to storage-friendly format"""
+    if isinstance(data, (list, np.ndarray)):
+        # Convert numpy arrays to lists for JSON serialization
+        return data.tolist() if hasattr(data, 'tolist') else list(data)
+    elif isinstance(data, (int, float, str, bool)):
+        return data
+    else:
+        # Convert other types to string representation
+        return str(data)
+
+def save_simulation_data(sim_params, Sistema, min_length):
+    """Save simulation data to parquet file for dashboard with enhanced location data"""
+    try:
+        sim_rocket = sim_params['rocket']
+        sim_location = sim_params['location']
+        location_data = location_settings[sim_location]
+        
+        Latitude = location_data['latitude']
+        Longitude = location_data['longitude']
+        Altitude = location_data['altitude']
+        
+        # Enhanced location metadata
+        location_metadata = {
+            "azimuth": location_data.get('azimuth', 90.0),
+            "max_launch_angle": location_data.get('max_launch_angle', 80.0),
+            "exclusion_radius": location_data.get('exclusion_radius', 5.0),
+            "min_altitude": location_data.get('min_altitude', 10000.0),
+            "surface_pressure": location_data.get('surface_pressure', 101325.0),
+            "description": location_data.get('description', '')
+        }
+        
+        # Create data dictionary in the exact format expected by dashboard
+        df_data = {
+            "Rocket name": [sim_rocket] * min_length,
+            "Location name": [sim_location] * min_length,
+            "Location Latitude": [float(Latitude)] * min_length,
+            "Location Longitude": [float(Longitude)] * min_length,
+            "Location Altitude": [float(Altitude)] * min_length,
+            # Add location metadata
+            "Location Azimuth": [float(location_metadata['azimuth'])] * min_length,
+            "Location Max Launch Angle": [float(location_metadata['max_launch_angle'])] * min_length,
+            "Location Exclusion Radius": [float(location_metadata['exclusion_radius'])] * min_length,
+            "Location Min Altitude": [float(location_metadata['min_altitude'])] * min_length,
+            "Location Surface Pressure": [float(location_metadata['surface_pressure'])] * min_length,
+            
+            # Simulation data, coordinates and velocity
+            "Simulation time": prepare_data_for_storage(np.array(Sistema.hist_time[:min_length])),
+            "Greenwich Mean Sidereal Time": prepare_data_for_storage(np.array(Sistema.hist_gmst[:min_length])),
+            "Range": prepare_data_for_storage(np.array(Sistema.hist_range[:min_length])),
+            "East coordinate": prepare_data_for_storage(np.array(Sistema.hist_east[:min_length])),
+            "North coordinate": prepare_data_for_storage(np.array(Sistema.hist_north[:min_length])),
+            "Up coordinate": prepare_data_for_storage(np.array(Sistema.hist_up[:min_length])),
+            "Velocity norm": prepare_data_for_storage(np.array(Sistema.hist_v_norm[:min_length])),
+            "Latitude": prepare_data_for_storage(np.array(Sistema.hist_lat[:min_length])),
+            "Longitude": prepare_data_for_storage(np.array(Sistema.hist_long[:min_length])),
+            "Altitude": prepare_data_for_storage(np.array(Sistema.hist_alt[:min_length])),
+            "East-North-Up location from platform": prepare_data_for_storage(Sistema.hist_r_enu[:min_length]),
+            "East-North-Up velocity from platform": prepare_data_for_storage(Sistema.hist_v_enu[:min_length]),
+            "Pitch Angle": prepare_data_for_storage(np.array(Sistema.hist_pitch[:min_length])),
+            "Yaw Angle": prepare_data_for_storage(np.array(Sistema.hist_yaw[:min_length])),
+            "Roll Angle": prepare_data_for_storage(np.array(Sistema.hist_roll[:min_length])),
+            "Angle of attack": prepare_data_for_storage(np.array(Sistema.hist_alpha[:min_length])),
+            "v_bx": prepare_data_for_storage(np.array(Sistema.hist_v_bx[:min_length])),
+            "v_by": prepare_data_for_storage(np.array(Sistema.hist_v_by[:min_length])),
+            "v_bz": prepare_data_for_storage(np.array(Sistema.hist_v_bz[:min_length])),
+            "Rotational velocity in East-North-Up": prepare_data_for_storage(np.array(Sistema.hist_w_enu[:min_length])),
+            
+            # Atmosphere
+            "Density of the atmosphere": prepare_data_for_storage(np.array(Sistema.hist_density[:min_length])),
+            "Ambient pressure": prepare_data_for_storage(np.array(Sistema.hist_press_amb[:min_length])),
+            "Speed of sound": prepare_data_for_storage(np.array(Sistema.hist_v_sonic[:min_length])),
+            "Mach number": prepare_data_for_storage(np.array(Sistema.hist_mach[:min_length])),
+
+            # Forces and torques
+            "Mass of the rocket": prepare_data_for_storage(np.array(Sistema.hist_mass[:min_length])),
+            "Drag coefficient": prepare_data_for_storage(np.array(Sistema.hist_drag_coeff[:min_length])),
+            "Lift coefficient": prepare_data_for_storage(np.array(Sistema.hist_lift_coeff[:min_length])),
+            "Thrust": prepare_data_for_storage(np.array(Sistema.hist_thrust[:min_length])),
+            "Inertia matrix in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_inertia_b[:min_length])),
+            "Center of mass in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm_b[:min_length])),
+            "Center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cp_b[:min_length])),
+            "Mass flux": prepare_data_for_storage(np.array(Sistema.hist_mass_flux[:min_length])),
+            "Drag force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_drag[:min_length])),
+            "Lift force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_lift[:min_length])),
+            "Center of mass to center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm2cp_b[:min_length])),
+            "Aerodynamic forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_aero_b[:min_length])),
+            "Aerodynamic torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_aero_b[:min_length])),
+            "Engine forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_engine_b[:min_length])),
+            "Engine torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_engine_b[:min_length])),
+            "Acceleration in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_accel_b[:min_length])),
+            
+            # Separate quaternion components into individual columns
+            "Quaternion_1": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_1[:min_length])),
+            "Quaternion_2": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_2[:min_length])),
+            "Quaternion_3": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_3[:min_length])),
+            "Quaternion_4": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_4[:min_length])),
+        }
+        
+        # Create DataFrame
+        simulation_df = pd.DataFrame(df_data)
+        
+        # Ensure directory exists
+        os.makedirs('data/simulation', exist_ok=True)
+        
+        # Save to parquet
+        simulation_df.to_parquet('data/simulation/sim_data.parquet', index=False)
+        
+        logger.info(f"Simulation data saved to parquet file with {min_length} data points")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error saving simulation data: {e}")
+        return False
+
+def run_simulation_direct(sim_params):
+    """Run simulation directly in the main thread with progress updates"""
+    try:
+        # Extract parameters
+        sim_rocket = sim_params['rocket']
+        sim_location = sim_params['location']
+        sim_runtime = sim_params['runtime']
+        sim_time_step = sim_params['time_step']
+        sim_date = sim_params['date']
+        sim_time = sim_params['time']
+        sim_timezone = sim_params['timezone']
+        average_temperature = sim_params['temperature']
+        launch_elevation = sim_params['elevation']
+        launch_site_orientation = sim_params['orientation']
+        vel_initial = sim_params['initial_velocity']
+        average_pressure = sim_params['pressure']
+        conditions = sim_params.get('conditions', [])
+        
+        # Load location data
+        location_data = location_settings[sim_location]
+        
+        # Extract initial data with enhanced location information
+        initial_mass = rocket_settings[sim_rocket]['initial_mass']
+        Latitude = location_data['latitude']
+        Longitude = location_data['longitude']
+        Altitude = location_data['altitude']
+        
+        # Display location information
+        location_description = location_data.get('description', '')
+        if location_description:
+            st.sidebar.info(f"📍 **{sim_location}**: {location_description}")
+
+        thrust_curve_data = load_thrust_curve(sim_rocket)
+        if thrust_curve_data:
+            logger.info(f"Using experimental thrust curve: {thrust_curve_data['duration']:.2f}s duration, {thrust_curve_data['max_thrust']:.0f}N peak thrust")
+        
+        # Auxiliary functions
+        deg2rad = pi / 180
+        rad2deg = 180 / pi
+
+        # Convert the simulation date and time to a timezone-aware datetime object
+        sim_datetime = datetime.datetime.combine(sim_date, sim_time)
+        sim_datetime = sim_datetime.replace(tzinfo=pytz.timezone(timezone_dict[sim_timezone]))
+
+        # Configuration of time simulation related data
+        Start = 0
+        Steps_num = int(sim_runtime / sim_time_step)
+        Steps = np.linspace(Start, sim_runtime, Steps_num)
+
+        # Initial data
+        East = 0
+        North = 0
+        Up = 1.0
+
+        Vel_east = vel_initial * np.sin(launch_elevation * deg2rad) * np.cos(launch_site_orientation * deg2rad)
+        Vel_north = vel_initial * np.sin(launch_elevation * deg2rad) * np.sin(launch_site_orientation * deg2rad)
+        Vel_up = vel_initial * np.cos(launch_elevation * deg2rad)
+
+        Roll = 0
+        W_yaw = 0
+        W_pitch = 0
+        W_roll = 0
+
+        Max_altitude = 1000000
+        Max_range = 1250000
+        Detonate_altitude = 900
+        
+        Detonate = "Detonation" in conditions if conditions else False
+
+        # Enhanced simulation parameters
+        max_safe_altitude = 200000  # 200 km safety limit
+        max_safe_velocity = 5000    # 5 km/s safety limit
+        stability_check_interval = 100
+
+        # Initialization
+        date = [sim_datetime.year, sim_datetime.month, sim_datetime.day, 
+                sim_datetime.hour, sim_datetime.minute, sim_datetime.second]
+        julian_date = Clock().julian_day(date)
+        gmst_0 = Clock().gmst(julian_date, 1)
+
+        r_enu_0 = np.array([East, North, Up])
+        v_enu_0 = np.array([Vel_east, Vel_north, Vel_up])
+
+        # Quaternion initialization
+        q_roll = np.array([
+            np.sin(Roll * 0.5 * deg2rad),
+            0,
+            0,
+            np.cos(Roll * 0.5 * deg2rad)
+        ])
+
+        q_pitch = np.array([
+            0,
+            np.sin(-launch_elevation * 0.5 * deg2rad),
+            0,
+            np.cos(-launch_elevation * 0.5 * deg2rad)
+        ])
+
+        q_yaw = np.array([
+            0,
+            0,
+            np.sin(launch_site_orientation * 0.5 * deg2rad),
+            np.cos(launch_site_orientation * 0.5 * deg2rad)
+        ])
+
+        q_temp = Mat.hamilton(q_pitch, q_roll)
+        q_enu2b_0 = Mat.hamilton(q_yaw, q_temp)
+
+        w_enu_0 = np.array([W_yaw, W_pitch, W_roll])
+        coordinates = np.array([Latitude, Longitude, Altitude])
+
+        # Object creation
+        Earth = Planet(gmst_0)
+        Environment = Atmosphere(average_temperature)
+        Sistema = Rocket(r_enu_0, v_enu_0, q_enu2b_0, w_enu_0, initial_mass)
+
+        # Create progress placeholder
+        progress_placeholder = st.empty()
+        progress_bar = progress_placeholder.progress(0)
+        status_placeholder = st.empty()
+
+        # Simulation loop
+        Time = []
+        t = Start
+        
+        for i in range(len(Steps)):
+            # Update progress
+            progress = min(1.0, i / len(Steps))
+            st.session_state.simulation_progress = progress
+            progress_bar.progress(progress)
+            status_placeholder.info(f"🔄 Simulation running... Progress: {progress:.1%}")
+            
+            try:
+                # Enhanced stability checks
+                if i % stability_check_interval == 0:
+                    # Check for numerical instability
+                    if (np.any(np.isnan(Sistema.r_enu)) or 
+                        np.any(np.isnan(Sistema.v_enu)) or
+                        np.any(np.abs(Sistema.r_enu) > 1e10) or
+                        np.any(np.abs(Sistema.v_enu) > max_safe_velocity)):
+                        raise RuntimeError("Numerical instability detected - values out of bounds")
+                    
+                    # Check physical limits
+                    if (Sistema.r_enu[2] > max_safe_altitude or
+                        Sistema.r_enu[2] < -1000 or
+                        np.linalg.norm(Sistema.v_enu) > max_safe_velocity):
+                        logger.warning("Simulation approaching physical limits")
+                        break
+                
+                # Simulation steps
+                Earth.update(sim_time_step)
+                Sistema.update_gmst(Earth.gmst)
+                Sistema.update_mass_related(
+                    rocket_settings[sim_rocket]['engine']['burn_time'],
+                    rocket_settings[sim_rocket]["CoM_before_burn"]["x"],
+                    rocket_settings[sim_rocket]["CoM_before_burn"]["y"], 
+                    rocket_settings[sim_rocket]["CoM_before_burn"]["z"],
+                    rocket_settings[sim_rocket]["I_before_burn"]["x"],
+                    rocket_settings[sim_rocket]["I_before_burn"]["y"],
+                    rocket_settings[sim_rocket]["I_before_burn"]["z"],
+                    rocket_settings[sim_rocket]["CoM_after_burn"]["x"],
+                    rocket_settings[sim_rocket]["CoM_after_burn"]["y"],
+                    rocket_settings[sim_rocket]["CoM_after_burn"]["z"],
+                    rocket_settings[sim_rocket]["I_after_burn"]["x"],
+                    rocket_settings[sim_rocket]["I_after_burn"]["y"],
+                    rocket_settings[sim_rocket]["I_after_burn"]["z"]
+                )
+                Sistema.update_pos_vel(coordinates)
+                Sistema.update_atmosphere(
+                    Environment.give_dens(Sistema.r_enu[2]),
+                    Environment.give_press(Sistema.r_enu[2]),
+                    Environment.give_v_sonic(Sistema.r_enu[2])
+                )
+                Sistema.update_aerodynamics(sim_rocket)
+                Sistema.update_forces_aero(reference_area=rocket_settings[sim_rocket]['reference_area'])
+                Sistema.update_engine(sim_rocket)
+                Sistema.update_forces_engine()
+                Sistema.update_forces_torques()
+                Sistema.update_g_accel(coordinates)
+                Sistema.RK4_update(sim_time_step)
+                Sistema.save_data()
+
+                # Enhanced termination conditions
+                if Sistema.time >= 1:
+                    if (Sistema.r_enu[2] < Sistema.hist_up[-2] and 
+                        Sistema.r_enu[2] < Detonate_altitude and 
+                        Detonate):
+                        logger.info(f"Detonation triggered at {Sistema.time:.2f}s")
+                        break
+                
+                termination_conditions = [
+                    Sistema.r_enu[2] <= 0,
+                    Sistema.r_enu[2] >= Max_altitude,
+                    Sistema.range >= Max_range,
+                    np.any(np.isnan(Sistema.r_enu)),
+                    abs(Sistema.v_enu[2]) > max_safe_velocity,
+                ]
+                
+                if any(termination_conditions):
+                    termination_reasons = [
+                        "Rocket hit the ground",
+                        "Maximum altitude exceeded",
+                        "Maximum range exceeded", 
+                        "Numerical instability detected",
+                        "Velocity exceeded safe limits",
+                    ]
+                    reason_idx = termination_conditions.index(True)
+                    if reason_idx < len(termination_reasons):
+                        logger.info(f"Simulation stopped: {termination_reasons[reason_idx]}")
+                    break
+                    
+                Time.append(t)
+                t += sim_time_step
+                Sistema.update_time(sim_time_step)
+                
+            except Exception as step_error:
+                logger.error(f"Step error at t={t:.3f}s: {step_error}")
+                # Try to continue but log the error
+                continue
+
+        # Clear progress indicators
+        progress_placeholder.empty()
+        status_placeholder.empty()
+        
+        # Final progress update
+        st.session_state.simulation_progress = 1.0
+        
+        # Determine minimum length of history arrays
+        hist_arrays = [
+            Sistema.hist_time, Sistema.hist_gmst, Sistema.hist_range, Sistema.hist_east,
+            Sistema.hist_north, Sistema.hist_up, Sistema.hist_v_norm, Sistema.hist_lat,
+            Sistema.hist_long, Sistema.hist_alt, Sistema.hist_r_enu, Sistema.hist_v_enu,
+            Sistema.hist_pitch, Sistema.hist_yaw, Sistema.hist_roll, Sistema.hist_alpha,
+            Sistema.hist_v_bx, Sistema.hist_v_by, Sistema.hist_v_bz, Sistema.hist_w_enu,
+            Sistema.hist_density, Sistema.hist_press_amb, Sistema.hist_v_sonic, Sistema.hist_mach,
+            Sistema.hist_mass, Sistema.hist_drag_coeff, Sistema.hist_lift_coeff, Sistema.hist_thrust,
+            Sistema.hist_inertia_b, Sistema.hist_cm_b, Sistema.hist_cp_b, Sistema.hist_mass_flux,
+            Sistema.hist_drag, Sistema.hist_lift, Sistema.hist_cm2cp_b, Sistema.hist_forces_aero_b,
+            Sistema.hist_torques_aero_b, Sistema.hist_forces_engine_b, Sistema.hist_torques_engine_b,
+            Sistema.hist_accel_b, Sistema.hist_q_enu2b_1, Sistema.hist_q_enu2b_2, 
+            Sistema.hist_q_enu2b_3, Sistema.hist_q_enu2b_4
+        ]
+        
+        min_length = min(len(arr) for arr in hist_arrays if hasattr(arr, '__len__'))
+        
+        # Save simulation data to parquet file
+        save_success = save_simulation_data(sim_params, Sistema, min_length)
+        
+        # Store results in session state
+        if hasattr(Sistema, 'hist_up') and Sistema.hist_up:
+            max_alt = max(Sistema.hist_up)
+        else:
+            max_alt = 0
+            
+        if hasattr(Sistema, 'hist_v_norm') and Sistema.hist_v_norm:
+            max_vel = max(Sistema.hist_v_norm)
+        else:
+            max_vel = 0
+
+        st.session_state.simulation_results = {
+            'rocket_data': Sistema,
+            'simulation_time': Sistema.time,
+            'max_altitude': max_alt,
+            'max_velocity': max_vel,
+            'final_altitude': Sistema.r_enu[2] if hasattr(Sistema, 'r_enu') else 0,
+            'data_saved': save_success,
+            'location_name': sim_location,
+            'location_data': location_data
+        }
+        
+        # Store simulation data for plotting
+        st.session_state.simulation_data = {
+            'time': Time,
+            'altitude': Sistema.hist_up if hasattr(Sistema, 'hist_up') else [],
+            'velocity': Sistema.hist_v_norm if hasattr(Sistema, 'hist_v_norm') else [],
+            'position_east': Sistema.hist_east if hasattr(Sistema, 'hist_east') else [],
+            'position_north': Sistema.hist_north if hasattr(Sistema, 'hist_north') else [],
+        }
+        
+        logger.info("Simulation completed successfully")
+        
+    except Exception as e:
+        error_msg = f"Simulation failed: {str(e)}"
+        st.session_state.simulation_error = error_msg
+        logger.exception(error_msg)
+    finally:
+        st.session_state.simulation_running = False
+
+
+# Load settings
 rocket_settings = load_json_file('data/rockets.json')
 location_settings = load_json_file('data/locations.json')
 
 timezone_dict = {
-        "United States": "America/New_York",
-        "Canada": "America/Toronto",
-        "Mexico": "America/Mexico_City",
-        "Jamaica": "America/Jamaica",
-        "Costa Rica": "America/Costa_Rica",
-        "Bahamas": "America/Nassau",
-        "Honduras": "America/Tegucigalpa",
-        "Cuba": "America/Havana",
-        "Dominican Republic": "America/Santo_Domingo",
-        "Brazil": "America/Sao_Paulo",
-        "Argentina": "America/Argentina/Buenos_Aires",
-        "Chile": "America/Santiago",
-        "Colombia": "America/Bogota",
-        "Peru": "America/Lima",
-        "Uruguay": "America/Montevideo",
-        "Ecuador": "America/Guayaquil",
-        "Bolivia": "America/La_Paz",
-        "Paraguay": "America/Asuncion",
-        "Venezuela": "America/Caracas",
-        "United Kingdom": "Europe/London",
-        "France": "Europe/Paris",
-        "Germany": "Europe/Berlin",
-        "Italy": "Europe/Rome",
-        "Spain": "Europe/Madrid",
-        "Russia": "Europe/Moscow",
-        "Turkey": "Europe/Istanbul",
-        "Greece": "Europe/Athens",
-        "Poland": "Europe/Warsaw",
-        "Ukraine": "Europe/Kiev",
-        "India": "Asia/Kolkata",
-        "Japan": "Asia/Tokyo",
-        "China": "Asia/Shanghai",
-        "Saudi Arabia": "Asia/Riyadh",
-        "South Korea": "Asia/Seoul",
-        "Indonesia": "Asia/Jakarta",
-        "Malaysia": "Asia/Kuala_Lumpur",
-        "Vietnam": "Asia/Ho_Chi_Minh",
-        "Philippines": "Asia/Manila",
-        "Thailand": "Asia/Bangkok",
-        "Australia": "Australia/Sydney",
-        "New Zealand": "Pacific/Auckland",
-        "Fiji": "Pacific/Fiji",
-        "Papua New Guinea": "Pacific/Port_Moresby",
-        "Samoa": "Pacific/Apia",
-        "Tonga": "Pacific/Tongatapu",
-        "Solomon Islands": "Pacific/Guadalcanal",
-        "Vanuatu": "Pacific/Efate",
-        "Kiribati": "Pacific/Tarawa",
-        "New Caledonia": "Pacific/Noumea"
+    "United States": "America/New_York",
+    "Canada": "America/Toronto",
+    "Mexico": "America/Mexico_City",
+    "Chile": "America/Santiago",
+    "Brazil": "America/Sao_Paulo",
+    "Argentina": "America/Argentina/Buenos_Aires",
+    "Peru": "America/Lima",
+    "French Guiana": "America/Cayenne",
+    "United Kingdom": "Europe/London",
+    "Germany": "Europe/Berlin",
+    "France": "Europe/Paris",
+    "Japan": "Asia/Tokyo",
+    "Australia": "Australia/Sydney"
 }
+
 options = list(timezone_dict.keys())
-default_index = options.index("Chile")
+default_index = options.index("Chile") if "Chile" in options else 0
 
 # Main header
-st.header('Rocket Simulation Settings')
+st.header('UdeC Rocket Simulation Software')
 st.write("Configure the simulation settings for your rocket launch. You can select the rocket, location, and various simulation parameters."
          " Once you have set the parameters, click 'Run Simulation' to start the simulation."
          " The simulation will run based on the provided settings and will display the results in a table format.")
 st.write("Code written by Orozco 2022. GUI done by Sepúlveda 2025.")
 
-# Add some blank space
-st.markdown("##")
+# Enhanced location information sidebar
+st.sidebar.subheader("📍 Location Information")
+selected_location = st.sidebar.selectbox("View Location Details", options=list(location_settings.keys()))
+if selected_location:
+    loc_data = location_settings[selected_location]
+    st.sidebar.write(f"**Name**: {loc_data['name']}")
+    st.sidebar.write(f"**Coordinates**: {loc_data['latitude']:.4f}°, {loc_data['longitude']:.4f}°")
+    st.sidebar.write(f"**Altitude**: {loc_data['altitude']:.1f} m")
+    st.sidebar.write(f"**Default Azimuth**: {loc_data.get('azimuth', 90.0)}°")
+    st.sidebar.write(f"**Max Launch Angle**: {loc_data.get('max_launch_angle', 80.0)}°")
+    if loc_data.get('description'):
+        st.sidebar.write(f"**Description**: {loc_data['description']}")
 
-# Create and edit rockets properties for the simulator
-with st.form("Simulation Settings"):
+# Simulation Status Dashboard
+st.markdown("---")
+st.subheader("📊 Simulation Status")
 
-    left_column, right_column = st.columns(2)
-    sim_runtime = st.slider('Simulation runtime [s]', min_value=0, max_value=1000, value=600, step=10, key="sim_runtime")
-    with left_column:
-        #info
-        st.subheader("Simulation Properties")
-        sim_time_step = st.number_input('Simulation time step [s]', min_value=0.000, max_value=10.000, value=0.001, step=0.001, key="sim_time_step")
-        sim_date = st.date_input('Simulation date', min_value=None, max_value=None, key="sim_date")
-        sim_time = st.time_input('Simulation time', key="sim_time")
-        sim_timezone = st.selectbox('Simulation timezone', options=options, index=default_index, key="sim_timezone")
-        conditions = st.segmented_control(label="Conditions for simulation", options=[
+# Create status columns
+status_col1, status_col2, status_col3, status_col4 = st.columns(4)
+
+with status_col1:
+    if st.session_state.simulation_running:
+        st.metric("Status", "🟢 Running", delta="Active")
+    elif st.session_state.simulation_results:
+        st.metric("Status", "✅ Completed", delta="Ready")
+    else:
+        st.metric("Status", "⚪ Ready", delta="Waiting")
+
+with status_col2:
+    if st.session_state.simulation_results:
+        results = st.session_state.simulation_results
+        st.metric("Max Altitude", f"{results['max_altitude']:.1f} m")
+    else:
+        st.metric("Max Altitude", "N/A")
+
+with status_col3:
+    if st.session_state.simulation_results:
+        results = st.session_state.simulation_results
+        st.metric("Duration", f"{results['simulation_time']:.1f} s")
+    else:
+        st.metric("Duration", "N/A")
+
+with status_col4:
+    if st.session_state.simulation_results:
+        results = st.session_state.simulation_results
+        location_name = results.get('location_name', 'Unknown')
+        st.metric("Location", location_name)
+    else:
+        st.metric("Location", "N/A")
+
+# Error display
+if st.session_state.simulation_error:
+    st.error(f"❌ {st.session_state.simulation_error}")
+    if st.button("Clear Error"):
+        st.session_state.simulation_error = None
+        st.rerun()
+
+# Quick actions
+st.markdown("#### Quick Actions")
+action_col1, action_col2, action_col3 = st.columns(3)
+
+with action_col1:
+    if st.button("📊 View Results", disabled=not st.session_state.simulation_results):
+        if st.session_state.simulation_results:
+            results = st.session_state.simulation_results
+            st.subheader("Simulation Summary")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Final Time", f"{results['simulation_time']:.2f} s")
+            with col2:
+                st.metric("Max Altitude", f"{results['max_altitude']:.1f} m")
+            with col3:
+                st.metric("Max Velocity", f"{results['max_velocity']:.1f} m/s")
+            with col4:
+                st.metric("Final Altitude", f"{results['final_altitude']:.1f} m")
+            
+            # Display location information
+            if results.get('location_data'):
+                loc_data = results['location_data']
+                st.subheader("Launch Site Information")
+                st.write(f"**Location**: {results['location_name']}")
+                st.write(f"**Coordinates**: {loc_data['latitude']:.4f}°, {loc_data['longitude']:.4f}°")
+                st.write(f"**Altitude**: {loc_data['altitude']:.1f} m")
+                if loc_data.get('description'):
+                    st.write(f"**Description**: {loc_data['description']}")
+            
+            # Add data saving status
+            if results.get('data_saved'):
+                st.success("✅ Simulation data saved successfully! You can now view the dashboard.")
+            else:
+                st.warning("⚠️ Simulation data may not have been saved properly.")
+            
+            # Add simple plot if data is available
+            if st.session_state.simulation_data:
+                st.subheader("Altitude vs Time")
+                if st.session_state.simulation_data['time'] and st.session_state.simulation_data['altitude']:
+                    chart_data = pd.DataFrame({
+                        'Time (s)': st.session_state.simulation_data['time'],
+                        'Altitude (m)': st.session_state.simulation_data['altitude']
+                    })
+                    st.line_chart(chart_data.set_index('Time (s)'))
+
+with action_col2:
+    if st.button("🔄 Restart Simulation"):
+        st.session_state.simulation_running = False
+        st.session_state.simulation_results = None
+        st.session_state.simulation_error = None
+        st.session_state.simulation_data = None
+        st.rerun()
+
+with action_col3:
+    if st.button("🗑️ Clear Results"):
+        st.session_state.simulation_results = None
+        st.session_state.simulation_error = None
+        st.session_state.simulation_data = None
+        st.rerun()
+
+st.markdown("---")
+
+# Main simulation settings - NO FORM
+st.subheader("Simulation Settings")
+
+left_column, right_column = st.columns(2)
+
+# Runtime slider
+st.session_state.sim_runtime = st.slider(
+    'Simulation runtime [s]', 
+    min_value=0, 
+    max_value=1000, 
+    value=st.session_state.sim_runtime, 
+    step=10, 
+    key="sim_runtime_slider"
+)
+
+with left_column:
+    st.subheader("Simulation Properties")
+    
+    # Time step
+    st.session_state.sim_time_step = st.number_input(
+        'Simulation time step [s]', 
+        min_value=0.000, 
+        max_value=10.000, 
+        value=st.session_state.sim_time_step, 
+        step=0.001, 
+        key="sim_time_step_input"
+    )
+    
+    # Date and time
+    st.session_state.sim_date = st.date_input(
+        'Simulation date', 
+        value=st.session_state.sim_date,
+        key="sim_date_input"
+    )
+    
+    st.session_state.sim_time = st.time_input(
+        'Simulation time', 
+        value=st.session_state.sim_time,
+        key="sim_time_input"
+    )
+    
+    # Timezone
+    st.session_state.sim_timezone = st.selectbox(
+        'Simulation timezone', 
+        options=options, 
+        index=options.index(st.session_state.sim_timezone) if st.session_state.sim_timezone in options else default_index,
+        key="sim_timezone_select"
+    )
+    
+    # Conditions
+    st.session_state.conditions = st.segmented_control(
+        label="Conditions for simulation", 
+        options=[
             "Detonation", 
             "Parachute [Coming Soon]", 
             "Second Stage [Coming Soon]", 
@@ -127,388 +771,204 @@ with st.form("Simulation Settings"):
             "ACS [Coming Soon]",
             "Thermal Model [coming Soon]",
             "Structural Model [Coming Soon]",
-            "Inertial Navigation System [Coming Soon]"], default=None)
+            "Inertial Navigation System [Coming Soon]"
+        ], 
+        default=st.session_state.conditions,
+        key="conditions_control"
+    )
 
-    with right_column:
-        #info
-        st.subheader("Simulation Settings")
-        sim_rocket = st.selectbox('Rocket Selection', options=list(rocket_settings.keys()), index=0, key="sim_rocket")
-        sim_location = st.selectbox('Location Selection', options=list(location_settings.keys()), index=1, key="sim_location")
-        average_temperature = st.number_input('Average temperature [°C]', min_value=-50.0, max_value=50.0, value=20.0, step=1.0, key="average_temperature")
-        launch_elevation = st.number_input('Launch elevation [°]', min_value=0.0, max_value=180.0, value=60.0, step=1.0, key="launch_elevation")
-        launch_site_orientation = st.number_input('Launch site orientation (from the East) [°]', min_value=-180.0, max_value=180.0, value=20.0, step=1.0, key="launch_site_orientation")
-        vel_initial = st.number_input('Initial velocity [m/s]', min_value=0.0, max_value=1000.0, value=0.0, step=1.0, key="vel_initial")
-        average_pressure = st.number_input('Average pressure [Pa]', min_value=0.0, max_value=1000000.0, value=101325.0, step=1.0, key="average_pressure")
-        
-        #average_humidity = st.number_input('Average humidity [%]', min_value=0.0, max_value=100.0, value=50.0, step=1.0, key="average_humidity")
-    # Add a submit button
+with right_column:
+    st.subheader("Launch Settings")
     
+    # Rocket selection
+    rocket_options = list(rocket_settings.keys())
+    if not rocket_options:
+        st.error("No rocket configurations found!")
+    else:
+        if st.session_state.sim_rocket not in rocket_options:
+            st.session_state.sim_rocket = rocket_options[0]
+        
+        st.session_state.sim_rocket = st.selectbox(
+            'Rocket Selection', 
+            options=rocket_options, 
+            index=rocket_options.index(st.session_state.sim_rocket) if st.session_state.sim_rocket in rocket_options else 0,
+            key="sim_rocket_select"
+        )
     
-    run = st.form_submit_button("Run Simulation")
-    if run:
-
-        st.info("Running!")
-        # loading json file for location and rocket settings
-        # (This part should be replaced with actual loading of the JSON file)
-
-        # Extracting the initial mass from the rocket settings
-        initial_mass = rocket_settings[sim_rocket]['initial_mass']
-        # Extracting the coordinates from the location settings
-        Latitude = location_settings[sim_location]['latitude']
-        Longitude = location_settings[sim_location]['longitude']
-        Altitude = location_settings[sim_location]['altitude']
+    # Location selection
+    location_options = list(location_settings.keys())
+    if not location_options:
+        st.error("No location configurations found!")
+    else:
+        if st.session_state.sim_location not in location_options:
+            st.session_state.sim_location = location_options[0]
         
-        # Auxiliary functions
-        deg2rad=pi/180
-        rad2deg=180/pi
-
-        # Convert the simulation date and time to a timezone-aware datetime object
-        sim_datetime = datetime.datetime.combine(sim_date, sim_time)
-        sim_datetime = sim_datetime.replace(tzinfo=pytz.timezone(timezone_dict[sim_timezone]))
-
+        st.session_state.sim_location = st.selectbox(
+            'Location Selection', 
+            options=location_options, 
+            index=location_options.index(st.session_state.sim_location) if st.session_state.sim_location in location_options else 0,
+            key="sim_location_select"
+        )
         
-
-        # ------ Configuration of time simulation related data ------ #
-        Start=0                     # [s]  # Starting time of simulation
-        Steps_num=int(sim_runtime/sim_time_step)                 
-        Steps=np.linspace(Start,sim_runtime,Steps_num)
-        #st.write(f"Simulation steps: {Steps_num} with time step: {sim_time_step:.3f} s. {Steps}")
-
-        # ___________________ Initial data to be INPUT ________________ #  # (All of this should to be obtained from external file!!!)
-        East=0        # [m]   # X axis initial location of rocket from platform
-        North=0       # [m]   # Y axis initial location of rocket from platform
-        Up=1.0        # [m]   # Z axis initial location of rocket from platform  (do not set at 0...this is in order to used a conditional later on for max. alt and range)
-
-        Vel_east= vel_initial * np.sin(launch_elevation * deg2rad) * np.cos(launch_site_orientation * deg2rad)    # [m/s]   # X axis initial velocity of rocket from platform
-        Vel_north= vel_initial * np.sin(launch_elevation * deg2rad) * np.sin(launch_site_orientation * deg2rad)   # [m/s]   # Y axis initial velocity of rocket from platform
-        Vel_up= vel_initial * np.cos(launch_elevation * deg2rad)      # [m/s]   # Z axis initial velocity of rocket from platform
-
-        Roll=0        # [deg]   # From initial position (between -180 and 180). Assumed to be always zero
-
-        W_yaw=0       # [rad/s]   # X axis initial rotational velocity of rocket from platform
-        W_pitch=0     # [rad/s]   # Y axis initial rotational velocity of rocket from platform
-        W_roll=0      # [rad/s]   # Z axis initial rotational velocity of rocket from platform
-
-        Max_altitude=1000000     # [m] # Max. altitude
-        Max_range=1250000        # [m] # Max. range
-        Detonate_altitude=900
-        
-        if conditions and "Detonation" in conditions:
-            Detonate=True
-            
-        else:           # Statement for detonation or not
-            Detonate=False          # Statement for detonation or not
-         # [m] # Altitude for detonation
-
-        # ___________________ Initialization of data ________________ #
-        date=[sim_datetime.year, sim_datetime.month, sim_datetime.day, sim_datetime.hour, sim_datetime.minute, sim_datetime.second]                # List containing date
-        julian_date=Clock().julian_day(date)                         # Obtaining Julian Date
-        gmst_0=Clock().gmst(julian_date,1)                           # Initial Greenwich Mean Sidereal Time [rad]
-
-        r_enu_0=np.array([East,North,Up])                            # [m]   # Initial East-North-Up location from platform
-        v_enu_0=np.array([Vel_east,Vel_north,Vel_up])                # [m/s] # Initial East-North-Up velocity from platform
-
-        # Primero creamos los cuaterniones individuales para cada rotación
-        q_roll = np.array([
-            np.sin(Roll*0.5*deg2rad),
-            0,
-            0,
-            np.cos(Roll*0.5*deg2rad)
-        ])
-
-        q_pitch = np.array([
-            0,
-            np.sin(-launch_elevation*0.5*deg2rad),  # Removido el signo negativo
-            0,
-            np.cos(-launch_elevation*0.5*deg2rad)
-        ])
-
-        q_yaw = np.array([
-            0,
-            0,
-            np.sin(launch_site_orientation*0.5*deg2rad),
-            np.cos(launch_site_orientation*0.5*deg2rad)
-        ])
-
-        # Aplicamos las rotaciones en el orden correcto: roll → pitch → yaw
-        q_temp = Mat.hamilton(q_pitch, q_roll)  # Primero roll, luego pitch
-        q_enu2b_0 = Mat.hamilton(q_yaw, q_temp)  # Finalmente yaw
-
-        w_enu_0=np.array([W_yaw,W_pitch,W_roll])                     # [rad/s] # Initial rotational velocity in East-North-Up
-
-        coordinates=np.array([Latitude, Longitude, Altitude])  # [rad, rad, m] # Initial coordinates of the platform
-
-        # _________________ Objects creation ___________________ #
-        Earth=Planet(gmst_0)                                       # Planet module object creation
-        Environment=Atmosphere(average_temperature)                        # Atmosphere module object creation
-        Sistema=Rocket(r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass)          # Rocket module object creation
-
-        
-        # Auxiliary timer for conditionals loop break
-        Time=[]       
-        t=Start
-
-        # ________________ Simulation sequence _________________#
-        for i in range(len(Steps)):
-            #st.write(f"Simulation time: {t:.4f} s")
-
-            # Planet Greenwich Mean Sidereal Time updating
-            Earth.update(sim_time_step)
-            # Rocket's sequence of simulation
-            Sistema.update_gmst(Earth.gmst)
-            Sistema.update_mass_related(rocket_settings[sim_rocket]['engine']['burn_time'], rocket_settings[sim_rocket]["CoM_before_burn"]["x"], rocket_settings[sim_rocket]["CoM_before_burn"]["y"], rocket_settings[sim_rocket]["CoM_before_burn"]["z"], rocket_settings[sim_rocket]["I_before_burn"]["x"], rocket_settings[sim_rocket]["I_before_burn"]["y"], rocket_settings[sim_rocket]["I_before_burn"]["z"], rocket_settings[sim_rocket]["CoM_after_burn"]["x"], rocket_settings[sim_rocket]["CoM_after_burn"]["y"], rocket_settings[sim_rocket]["CoM_after_burn"]["z"], rocket_settings[sim_rocket]["I_after_burn"]["x"], rocket_settings[sim_rocket]["I_after_burn"]["y"], rocket_settings[sim_rocket]["I_after_burn"]["z"])  # [s]    # Propellant total burning time
-            Sistema.update_pos_vel(coordinates)
-            Sistema.update_atmosphere(Environment.give_dens(Sistema.r_enu[2]),Environment.give_press(Sistema.r_enu[2]),Environment.give_v_sonic(Sistema.r_enu[2]))    
-            Sistema.update_aerodynamics(sim_rocket)
-            Sistema.update_forces_aero(reference_area=rocket_settings[sim_rocket]['reference_area'])
-            Sistema.update_engine(sim_rocket)
-            Sistema.update_forces_engine()
-            Sistema.update_forces_torques()
-            Sistema.update_g_accel(coordinates)
-            Sistema.RK4_update(sim_time_step)
-            Sistema.save_data()
-
-            if Sistema.time>=1:
-                if Sistema.r_enu[2]<Sistema.hist_up[-2] and Sistema.r_enu[2]<Detonate_altitude and Detonate==True:
-                    st.warning(f"Rocket has reached the detonation altitude of {Detonate_altitude} m at time {Sistema.time:.2f} s. Simulation will stop.")
-                    break
+        # Display location information when selected
+        if st.session_state.sim_location in location_settings:
+            loc_info = location_settings[st.session_state.sim_location]
+            st.caption(f"📍 {loc_info.get('description', 'No description available')}")
+            st.caption(f"Coordinates: {loc_info['latitude']:.4f}°, {loc_info['longitude']:.4f}° | Altitude: {loc_info['altitude']:.1f} m")
     
-            # Conditional to stop when reached
-            if (Sistema.r_enu[2]<=0 or 
-                Sistema.r_enu[2]>=Max_altitude or 
-                Sistema.range>= Max_range or
-                np.isnan(Sistema.r_enu[2]) or  # Detectar valores NaN
-                abs(Sistema.v_enu[2]) > 1e4):  # Detectar velocidades irreales
-                st.warning("Simulation stopped due to physical limits or numerical instability")
-                break
+    # Environmental parameters
+    st.session_state.average_temperature = st.number_input(
+        'Average temperature [°C]', 
+        min_value=-50.0, 
+        max_value=50.0, 
+        value=st.session_state.average_temperature, 
+        step=1.0, 
+        key="average_temperature_input"
+    )
+    
+    st.session_state.launch_elevation = st.number_input(
+        'Launch elevation [°]', 
+        min_value=0.0, 
+        max_value=180.0, 
+        value=st.session_state.launch_elevation, 
+        step=1.0, 
+        key="launch_elevation_input"
+    )
+    
+    st.session_state.launch_site_orientation = st.number_input(
+        'Launch site orientation (from the East) [°]', 
+        min_value=-180.0, 
+        max_value=180.0, 
+        value=st.session_state.launch_site_orientation, 
+        step=1.0, 
+        key="launch_site_orientation_input"
+    )
+    
+    st.session_state.vel_initial = st.number_input(
+        'Initial velocity [m/s]', 
+        min_value=0.0, 
+        max_value=1000.0, 
+        value=st.session_state.vel_initial, 
+        step=1.0, 
+        key="vel_initial_input"
+    )
+    
+    st.session_state.average_pressure = st.number_input(
+        'Average pressure [Pa]', 
+        min_value=0.0, 
+        max_value=1000000.0, 
+        value=st.session_state.average_pressure, 
+        step=1.0, 
+        key="average_pressure_input"
+    )
 
-            Time.append(t)
-            t+=sim_time_step
+# Simulation control buttons
+st.markdown("---")
+col1, col2, col3 = st.columns([1, 1, 1])
 
-            # Rocket's updating of simulation time
-            Sistema.update_time(sim_time_step)
+with col1:
+    run_simulation = st.button(
+        "🚀 Run Simulation", 
+        type="primary", 
+        disabled=st.session_state.simulation_running,
+        use_container_width=True
+    )
 
-            if i % 100 == 0:  # Log cada 100 pasos
-                logging.debug(f"t={t:.3f}s, h={Sistema.r_enu[2]:.2f}m, v={Sistema.v_norm:.2f}m/s")
+with col2:
+    clear_all = st.button(
+        "🗑️ Clear All", 
+        type="secondary",
+        use_container_width=True
+    )
+
+with col3:
+    reset_defaults = st.button(
+        "🔄 Reset Defaults", 
+        type="secondary",
+        use_container_width=True
+    )
+
+# Handle button actions
+if run_simulation:
+    # Validate inputs first
+    validation_errors = validate_simulation_inputs(
+        st.session_state.sim_rocket, 
+        st.session_state.sim_location, 
+        st.session_state.sim_time_step, 
+        st.session_state.sim_runtime,
+        st.session_state.average_temperature, 
+        st.session_state.average_pressure, 
+        st.session_state.launch_elevation, 
+        st.session_state.vel_initial,
+        location_settings
+    )
+    
+    if validation_errors:
+        for error in validation_errors:
+            st.error(error)
+    else:
+        # Reset flags and start simulation
+        st.session_state.simulation_error = None
+        st.session_state.simulation_running = True
         
-            # Verificar estabilidad numérica
-            if np.any(np.isnan(Sistema.r_enu)) or np.any(np.isnan(Sistema.v_enu)):
-                raise RuntimeError("Numerical instability detected")
-            
-
-        st.success("Finished!")
+        # Store simulation parameters
+        sim_params = {
+            'rocket': st.session_state.sim_rocket,
+            'location': st.session_state.sim_location,
+            'runtime': st.session_state.sim_runtime,
+            'time_step': st.session_state.sim_time_step,
+            'date': st.session_state.sim_date,
+            'time': st.session_state.sim_time,
+            'timezone': st.session_state.sim_timezone,
+            'temperature': st.session_state.average_temperature,
+            'elevation': st.session_state.launch_elevation,
+            'orientation': st.session_state.launch_site_orientation,
+            'initial_velocity': st.session_state.vel_initial,
+            'pressure': st.session_state.average_pressure,
+            'conditions': st.session_state.conditions
+        }
         
-        # Primero, definimos una función auxiliar mejorada para preparar los datos
-        def prepare_data_for_storage(data):
-            """
-            Prepara los datos para almacenamiento, convirtiendo arrays y objetos complejos a formato serializable
-            """
-            if isinstance(data, np.ndarray):
-                if data.ndim == 0:  # Si es un array escalar
-                    return float(data)  # Convertir a float
-                if data.ndim > 1:
-                    return [prepare_data_for_storage(row) for row in data]
-                return list(data)
-            if isinstance(data, list):
-                if len(data) > 0 and isinstance(data[0], np.ndarray):
-                    return [prepare_data_for_storage(item) for item in data]
-                return data
-            return data
+        # Run simulation directly in main thread
+        run_simulation_direct(sim_params)
+        st.rerun()
 
-        try:
-            # Obtener la longitud de los datos de simulación
-            sim_length = len(Sistema.hist_time)
-            
-            # Modificar cómo se manejan los componentes del cuaternión
-            df_data = {
-                # Replicar valores escalares
-                "Rocket name": [sim_rocket] * sim_length,
-                "Location name": [sim_location] * sim_length,
-                "Location Latitude": [float(Latitude)] * sim_length,
-                "Location Longitude": [float(Longitude)] * sim_length,
-                
-                # Datos de la simulación, coordenadas y velocidad
-                "Simulation time": prepare_data_for_storage(np.array(Sistema.hist_time)),
-                "Greenwich Mean Sidereal Time": prepare_data_for_storage(np.array(Sistema.hist_gmst)),
-                "Range": prepare_data_for_storage(np.array(Sistema.hist_range)),
-                "East coordinate": prepare_data_for_storage(np.array(Sistema.hist_east)),
-                "North coordinate": prepare_data_for_storage(np.array(Sistema.hist_north)),
-                "Up coordinate": prepare_data_for_storage(np.array(Sistema.hist_up)),
-                "Velocity norm": prepare_data_for_storage(np.array(Sistema.hist_v_norm)),
-                "Latitude": prepare_data_for_storage(np.array(Sistema.hist_lat)),
-                "Longitude": prepare_data_for_storage(np.array(Sistema.hist_long)),
-                "Altitude": prepare_data_for_storage(np.array(Sistema.hist_alt)),
-                "East-North-Up location from platform": prepare_data_for_storage(Sistema.hist_r_enu),
-                "East-North-Up velocity from platform": prepare_data_for_storage(Sistema.hist_v_enu),
-                "Pitch Angle": prepare_data_for_storage(np.array(Sistema.hist_pitch)),
-                "Yaw Angle": prepare_data_for_storage(np.array(Sistema.hist_yaw)),
-                "Roll Angle": prepare_data_for_storage(np.array(Sistema.hist_roll)),
-                "Angle of attack": prepare_data_for_storage(np.array(Sistema.hist_alpha)),
-                "v_bx": prepare_data_for_storage(np.array(Sistema.hist_v_bx)),
-                "v_by": prepare_data_for_storage(np.array(Sistema.hist_v_by)),
-                "v_bz": prepare_data_for_storage(np.array(Sistema.hist_v_bz)),
-                "Rotational velocity in East-North-Up": prepare_data_for_storage(np.array(Sistema.hist_w_enu)),
-                
-                # Atmósfera
-                "Density of the atmosphere": prepare_data_for_storage(np.array(Sistema.hist_density)),
-                "Ambient pressure": prepare_data_for_storage(np.array(Sistema.hist_press_amb)),
-                "Speed of sound": prepare_data_for_storage(np.array(Sistema.hist_v_sonic)),
-                "Mach number": prepare_data_for_storage(np.array(Sistema.hist_mach)),
+if clear_all:
+    # Clear all simulation state and reset parameters
+    st.session_state.simulation_running = False
+    st.session_state.simulation_results = None
+    st.session_state.simulation_error = None
+    st.session_state.simulation_progress = 0.0
+    st.session_state.simulation_data = None
+    st.info("🧹 All simulation data cleared!")
+    st.rerun()
 
-                # Fuerzas y torques
-                "Mass of the rocket": prepare_data_for_storage(np.array(Sistema.hist_mass)),
-                "Drag coefficient": prepare_data_for_storage(np.array(Sistema.hist_drag_coeff)),
-                "Lift coefficient": prepare_data_for_storage(np.array(Sistema.hist_lift_coeff)),
-                "Thrust": prepare_data_for_storage(np.array(Sistema.hist_thrust)),
-                "Inertia matrix in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_inertia_b)),
-                "Center of mass in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm_b)),
-                "Center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cp_b)),
-                "Mass flux": prepare_data_for_storage(np.array(Sistema.hist_mass_flux)),
-                "Drag force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_drag)),
-                "Lift force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_lift)),
-                "Center of mass to center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm2cp_b)),
-                "Aerodynamic forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_aero_b)),
-                "Aerodynamic torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_aero_b)),
-                "Engine forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_engine_b)),
-                "Engine torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_engine_b)),
-                "Acceleration in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_accel_b)),
-                
-                
-                # Separar los componentes del cuaternión en columnas individuales
-                "Quaternion_1": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_1)),
-                "Quaternion_2": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_2)),
-                "Quaternion_3": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_3)),
-                "Quaternion_4": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_4)),
-            }
+if reset_defaults:
+    # Reset all parameters to defaults
+    st.session_state.sim_runtime = 600
+    st.session_state.sim_time_step = 0.001
+    st.session_state.sim_date = datetime.date.today()
+    st.session_state.sim_time = datetime.time(12, 0)
+    st.session_state.sim_timezone = "Chile"
+    st.session_state.average_temperature = 20.0
+    st.session_state.launch_elevation = 60.0
+    st.session_state.launch_site_orientation = 20.0
+    st.session_state.vel_initial = 0.0
+    st.session_state.average_pressure = 101325.0
+    st.session_state.conditions = []
+    st.success("🔄 All parameters reset to defaults!")
+    st.rerun()
 
-            # Asegurarse de que todas las listas tengan la misma longitud
-            min_length = min(len(Sistema.hist_time), len(Sistema.hist_range), len(Sistema.hist_east),
-                            len(Sistema.hist_north), len(Sistema.hist_up), len(Sistema.hist_v_norm),
-                            len(Sistema.hist_lat), len(Sistema.hist_long), len(Sistema.hist_alt),
-                            len(Sistema.hist_cm2cp_b), len(Sistema.hist_forces_aero_b),
-                            len(Sistema.hist_torques_aero_b), len(Sistema.hist_forces_engine_b),
-                            len(Sistema.hist_torques_engine_b))
-
-            # Truncar todas las listas a la longitud mínima
-            df_data = {
-                "Rocket name": [sim_rocket] * min_length,
-                "Location name": [sim_location] * min_length,
-                "Location Latitude": [float(Latitude)] * min_length,
-                "Location Longitude": [float(Longitude)] * min_length,
-                # Datos de la simulación, coordenadas y velocidad
-                "Simulation time": prepare_data_for_storage(np.array(Sistema.hist_time[:min_length])),
-                "Greenwich Mean Sidereal Time": prepare_data_for_storage(np.array(Sistema.hist_gmst[:min_length])),
-                "Range": prepare_data_for_storage(np.array(Sistema.hist_range[:min_length])),
-                "East coordinate": prepare_data_for_storage(np.array(Sistema.hist_east[:min_length])),
-                "North coordinate": prepare_data_for_storage(np.array(Sistema.hist_north[:min_length])),
-                "Up coordinate": prepare_data_for_storage(np.array(Sistema.hist_up[:min_length])),
-                "Velocity norm": prepare_data_for_storage(np.array(Sistema.hist_v_norm[:min_length])),
-                "Latitude": prepare_data_for_storage(np.array(Sistema.hist_lat[:min_length])),
-                "Longitude": prepare_data_for_storage(np.array(Sistema.hist_long[:min_length])),
-                "Altitude": prepare_data_for_storage(np.array(Sistema.hist_alt[:min_length])),
-                "East-North-Up location from platform": prepare_data_for_storage(Sistema.hist_r_enu[:min_length]),
-                "East-North-Up velocity from platform": prepare_data_for_storage(Sistema.hist_v_enu[:min_length]),
-                "Pitch Angle": prepare_data_for_storage(np.array(Sistema.hist_pitch[:min_length])),
-                "Yaw Angle": prepare_data_for_storage(np.array(Sistema.hist_yaw[:min_length])),
-                "Roll Angle": prepare_data_for_storage(np.array(Sistema.hist_roll[:min_length])),
-                "Angle of attack": prepare_data_for_storage(np.array(Sistema.hist_alpha[:min_length])),
-                "v_bx": prepare_data_for_storage(np.array(Sistema.hist_v_bx[:min_length])),
-                "v_by": prepare_data_for_storage(np.array(Sistema.hist_v_by[:min_length])),
-                "v_bz": prepare_data_for_storage(np.array(Sistema.hist_v_bz[:min_length])),
-                "Rotational velocity in East-North-Up": prepare_data_for_storage(np.array(Sistema.hist_w_enu[:min_length])),
-                
-                # Atmósfera
-                "Density of the atmosphere": prepare_data_for_storage(np.array(Sistema.hist_density[:min_length])),
-                "Ambient pressure": prepare_data_for_storage(np.array(Sistema.hist_press_amb[:min_length])),
-                "Speed of sound": prepare_data_for_storage(np.array(Sistema.hist_v_sonic[:min_length])),
-                "Mach number": prepare_data_for_storage(np.array(Sistema.hist_mach[:min_length])),
-
-                # Fuerzas y torques
-                "Mass of the rocket": prepare_data_for_storage(np.array(Sistema.hist_mass[:min_length])),
-                "Drag coefficient": prepare_data_for_storage(np.array(Sistema.hist_drag_coeff[:min_length])),
-                "Lift coefficient": prepare_data_for_storage(np.array(Sistema.hist_lift_coeff[:min_length])),
-                "Thrust": prepare_data_for_storage(np.array(Sistema.hist_thrust[:min_length])),
-                "Inertia matrix in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_inertia_b[:min_length])),
-                "Center of mass in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm_b[:min_length])),
-                "Center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cp_b[:min_length])),
-                "Mass flux": prepare_data_for_storage(np.array(Sistema.hist_mass_flux[:min_length])),
-                "Drag force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_drag[:min_length])),
-                "Lift force in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_lift[:min_length])),
-                "Center of mass to center of pressure in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_cm2cp_b[:min_length])),
-                "Aerodynamic forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_aero_b[:min_length])),
-                "Aerodynamic torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_aero_b[:min_length])),
-                "Engine forces in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_forces_engine_b[:min_length])),
-                "Engine torques in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_torques_engine_b[:min_length])),
-                "Acceleration in bodyframe": prepare_data_for_storage(np.array(Sistema.hist_accel_b[:min_length])),
-                
-                # Separar los componentes del cuaternión en columnas individuales
-                "Quaternion_1": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_1[:min_length])),
-                "Quaternion_2": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_2[:min_length])),
-                "Quaternion_3": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_3[:min_length])),
-                "Quaternion_4": prepare_data_for_storage(np.array(Sistema.hist_q_enu2b_4[:min_length])),
-            }
-
-            # Verificación de longitudes
-            for key, value in df_data.items():
-                if len(value) != min_length:
-                    st.write(f"Advertencia: {key} tiene longitud {len(value)}, esperada {min_length}")
-            
-            # Crear DataFrame y guardar
-            df = pd.DataFrame(df_data)
-            df.to_parquet("data/simulation/sim_data.parquet", engine='pyarrow')
-            st.success("Datos guardados exitosamente!")
-
-        except Exception as e:
-            st.error(f"Error al guardar los datos: {str(e)}")
-            if df_data:
-                st.write("Debugging info:")
-                for key, value in df_data.items():
-                    try:
-                        if isinstance(value, (list, np.ndarray)):
-                            shape = np.array(value).shape if isinstance(value, np.ndarray) else len(value)
-                            st.write(f"{key}: tipo {type(value)}, forma {shape}")
-                            if len(value) > 0:
-                                st.write(f"Primer elemento: {type(value[0])}")
-                    except Exception as debug_e:
-                        st.write(f"{key}: Error al analizar - {str(debug_e)}")
-        if conditions and "Wind Conditions" in conditions:
-            st.subheader("Wind Settings [Coming Soon]")
-            wind_profile = st.selectbox(
-                "Wind Profile",
-                ["Calm", "Light", "Moderate", "Strong"]
-            )
-            
-            # Parámetros avanzados
-            with st.expander("Advanced Wind Parameters"):
-                surface_speed = st.slider(
-                    "Surface Wind Speed [m/s]",
-                    0.0, 20.0, 5.0
-                )
-                wind_direction = st.slider(
-                    "Primary Wind Direction [°]",
-                    0, 360, 180
-                )
-                turbulence = st.slider(
-                    "Turbulence Intensity [%]",
-                    0, 100, 20
-                )
-        if conditions and "Telemetry" in conditions:
-            st.subheader("Configuración de Telemetría")
-            telemetry_config = {
-                'sampling_rate': st.slider(
-                    "Tasa de muestreo [Hz]", 1, 100, 10),
-                'tx_power': st.number_input(
-                    "Potencia de transmisión [W]", 0.1, 10.0, 1.0),
-                'frequency': st.selectbox(
-                    "Frecuencia [MHz]",
-                    [433, 915, 2400]
-                ) * 1e6,
-                'antenna_gain': st.slider(
-                    "Ganancia de antena [dBi]", 0, 12, 3),
-                'min_snr': st.slider(
-                    "SNR mínimo [dB]", 5, 20, 10)
-            }
-
-
-
-
+# Display current settings
+with st.expander("📋 Current Simulation Settings"):
+    st.write(f"**Rocket**: {st.session_state.sim_rocket}")
+    st.write(f"**Location**: {st.session_state.sim_location}")
+    st.write(f"**Runtime**: {st.session_state.sim_runtime} s")
+    st.write(f"**Time Step**: {st.session_state.sim_time_step} s")
+    st.write(f"**Date/Time**: {st.session_state.sim_date} {st.session_state.sim_time}")
+    st.write(f"**Timezone**: {st.session_state.sim_timezone}")
+    st.write(f"**Temperature**: {st.session_state.average_temperature} °C")
+    st.write(f"**Launch Elevation**: {st.session_state.launch_elevation} °")
+    st.write(f"**Orientation**: {st.session_state.launch_site_orientation} °")
+    st.write(f"**Initial Velocity**: {st.session_state.vel_initial} m/s")
+    st.write(f"**Pressure**: {st.session_state.average_pressure} Pa")
+    st.write(f"**Conditions**: {', '.join(st.session_state.conditions) if st.session_state.conditions else 'None'}")
