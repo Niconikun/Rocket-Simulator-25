@@ -1,0 +1,66 @@
+{
+    "name": "Agni-1",
+    "initial_mass": 12000.0,
+    "reference_area": 3140000.0,
+    "I_before_burn": {
+        "x": 0.0,
+        "y": 1500000000.0,
+        "z": 0.0
+    },
+    "CoM_before_burn": {
+        "x": 0.0,
+        "y": 7000.0,
+        "z": 0.0
+    },
+    "I_after_burn": {
+        "x": 0.0,
+        "y": 1500000000.0,
+        "z": 0.0
+    },
+    "CoM_after_burn": {
+        "x": 0.0,
+        "y": 5000.0,
+        "z": 0.0
+    },
+    "engine": {
+        "burn_time": 49.0,
+        "nozzle_exit_diameter": 1000.0,
+        "propellant_mass": 9342.0,
+        "specific_impulse": 232.0,
+        "mean_thrust": 454930.5,
+        "max_thrust": 454930.5,
+        "mean_chamber_pressure": 4410000.0,
+        "max_chamber_pressure": 4410000.0,
+        "thrust_to_weight_ratio": 4.0
+    },
+    "geometry": {
+        "length nosecone fins": 0.0,
+        "total length": 14701.0
+    },
+    "fins": {
+        "fin_type": "Trapezoidal",
+        "span": 500.0,
+        "chord_root": 1000.0,
+        "chord_tip": 1.0,
+        "mid_chord": 500.0,
+        "N_fins": 4,
+        "sweep_angle": 0.0
+    },
+    "nosecone": {
+        "type": "Conical",
+        "length": 4200.0,
+        "diameter": 1000.0,
+        "ogive_radius": 0.0,
+        "parabolic_parameter": 0.5,
+        "power_value": 0.5,
+        "haack_type": "LV-Haack"
+    },
+    "fuselage": {
+        "length": 10500.0,
+        "diameter": 1000.0
+    },
+    "rear_section": {
+        "length": 1.0,
+        "diameter": 1000.0
+    }
+}

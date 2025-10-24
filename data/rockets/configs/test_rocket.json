@@ -48,6 +48,7 @@
         "N_fins": 4
     },
     "nosecone": {
+        "type": "Conical",
         "length": 500.0,
         "diameter": 150.0,
         "shape": "Conical"
