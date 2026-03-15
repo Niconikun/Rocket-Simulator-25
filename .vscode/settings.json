@@ -113,5 +113,6 @@
         "yaxis",
         "ylabel",
         "Zhao"
-    ]
+    ],
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

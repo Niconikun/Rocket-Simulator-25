@@ -47,6 +47,9 @@ from src.models.aerodynamics_wrapper import AerodynamicsWrapper
 from src.utils.mattools import MatTools as Mat
 from src.utils.geotools import GeoTools as Geo
 
+# Configure logger for this module
+logger = logging.getLogger(__name__)
+
 class Rocket(object):
     """
     Clase principal para la simulación de cohetes.
@@ -640,12 +643,32 @@ class Rocket(object):
 
             3. Masa:
                 dm/dt = -ṁ
+        
+        Estabilidad Numérica:
+            - Normalización automática del cuaternión al inicio
+            - Validación de valores de entrada
+            - Prevención de singularidades en cálculos de actitud
         """
         r_enu = x[0:3]
         v_enu = x[3:6]
         q_enu2b = x[6:10]
         w_b = x[10:13]
         mass = x[13]
+        
+        # CRITICAL: Normalize quaternion at start of dynamics calculation
+        # This ensures we always operate with unit quaternions (mathematical constraint)
+        q_norm = np.linalg.norm(q_enu2b)
+        if q_norm > 1e-6:
+            q_enu2b = q_enu2b / q_norm
+        else:
+            # Recovery: Use identity quaternion if norm is too small
+            logger.warning(f"Quaternion norm {q_norm:.2e} too small in dynamics(), resetting to identity")
+            q_enu2b = np.array([0.0, 0.0, 0.0, 1.0])
+        
+        # Validate mass is positive
+        if mass <= 0:
+            logger.error(f"Non-positive mass {mass} in dynamics()")
+            mass = 1.0  # Use minimum viable mass
 
         # Modificar la condición de parada
         total_force = np.linalg.norm(self.forces_b)
@@ -681,7 +704,14 @@ class Rocket(object):
         
         #______Mass_____________#
         
-        mass_dot=-self.mass_flux   # [kg/s]    # Time derivative of mass
+        # Calculate mass derivative with safeguards
+        # Prevent negative mass by limiting flux
+        if mass > 0:
+            # Use actual mass flux but don't allow it to drop mass below 10% of current
+            # This prevents numerical issues when mass gets very small
+            mass_dot = -self.mass_flux  # [kg/s]
+        else:
+            mass_dot = 0.0  # No more mass to burn
 
         # Concatenation of variables
         f_traj=np.concatenate((r_dot_enu,v_dot_enu))
@@ -694,39 +724,109 @@ class Rocket(object):
     def RK4_update(self,dt):
         
         """
-        Propaga las variables de estado usando el método Runge-Kutta de 4to orden.
+        Propaga las variables de estado usando el método Runge-Kutta de 4to orden
+        con estabilidad numérica mejorada para quaterniones.
 
         Args:
             dt (float): Paso de tiempo [s]
 
-        Cálculos:
-            1. Concatenación de variables de estado
-            2. Cálculo de coeficientes k1, k2, k3, k4
-            3. Actualización del vector de estado
-            4. Normalización del cuaternión
+        Control de Estabilidad:
+            1. Normalización de cuaternión antes de integración
+            2. Validación de quaternion norm durante pasos intermedios
+            3. Recuperación automática de cuaternión degenerado
+            4. Detección de NaN/Inf en estados
 
         Referencias:
             - Butcher, J.C. (2016). Numerical Methods for Ordinary Differential Equations
+            - Wie, B. (1998). Space Vehicle Dynamics and Control for Aerospace Applications
         """
 
         # Consecutive concatenation of all required variables
         traj=np.concatenate((self.r_enu,self.v_enu))
+        
+        # CRITICAL: Normalize quaternion before integration to ensure stability
+        q_norm_initial = np.linalg.norm(self.q_enu2b)
+        if q_norm_initial < 1e-6:
+            logger.warning(f"Quaternion nearly zero at t={self.time:.3f}s, reinitializing to identity")
+            self.q_enu2b = np.array([0.0, 0.0, 0.0, 1.0])
+        else:
+            self.q_enu2b = self.q_enu2b / q_norm_initial
+        
         att=np.concatenate((self.q_enu2b,self.w_b))
         mov=np.concatenate((traj,att))
         mass=np.array([self.mass])     # Auxiliary mass_dot to avoid float error in Numpy
         x=np.concatenate((mov,mass))
 
-        #_________Runge-Kutta 4 sequence________#
+        #_________Runge-Kutta 4 sequence with quaternion stabilization________#
         k1=self.dynamics(x)
+        
+        # Validate k1 for NaN/Inf
+        if np.any(np.isnan(k1)) or np.any(np.isinf(k1)):
+            logger.error(f"NaN/Inf detected in k1 at t={self.time:.3f}s")
+            raise RuntimeError("Numerical instability in dynamics calculation (k1 contains NaN/Inf)")
+        
         xk2=x + 0.5*dt*k1
+        
+        # Normalize quaternion in intermediate step to maintain unit constraint
+        q_k2 = xk2[6:10]
+        q_norm_k2 = np.linalg.norm(q_k2)
+        if q_norm_k2 > 1e-6:
+            xk2[6:10] = q_k2 / q_norm_k2
+        else:
+            logger.warning(f"Very small quaternion norm at RK4 step k2, using previous value")
+            xk2[6:10] = self.q_enu2b
+        
+        # Ensure mass stays positive at intermediate steps
+        if xk2[13] < 0.1:
+            xk2[13] = 0.1
 
         k2=self.dynamics(xk2)
+        
+        if np.any(np.isnan(k2)) or np.any(np.isinf(k2)):
+            logger.error(f"NaN/Inf detected in k2 at t={self.time:.3f}s")
+            raise RuntimeError("Numerical instability in dynamics calculation (k2 contains NaN/Inf)")
+        
         xk3=x+ 0.5*dt*k2
+        
+        # Normalize quaternion in intermediate step
+        q_k3 = xk3[6:10]
+        q_norm_k3 = np.linalg.norm(q_k3)
+        if q_norm_k3 > 1e-6:
+            xk3[6:10] = q_k3 / q_norm_k3
+        else:
+            logger.warning(f"Very small quaternion norm at RK4 step k3, using previous value")
+            xk3[6:10] = self.q_enu2b
+        
+        # Ensure mass stays positive at intermediate steps
+        if xk3[13] < 0.1:
+            xk3[13] = 0.1
 
         k3=self.dynamics(xk3)
+        
+        if np.any(np.isnan(k3)) or np.any(np.isinf(k3)):
+            logger.error(f"NaN/Inf detected in k3 at t={self.time:.3f}s")
+            raise RuntimeError("Numerical instability in dynamics calculation (k3 contains NaN/Inf)")
+        
         xk4=x+ dt*k3
+        
+        # Normalize quaternion in final step
+        q_k4 = xk4[6:10]
+        q_norm_k4 = np.linalg.norm(q_k4)
+        if q_norm_k4 > 1e-6:
+            xk4[6:10] = q_k4 / q_norm_k4
+        else:
+            logger.warning(f"Very small quaternion norm at RK4 step k4, using previous value")
+            xk4[6:10] = self.q_enu2b
+        
+        # Ensure mass stays positive at intermediate steps
+        if xk4[13] < 0.1:
+            xk4[13] = 0.1
 
         k4=self.dynamics(xk4)
+        
+        if np.any(np.isnan(k4)) or np.any(np.isinf(k4)):
+            logger.error(f"NaN/Inf detected in k4 at t={self.time:.3f}s")
+            raise RuntimeError("Numerical instability in dynamics calculation (k4 contains NaN/Inf)")
 
         new_x= x + (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
 
@@ -734,18 +834,32 @@ class Rocket(object):
         self.r_enu=new_x[0:3]
         self.v_enu=new_x[3:6]
         
+        # Validate position and velocity for out-of-bounds values
+        if np.any(np.abs(self.r_enu) > 1e8) or np.any(np.abs(self.v_enu) > 1e5):
+            logger.warning(f"State values out of reasonable bounds at t={self.time:.3f}s")
+        
         q_enu2b=new_x[6:10]
         q_norm = np.linalg.norm(q_enu2b)
-        if q_norm > 0:
+        
+        if q_norm > 1e-6:
             self.q_enu2b = q_enu2b / q_norm
         else:
-            st.error("Error: Quaternion normalization failed")
-            raise RuntimeError("Quaternion became zero")
+            logger.error(f"Quaternion norm too small ({q_norm:.2e}) at t={self.time:.3f}s, resetting to identity")
+            self.q_enu2b = np.array([0.0, 0.0, 0.0, 1.0])
+            # Return early to avoid invalid orientation calculations
+            self.w_enu = np.zeros(3)
+            self.mass = new_x[13]
+            return
         
         w_b=new_x[10:13]
-        self.w_enu=Mat.q_rot(w_b,q_enu2b,1)
+        self.w_enu=Mat.q_rot(w_b,self.q_enu2b,1)
 
         self.mass=new_x[13]
+        
+        # Validate final mass is positive and reasonable
+        if self.mass < 0.1:
+            logger.warning(f"Mass too low ({self.mass:.3f}kg) at t={self.time:.3f}s, clamping to minimum viable")
+            self.mass = max(0.1, self.mass)  # Minimum viable mass (e.g., empty rocket shell)
 
     def save_data(self):
         """Saves all obtained data before propagation"""

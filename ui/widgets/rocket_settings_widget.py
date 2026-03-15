@@ -1,0 +1,1022 @@
+"""Rocket Settings Widget - Complete rocket configuration with 3D preview."""
+
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox,
+    QPushButton, QComboBox, QGroupBox, QFormLayout, QMessageBox, QTabWidget,
+    QFileDialog, QScrollArea, QSpinBox, QScrollArea, QTextEdit
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap
+from models.app_state import ApplicationState
+import json
+import os
+import logging
+import numpy as np
+
+# Try to import PyVista for 3D visualization
+try:
+    import pyvista as pv
+    HAS_PYVISTA = True
+except ImportError:
+    HAS_PYVISTA = False
+
+# Try to import pandas for CSV handling
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except ImportError:
+    HAS_PANDAS = False
+
+# Try to import matplotlib for thrust curve visualization
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+
+logger = logging.getLogger(__name__)
+
+
+class RocketSettingsWidget(QWidget):
+    """
+    Enhanced rocket configuration widget with comprehensive parameter editing and 3D preview.
+    
+    Features:
+    - Load/edit/save rocket configurations from JSON files
+    - Edit all rocket parameters organized in tabs
+    - 3D visualization of rocket geometry
+    - Support for all JSON parameters (CoM, fuselage, fins, nosecone, etc.)
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.state = ApplicationState.get_instance()
+        self.rockets = {}
+        self.current_rocket = None
+        self.thrust_curve_data = None  # Store loaded thrust curve
+        self.init_ui()
+        self.load_rocket_configs()
+    
+    def init_ui(self):
+        """Initialize the UI with rocket selection and tabbed editing."""
+        main_layout = QVBoxLayout()
+        
+        # ===== ROCKET SELECTION =====
+        selection_group = QGroupBox("Rocket Selection")
+        selection_layout = QHBoxLayout()
+        
+        selection_layout.addWidget(QLabel("Select Rocket:"))
+        self.rocket_combo = QComboBox()
+        self.rocket_combo.addItem("Manual")
+        self.rocket_combo.currentTextChanged.connect(self.on_rocket_selected)
+        selection_layout.addWidget(self.rocket_combo)
+        
+        load_button = QPushButton("📁 Load File")
+        load_button.clicked.connect(self.load_rocket_config_file)
+        selection_layout.addWidget(load_button)
+        
+        selection_group.setLayout(selection_layout)
+        main_layout.addWidget(selection_group)
+        
+        # ===== TABBED EDITING SECTION =====
+        self.tabs = QTabWidget()
+        
+        # Tab 1: Basic Properties
+        self.tab_basic = self._create_basic_properties_tab()
+        self.tabs.addTab(self.tab_basic, "Properties")
+        
+        # Tab 2: Inertia & CoM
+        self.tab_inertia = self._create_inertia_tab()
+        self.tabs.addTab(self.tab_inertia, "Inertia & CoM")
+        
+        # Tab 3: Engine
+        self.tab_engine = self._create_engine_tab()
+        self.tabs.addTab(self.tab_engine, "Engine")
+        
+        # Tab 4: Geometry
+        self.tab_geometry = self._create_geometry_tab()
+        self.tabs.addTab(self.tab_geometry, "Geometry")
+        
+        # Tab 5: Nosecone
+        self.tab_nosecone = self._create_nosecone_tab()
+        self.tabs.addTab(self.tab_nosecone, "Nosecone")
+        
+        # Tab 6: Fins
+        self.tab_fins = self._create_fins_tab()
+        self.tabs.addTab(self.tab_fins, "Fins")
+        
+        # Tab 7: Thrust Curves
+        self.tab_thrust = self._create_thrust_curves_tab()
+        self.tabs.addTab(self.tab_thrust, "Thrust Curves")
+        
+        main_layout.addWidget(self.tabs)
+        
+        # ===== ACTION BUTTONS =====
+        button_layout = QHBoxLayout()
+        
+        validate_button = QPushButton("✓ Validate Configuration")
+        validate_button.clicked.connect(self.validate_and_show_results)
+        button_layout.addWidget(validate_button)
+        
+        save_button = QPushButton("💾 Save Configuration")
+        save_button.clicked.connect(self.save_rocket_config)
+        button_layout.addWidget(save_button)
+        
+        visualize_button = QPushButton("🎨 Preview 3D Model")
+        visualize_button.clicked.connect(self.visualize_3d_model)
+        button_layout.addWidget(visualize_button)
+        
+        delete_button = QPushButton("🗑️ Delete Rocket")
+        delete_button.clicked.connect(self.delete_rocket_config)
+        button_layout.addWidget(delete_button)
+        
+        main_layout.addLayout(button_layout)
+        
+        self.setLayout(main_layout)
+    
+    def _create_basic_properties_tab(self):
+        """Create the Properties tab."""
+        widget = QWidget()
+        layout = QFormLayout()
+        
+        # Rocket Name
+        self.name_edit = QLineEdit()
+        layout.addRow("Rocket Name:", self.name_edit)
+        
+        # Initial Mass
+        self.initial_mass_spinbox = QDoubleSpinBox()
+        self.initial_mass_spinbox.setRange(0.1, 100000)
+        self.initial_mass_spinbox.setSuffix(" kg")
+        layout.addRow("Initial Mass:", self.initial_mass_spinbox)
+        
+        # Reference Area
+        self.reference_area_spinbox = QDoubleSpinBox()
+        self.reference_area_spinbox.setRange(0.01, 100000000)
+        self.reference_area_spinbox.setSuffix(" mm²")
+        self.reference_area_spinbox.setDecimals(1)
+        layout.addRow("Reference Area:", self.reference_area_spinbox)
+        
+        widget.setLayout(layout)
+        return widget
+    
+    def _create_inertia_tab(self):
+        """Create the Inertia & Center of Mass tab."""
+        widget = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        
+        content = QWidget()
+        form_layout = QFormLayout()
+        
+        # Before Burn
+        form_layout.addRow(QLabel("BEFORE BURN"))
+        
+        form_layout.addRow(QLabel("Moment of Inertia [kg·m²]"))
+        self.i_before_x = QDoubleSpinBox()
+        self.i_before_x.setRange(0, 1e10)
+        self.i_before_x.setSuffix(" x")
+        form_layout.addRow("I_x:", self.i_before_x)
+        
+        self.i_before_y = QDoubleSpinBox()
+        self.i_before_y.setRange(0, 1e10)
+        self.i_before_y.setSuffix(" y")
+        form_layout.addRow("I_y:", self.i_before_y)
+        
+        self.i_before_z = QDoubleSpinBox()
+        self.i_before_z.setRange(0, 1e10)
+        self.i_before_z.setSuffix(" z")
+        form_layout.addRow("I_z:", self.i_before_z)
+        
+        form_layout.addRow(QLabel("Center of Mass [m]"))
+        self.com_before_x = QDoubleSpinBox()
+        self.com_before_x.setRange(-100000, 100000)
+        self.com_before_x.setDecimals(3)
+        form_layout.addRow("CoM_x:", self.com_before_x)
+        
+        self.com_before_y = QDoubleSpinBox()
+        self.com_before_y.setRange(-100000, 100000)
+        self.com_before_y.setDecimals(3)
+        form_layout.addRow("CoM_y:", self.com_before_y)
+        
+        self.com_before_z = QDoubleSpinBox()
+        self.com_before_z.setRange(-100000, 100000)
+        self.com_before_z.setDecimals(3)
+        form_layout.addRow("CoM_z:", self.com_before_z)
+        
+        # After Burn
+        form_layout.addRow(QLabel("AFTER BURN"))
+        
+        form_layout.addRow(QLabel("Moment of Inertia [kg·m²]"))
+        self.i_after_x = QDoubleSpinBox()
+        self.i_after_x.setRange(0, 1e10)
+        self.i_after_x.setSuffix(" x")
+        form_layout.addRow("I_x:", self.i_after_x)
+        
+        self.i_after_y = QDoubleSpinBox()
+        self.i_after_y.setRange(0, 1e10)
+        self.i_after_y.setSuffix(" y")
+        form_layout.addRow("I_y:", self.i_after_y)
+        
+        self.i_after_z = QDoubleSpinBox()
+        self.i_after_z.setRange(0, 1e10)
+        self.i_after_z.setSuffix(" z")
+        form_layout.addRow("I_z:", self.i_after_z)
+        
+        form_layout.addRow(QLabel("Center of Mass [m]"))
+        self.com_after_x = QDoubleSpinBox()
+        self.com_after_x.setRange(-100000, 100000)
+        self.com_after_x.setDecimals(3)
+        form_layout.addRow("CoM_x:", self.com_after_x)
+        
+        self.com_after_y = QDoubleSpinBox()
+        self.com_after_y.setRange(-100000, 100000)
+        self.com_after_y.setDecimals(3)
+        form_layout.addRow("CoM_y:", self.com_after_y)
+        
+        self.com_after_z = QDoubleSpinBox()
+        self.com_after_z.setRange(-100000, 100000)
+        self.com_after_z.setDecimals(3)
+        form_layout.addRow("CoM_z:", self.com_after_z)
+        
+        content.setLayout(form_layout)
+        scroll.setWidget(content)
+        
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(scroll)
+        widget.setLayout(main_layout)
+        return widget
+    
+    def _create_engine_tab(self):
+        """Create the Engine tab."""
+        widget = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        
+        content = QWidget()
+        form_layout = QFormLayout()
+        
+        # Burn Time
+        self.burn_time = QDoubleSpinBox()
+        self.burn_time.setRange(0.1, 3600)
+        self.burn_time.setSuffix(" s")
+        form_layout.addRow("Burn Time:", self.burn_time)
+        
+        # Propellant Mass
+        self.propellant_mass = QDoubleSpinBox()
+        self.propellant_mass.setRange(0, 100000)
+        self.propellant_mass.setSuffix(" kg")
+        form_layout.addRow("Propellant Mass:", self.propellant_mass)
+        
+        # Specific Impulse
+        self.specific_impulse = QDoubleSpinBox()
+        self.specific_impulse.setRange(0, 500)
+        self.specific_impulse.setSuffix(" s")
+        form_layout.addRow("Specific Impulse (Isp):", self.specific_impulse)
+        
+        # Mean Thrust
+        self.mean_thrust = QDoubleSpinBox()
+        self.mean_thrust.setRange(0, 1e9)
+        self.mean_thrust.setSuffix(" N")
+        form_layout.addRow("Mean Thrust:", self.mean_thrust)
+        
+        # Max Thrust
+        self.max_thrust = QDoubleSpinBox()
+        self.max_thrust.setRange(0, 1e9)
+        self.max_thrust.setSuffix(" N")
+        form_layout.addRow("Max Thrust:", self.max_thrust)
+        
+        # Nozzle Exit Diameter
+        self.nozzle_diameter = QDoubleSpinBox()
+        self.nozzle_diameter.setRange(0.1, 100000)
+        self.nozzle_diameter.setSuffix(" mm")
+        form_layout.addRow("Nozzle Exit Diameter:", self.nozzle_diameter)
+        
+        # Chamber Pressure
+        self.mean_chamber_pressure = QDoubleSpinBox()
+        self.mean_chamber_pressure.setRange(0, 1e8)
+        self.mean_chamber_pressure.setSuffix(" Pa")
+        form_layout.addRow("Mean Chamber Pressure:", self.mean_chamber_pressure)
+        
+        self.max_chamber_pressure = QDoubleSpinBox()
+        self.max_chamber_pressure.setRange(0, 1e8)
+        self.max_chamber_pressure.setSuffix(" Pa")
+        form_layout.addRow("Max Chamber Pressure:", self.max_chamber_pressure)
+        
+        # Thrust to Weight Ratio
+        self.thrust_to_weight = QDoubleSpinBox()
+        self.thrust_to_weight.setRange(0, 100)
+        self.thrust_to_weight.setDecimals(2)
+        form_layout.addRow("Thrust to Weight Ratio:", self.thrust_to_weight)
+        
+        content.setLayout(form_layout)
+        scroll.setWidget(content)
+        
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(scroll)
+        widget.setLayout(main_layout)
+        return widget
+    
+    def _create_geometry_tab(self):
+        """Create the Geometry tab."""
+        widget = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        
+        content = QWidget()
+        form_layout = QFormLayout()
+        
+        # Fuselage
+        form_layout.addRow(QLabel("FUSELAGE"))
+        self.fuselage_length = QDoubleSpinBox()
+        self.fuselage_length.setRange(0, 100000)
+        self.fuselage_length.setSuffix(" mm")
+        form_layout.addRow("Length:", self.fuselage_length)
+        
+        self.fuselage_diameter = QDoubleSpinBox()
+        self.fuselage_diameter.setRange(1, 100000)
+        self.fuselage_diameter.setSuffix(" mm")
+        form_layout.addRow("Diameter:", self.fuselage_diameter)
+        
+        # Rear Section
+        form_layout.addRow(QLabel("REAR SECTION"))
+        self.rear_length = QDoubleSpinBox()
+        self.rear_length.setRange(0, 100000)
+        self.rear_length.setSuffix(" mm")
+        form_layout.addRow("Length:", self.rear_length)
+        
+        self.rear_diameter = QDoubleSpinBox()
+        self.rear_diameter.setRange(1, 100000)
+        self.rear_diameter.setSuffix(" mm")
+        form_layout.addRow("Diameter:", self.rear_diameter)
+        
+        # Total Geometry
+        form_layout.addRow(QLabel("TOTAL"))
+        self.total_length = QDoubleSpinBox()
+        self.total_length.setRange(0, 100000)
+        self.total_length.setSuffix(" mm")
+        form_layout.addRow("Total Length:", self.total_length)
+        
+        self.length_nosecone_fins = QDoubleSpinBox()
+        self.length_nosecone_fins.setRange(0, 100000)
+        self.length_nosecone_fins.setSuffix(" mm")
+        form_layout.addRow("Length (Nosecone to Fins):", self.length_nosecone_fins)
+        
+        content.setLayout(form_layout)
+        scroll.setWidget(content)
+        
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(scroll)
+        widget.setLayout(main_layout)
+        return widget
+    
+    def _create_nosecone_tab(self):
+        """Create the Nosecone tab."""
+        widget = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        
+        content = QWidget()
+        form_layout = QFormLayout()
+        
+        # Type
+        form_layout.addRow(QLabel("TYPE"))
+        self.nosecone_type = QComboBox()
+        self.nosecone_type.addItems(["Conical", "Ogive", "Parabolic", "Power", "Haack"])
+        form_layout.addRow("Nosecone Type:", self.nosecone_type)
+        
+        # Dimensions
+        form_layout.addRow(QLabel("DIMENSIONS"))
+        self.nosecone_length = QDoubleSpinBox()
+        self.nosecone_length.setRange(0, 100000)
+        self.nosecone_length.setSuffix(" mm")
+        form_layout.addRow("Length:", self.nosecone_length)
+        
+        self.nosecone_diameter = QDoubleSpinBox()
+        self.nosecone_diameter.setRange(1, 100000)
+        self.nosecone_diameter.setSuffix(" mm")
+        form_layout.addRow("Base Diameter:", self.nosecone_diameter)
+        
+        # Type-specific parameters
+        form_layout.addRow(QLabel("TYPE PARAMETERS"))
+        self.ogive_radius = QDoubleSpinBox()
+        self.ogive_radius.setRange(0, 1e6)
+        self.ogive_radius.setSuffix(" mm")
+        form_layout.addRow("Ogive Radius:", self.ogive_radius)
+        
+        self.parabolic_parameter = QDoubleSpinBox()
+        self.parabolic_parameter.setRange(0, 1)
+        self.parabolic_parameter.setDecimals(3)
+        form_layout.addRow("Parabolic Parameter:", self.parabolic_parameter)
+        
+        self.power_value = QDoubleSpinBox()
+        self.power_value.setRange(0, 2)
+        self.power_value.setDecimals(3)
+        form_layout.addRow("Power Value:", self.power_value)
+        
+        self.haack_type = QComboBox()
+        self.haack_type.addItems(["LD-Haack", "LV-Haack"])
+        form_layout.addRow("Haack Type:", self.haack_type)
+        
+        content.setLayout(form_layout)
+        scroll.setWidget(content)
+        
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(scroll)
+        widget.setLayout(main_layout)
+        return widget
+    
+    def _create_fins_tab(self):
+        """Create the Fins tab."""
+        widget = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        
+        content = QWidget()
+        form_layout = QFormLayout()
+        
+        # Number of fins
+        form_layout.addRow(QLabel("FIN CONFIGURATION"))
+        self.n_fins = QSpinBox()
+        self.n_fins.setRange(0, 12)
+        form_layout.addRow("Number of Fins:", self.n_fins)
+        
+        # Fin type
+        self.fin_type = QComboBox()
+        self.fin_type.addItems(["Trapezoidal", "Delta", "Tapered Swept", "Elliptical", "Custom"])
+        form_layout.addRow("Fin Type:", self.fin_type)
+        
+        # Fin dimensions
+        form_layout.addRow(QLabel("DIMENSIONS"))
+        self.fin_span = QDoubleSpinBox()
+        self.fin_span.setRange(0, 100000)
+        self.fin_span.setSuffix(" mm")
+        form_layout.addRow("Span:", self.fin_span)
+        
+        self.fin_chord_root = QDoubleSpinBox()
+        self.fin_chord_root.setRange(0, 100000)
+        self.fin_chord_root.setSuffix(" mm")
+        form_layout.addRow("Root Chord:", self.fin_chord_root)
+        
+        self.fin_chord_tip = QDoubleSpinBox()
+        self.fin_chord_tip.setRange(0, 100000)
+        self.fin_chord_tip.setSuffix(" mm")
+        form_layout.addRow("Tip Chord:", self.fin_chord_tip)
+        
+        self.fin_mid_chord = QDoubleSpinBox()
+        self.fin_mid_chord.setRange(0, 100000)
+        self.fin_mid_chord.setSuffix(" mm")
+        form_layout.addRow("Mid Chord:", self.fin_mid_chord)
+        
+        self.fin_sweep_angle = QDoubleSpinBox()
+        self.fin_sweep_angle.setRange(-180, 180)
+        self.fin_sweep_angle.setSuffix(" °")
+        form_layout.addRow("Sweep Angle:", self.fin_sweep_angle)
+        
+        content.setLayout(form_layout)
+        scroll.setWidget(content)
+        
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(scroll)
+        widget.setLayout(main_layout)
+        return widget
+    
+    def _create_thrust_curves_tab(self):
+        """Create the Thrust Curves tab."""
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # Upload section
+        upload_group = QGroupBox("Load Thrust Curve from CSV")
+        upload_layout = QHBoxLayout()
+        
+        upload_button = QPushButton("📂 Load CSV File")
+        upload_button.clicked.connect(self.load_thrust_curve)
+        upload_layout.addWidget(upload_button)
+        
+        self.thrust_curve_label = QLabel("No curve loaded")
+        upload_layout.addWidget(self.thrust_curve_label)
+        upload_layout.addStretch()
+        
+        upload_group.setLayout(upload_layout)
+        layout.addWidget(upload_group)
+        
+        # Info section
+        info_group = QGroupBox("Thrust Curve Information")
+        info_layout = QVBoxLayout()
+        
+        self.thrust_info_text = QTextEdit()
+        self.thrust_info_text.setReadOnly(True)
+        self.thrust_info_text.setMaximumHeight(200)
+        info_layout.addWidget(self.thrust_info_text)
+        
+        info_group.setLayout(info_layout)
+        layout.addWidget(info_group)
+        
+        # Canvas for matplotlib (if available)
+        if HAS_MATPLOTLIB:
+            canvas_group = QGroupBox("Thrust Curve Visualization")
+            canvas_layout = QVBoxLayout()
+            
+            self.figure = Figure(figsize=(10, 4), dpi=100)
+            self.canvas = FigureCanvas(self.figure)
+            canvas_layout.addWidget(self.canvas)
+            
+            canvas_group.setLayout(canvas_layout)
+            layout.addWidget(canvas_group)
+        else:
+            layout.addWidget(QLabel("⚠️ Install matplotlib to visualize curves: pip install matplotlib"))
+        
+        layout.addStretch()
+        widget.setLayout(layout)
+        return widget
+    
+    def load_rocket_configs(self):
+        """Load all available rocket configurations."""
+        try:
+            configs_path = 'data/rockets/configs'
+            if os.path.exists(configs_path):
+                for filename in os.listdir(configs_path):
+                    if filename.endswith('.json'):
+                        with open(os.path.join(configs_path, filename), 'r', encoding='utf-8') as f:
+                            rocket_data = json.load(f)
+                            rocket_name = rocket_data.get('name', filename)
+                            self.rockets[rocket_name] = rocket_data
+                            self.rocket_combo.addItem(rocket_name)
+            logger.info(f"Loaded {len(self.rockets)} rocket configurations")
+        except Exception as e:
+            logger.error(f"Error loading rocket configs: {e}")
+    
+    def on_rocket_selected(self, rocket_name: str):
+        """Handle rocket selection change."""
+        if rocket_name == "Manual":
+            self.current_rocket = None
+            return
+        
+        if rocket_name in self.rockets:
+            self.current_rocket = rocket_name
+            self.load_rocket_data(self.rockets[rocket_name])
+            self.state.set('selected_rocket', rocket_name)
+    
+    def load_rocket_data(self, rocket_data: dict):
+        """Load rocket data into UI fields."""
+        # Basic Properties
+        self.name_edit.setText(rocket_data.get('name', ''))
+        self.initial_mass_spinbox.setValue(rocket_data.get('initial_mass', 0.0))
+        self.reference_area_spinbox.setValue(rocket_data.get('reference_area', 0.0))
+        
+        # Inertia & CoM - Before Burn
+        i_before = rocket_data.get('I_before_burn', {})
+        self.i_before_x.setValue(i_before.get('x', 0.0))
+        self.i_before_y.setValue(i_before.get('y', 0.0))
+        self.i_before_z.setValue(i_before.get('z', 0.0))
+        
+        com_before = rocket_data.get('CoM_before_burn', {})
+        self.com_before_x.setValue(com_before.get('x', 0.0))
+        self.com_before_y.setValue(com_before.get('y', 0.0))
+        self.com_before_z.setValue(com_before.get('z', 0.0))
+        
+        # Inertia & CoM - After Burn
+        i_after = rocket_data.get('I_after_burn', {})
+        self.i_after_x.setValue(i_after.get('x', 0.0))
+        self.i_after_y.setValue(i_after.get('y', 0.0))
+        self.i_after_z.setValue(i_after.get('z', 0.0))
+        
+        com_after = rocket_data.get('CoM_after_burn', {})
+        self.com_after_x.setValue(com_after.get('x', 0.0))
+        self.com_after_y.setValue(com_after.get('y', 0.0))
+        self.com_after_z.setValue(com_after.get('z', 0.0))
+        
+        # Engine
+        engine = rocket_data.get('engine', {})
+        self.burn_time.setValue(engine.get('burn_time', 0.0))
+        self.propellant_mass.setValue(engine.get('propellant_mass', 0.0))
+        self.specific_impulse.setValue(engine.get('specific_impulse', 0.0))
+        self.mean_thrust.setValue(engine.get('mean_thrust', 0.0))
+        self.max_thrust.setValue(engine.get('max_thrust', 0.0))
+        self.nozzle_diameter.setValue(engine.get('nozzle_exit_diameter', 0.0))
+        self.mean_chamber_pressure.setValue(engine.get('mean_chamber_pressure', 0.0))
+        self.max_chamber_pressure.setValue(engine.get('max_chamber_pressure', 0.0))
+        self.thrust_to_weight.setValue(engine.get('thrust_to_weight_ratio', 0.0))
+        
+        # Geometry
+        geometry = rocket_data.get('geometry', {})
+        self.total_length.setValue(geometry.get('total length', 0.0))
+        self.length_nosecone_fins.setValue(geometry.get('length nosecone fins', 0.0))
+        
+        fuselage = rocket_data.get('fuselage', {})
+        self.fuselage_length.setValue(fuselage.get('length', 0.0))
+        self.fuselage_diameter.setValue(fuselage.get('diameter', 0.0))
+        
+        rear = rocket_data.get('rear_section', {})
+        self.rear_length.setValue(rear.get('length', 0.0))
+        self.rear_diameter.setValue(rear.get('diameter', 0.0))
+        
+        # Nosecone
+        nosecone = rocket_data.get('nosecone', {})
+        self.nosecone_type.setCurrentText(nosecone.get('type', 'Conical'))
+        self.nosecone_length.setValue(nosecone.get('length', 0.0))
+        self.nosecone_diameter.setValue(nosecone.get('diameter', 0.0))
+        self.ogive_radius.setValue(nosecone.get('ogive_radius', 0.0))
+        self.parabolic_parameter.setValue(nosecone.get('parabolic_parameter', 0.5))
+        self.power_value.setValue(nosecone.get('power_value', 0.5))
+        self.haack_type.setCurrentText(nosecone.get('haack_type', 'LV-Haack'))
+        
+        # Fins
+        fins = rocket_data.get('fins', {})
+        self.n_fins.setValue(fins.get('N_fins', 0))
+        self.fin_type.setCurrentText(fins.get('fin_type', 'Trapezoidal'))
+        self.fin_span.setValue(fins.get('span', 0.0))
+        self.fin_chord_root.setValue(fins.get('chord_root', 0.0))
+        self.fin_chord_tip.setValue(fins.get('chord_tip', 0.0))
+        self.fin_mid_chord.setValue(fins.get('mid_chord', 0.0))
+        self.fin_sweep_angle.setValue(fins.get('sweep_angle', 0.0))
+    
+    def validate_rocket_config(self) -> tuple:
+        """Validate rocket configuration for physical coherence.
+        
+        Returns:
+            (is_valid, error_messages) - tuple with validation status and list of errors
+        """
+        errors = []
+        warnings = []
+        
+        # Basic validation
+        if not self.name_edit.text():
+            errors.append("❌ Rocket name is required")
+        
+        # Mass validation
+        if self.initial_mass_spinbox.value() <= 0:
+            errors.append("❌ Initial mass must be > 0")
+        
+        if self.propellant_mass.value() > self.initial_mass_spinbox.value():
+            errors.append("❌ Propellant mass cannot exceed initial mass")
+        
+        # Thrust validation
+        if self.mean_thrust.value() > self.max_thrust.value():
+            errors.append("❌ Mean thrust cannot exceed max thrust")
+        
+        if self.max_thrust.value() < 0:
+            errors.append("❌ Max thrust must be >= 0")
+        
+        # Engine validation
+        if self.burn_time.value() <= 0:
+            errors.append("❌ Burn time must be > 0")
+        
+        if self.specific_impulse.value() <= 0 and self.mean_thrust.value() > 0:
+            warnings.append("⚠️  Isp should be > 0 if motor is burning")
+        
+        # CoM validation
+        if self.com_before_z.value() > self.total_length.value() / 1000:
+            warnings.append("⚠️  CoM before burn is beyond rocket length")
+        
+        if self.com_after_z.value() > self.total_length.value() / 1000:
+            warnings.append("⚠️  CoM after burn is beyond rocket length")
+        
+        # Thrust-to-weight validation
+        if self.max_thrust.value() > 0 and self.initial_mass_spinbox.value() > 0:
+            calculated_twr = self.max_thrust.value() / (self.initial_mass_spinbox.value() * 9.81)
+            entered_twr = self.thrust_to_weight.value()
+            if abs(calculated_twr - entered_twr) > 0.5:
+                warnings.append(f"⚠️  TWR mismatch: calculated={calculated_twr:.2f}, entered={entered_twr:.2f}")
+        
+        # Geometry validation
+        if self.fuselage_length.value() <= 0 and self.fuselage_diameter.value() > 0:
+            errors.append("❌ Fuselage length must be > 0 if diameter is specified")
+        
+        if self.total_length.value() <= 0:
+            warnings.append("⚠️  Total length is 0 or negative")
+        
+        # Inertia validation  
+        if self.i_before_x.value() < 0 or self.i_before_y.value() < 0 or self.i_before_z.value() < 0:
+            errors.append("❌ Moment of inertia cannot be negative")
+        
+        # Fin validation
+        if self.n_fins.value() > 0 and self.fin_span.value() <= 0:
+            errors.append("❌ Fin span must be > 0 if fins are present")
+        
+        is_valid = len(errors) == 0
+        return is_valid, errors, warnings
+    
+    def validate_and_show_results(self):
+        """Validate configuration and show results."""
+        is_valid, errors, warnings = self.validate_rocket_config()
+        
+        # Build message
+        message = ""
+        if is_valid:
+            message = "✅ CONFIGURATION IS VALID\n\n"
+        else:
+            message = "❌ CONFIGURATION HAS ERRORS:\n\n"
+        
+        if errors:
+            message += "ERRORS:\n"
+            for error in errors:
+                message += f"  {error}\n"
+            message += "\n"
+        
+        if warnings:
+            message += "WARNINGS:\n"
+            for warning in warnings:
+                message += f"  {warning}\n"
+        
+        if not errors and not warnings:
+            message += "All parameters are within acceptable ranges."
+        
+        # Show dialog
+        if is_valid:
+            QMessageBox.information(self, "Validation Result", message)
+        else:
+            QMessageBox.warning(self, "Validation Failed", message)
+        
+        logger.info(f"Validation: Valid={is_valid}, Errors={len(errors)}, Warnings={len(warnings)}")
+    
+    def load_thrust_curve(self):
+        """Load thrust curve from CSV file."""
+        if not HAS_PANDAS:
+            QMessageBox.warning(
+                self, "Pandas Not Available",
+                "Install pandas to load thrust curves: pip install pandas"
+            )
+            return
+        
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Load Thrust Curve", "",
+            "CSV Files (*.csv);;All Files (*.*)"
+        )
+        
+        if not filepath:
+            return
+        
+        try:
+            # Try to load CSV
+            df = pd.read_csv(filepath)
+            
+            # Detect columns (try common names)
+            time_col = None
+            thrust_col = None
+            
+            for col in df.columns:
+                col_lower = col.lower().strip()
+                if 'time' in col_lower or 't' == col_lower:
+                    time_col = col
+                if 'thrust' in col_lower or 'f' == col_lower or 'force' in col_lower:
+                    thrust_col = col
+            
+            if time_col is None or thrust_col is None:
+                QMessageBox.warning(
+                    self, "CSV Format Error",
+                    f"Could not find time and thrust columns.\n\n"
+                    f"Found columns: {', '.join(df.columns)}\n\n"
+                    f"Please ensure the CSV has 'time' and 'thrust' columns."
+                )
+                return
+            
+            # Extract data
+            times = df[time_col].values
+            thrusts = df[thrust_col].values
+            
+            # Calculate statistics
+            self.thrust_curve_data = {'time': times, 'thrust': thrusts, 'file': os.path.basename(filepath)}
+            
+            mean_thrust = np.mean(thrusts)
+            max_thrust = np.max(thrusts)
+            burn_time = times[-1] - times[0]
+            
+            # Update info text
+            info = f"File: {self.thrust_curve_data['file']}\n\n"
+            info += f"Statistics:\n"
+            info += f"  Burn Time: {burn_time:.2f} s\n"
+            info += f"  Mean Thrust: {mean_thrust:.2f} N\n"
+            info += f"  Max Thrust: {max_thrust:.2f} N\n"
+            info += f"  Data Points: {len(times)}\n\n"
+            info += f"🔗 Suggested Updates:\n"
+            info += f"  Burn Time: {burn_time:.2f} s\n"
+            info += f"  Mean Thrust: {mean_thrust:.2f} N\n"
+            info += f"  Max Thrust: {max_thrust:.2f} N\n"
+            
+            self.thrust_info_text.setText(info)
+            self.thrust_curve_label.setText(f"✓ Loaded: {self.thrust_curve_data['file']}")
+            
+            # Plot if matplotlib available
+            if HAS_MATPLOTLIB:
+                self.figure.clear()
+                ax = self.figure.add_subplot(111)
+                ax.plot(times, thrusts, 'b-', linewidth=2, label='Thrust')
+                ax.axhline(y=mean_thrust, color='r', linestyle='--', label=f'Mean: {mean_thrust:.0f} N')
+                ax.set_xlabel('Time (s)')
+                ax.set_ylabel('Thrust (N)')
+                ax.set_title(f'Thrust Curve: {self.thrust_curve_data["file"]}')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                self.figure.tight_layout()
+                self.canvas.draw()
+            
+            logger.info(f"Loaded thrust curve: {filepath}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load CSV: {str(e)}")
+            logger.error(f"Error loading thrust curve: {e}")
+    
+    def save_rocket_config(self):
+        """Save rocket configuration to JSON file."""
+        # Validate before saving
+        is_valid, errors, warnings = self.validate_rocket_config()
+        
+        if not is_valid:
+            reply = QMessageBox.question(
+                self, "Validation Errors",
+                f"Configuration has {len(errors)} error(s):\n\n" +
+                "\n".join(errors) + "\n\n"
+                f"Save anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
+        
+        configs_path = 'data/rockets/configs'
+        os.makedirs(configs_path, exist_ok=True)
+        
+        rocket_data = {
+            'name': self.name_edit.text(),
+            'initial_mass': self.initial_mass_spinbox.value(),
+            'reference_area': self.reference_area_spinbox.value(),
+            'I_before_burn': {
+                'x': self.i_before_x.value(),
+                'y': self.i_before_y.value(),
+                'z': self.i_before_z.value()
+            },
+            'CoM_before_burn': {
+                'x': self.com_before_x.value(),
+                'y': self.com_before_y.value(),
+                'z': self.com_before_z.value()
+            },
+            'I_after_burn': {
+                'x': self.i_after_x.value(),
+                'y': self.i_after_y.value(),
+                'z': self.i_after_z.value()
+            },
+            'CoM_after_burn': {
+                'x': self.com_after_x.value(),
+                'y': self.com_after_y.value(),
+                'z': self.com_after_z.value()
+            },
+            'engine': {
+                'burn_time': self.burn_time.value(),
+                'propellant_mass': self.propellant_mass.value(),
+                'specific_impulse': self.specific_impulse.value(),
+                'mean_thrust': self.mean_thrust.value(),
+                'max_thrust': self.max_thrust.value(),
+                'nozzle_exit_diameter': self.nozzle_diameter.value(),
+                'mean_chamber_pressure': self.mean_chamber_pressure.value(),
+                'max_chamber_pressure': self.max_chamber_pressure.value(),
+                'thrust_to_weight_ratio': self.thrust_to_weight.value()
+            },
+            'geometry': {
+                'total length': self.total_length.value(),
+                'length nosecone fins': self.length_nosecone_fins.value()
+            },
+            'fuselage': {
+                'length': self.fuselage_length.value(),
+                'diameter': self.fuselage_diameter.value()
+            },
+            'rear_section': {
+                'length': self.rear_length.value(),
+                'diameter': self.rear_diameter.value()
+            },
+            'nosecone': {
+                'type': self.nosecone_type.currentText(),
+                'length': self.nosecone_length.value(),
+                'diameter': self.nosecone_diameter.value(),
+                'ogive_radius': self.ogive_radius.value(),
+                'parabolic_parameter': self.parabolic_parameter.value(),
+                'power_value': self.power_value.value(),
+                'haack_type': self.haack_type.currentText()
+            },
+            'fins': {
+                'fin_type': self.fin_type.currentText(),
+                'N_fins': self.n_fins.value(),
+                'span': self.fin_span.value(),
+                'chord_root': self.fin_chord_root.value(),
+                'chord_tip': self.fin_chord_tip.value(),
+                'mid_chord': self.fin_mid_chord.value(),
+                'sweep_angle': self.fin_sweep_angle.value()
+            }
+        }
+        
+        # Add thrust curve info if available
+        if self.thrust_curve_data:
+            rocket_data['thrust_curve'] = {
+                'source_file': self.thrust_curve_data.get('file', 'unknown'),
+                'data_points': len(self.thrust_curve_data.get('time', [])),
+                'loaded': True
+            }
+        
+        try:
+            safe_name = self.name_edit.text().lower().replace(" ", "_")
+            file_path = os.path.join(configs_path, f"{safe_name}.json")
+            
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(rocket_data, f, indent=4, ensure_ascii=False)
+            
+            QMessageBox.information(self, "Success", f"Rocket saved to {file_path}")
+            logger.info(f"Rocket configuration saved: {file_path}")
+            
+            # Reload configurations
+            self.rockets.clear()
+            self.rocket_combo.clear()
+            self.rocket_combo.addItem("Manual")
+            self.load_rocket_configs()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save: {str(e)}")
+            logger.error(f"Error saving rocket: {e}")
+    
+    def visualize_3d_model(self):
+        """Visualize 3D model of rocket."""
+        if not HAS_PYVISTA:
+            QMessageBox.information(
+                self, "PyVista Not Available",
+                "PyVista is not installed. Install it with: pip install pyvista\n\n"
+                "3D visualization will be available after installation."
+            )
+            return
+        
+        # Create simple 3D model
+        try:
+            plotter = pv.Plotter(title="Rocket 3D Model")
+            
+            # Get dimensions
+            nosecone_len = self.nosecone_length.value() / 1000  # Convert to m
+            nosecone_diam = self.nosecone_diameter.value() / 1000
+            fuselage_len = self.fuselage_length.value() / 1000
+            fuselage_diam = self.fuselage_diameter.value() / 1000
+            
+            # Nosecone (cone)
+            if nosecone_len > 0 and nosecone_diam > 0:
+                cone = pv.Cone(height=nosecone_len, radius=nosecone_diam/2)
+                cone = cone.translate([0, 0, fuselage_len + nosecone_len/2])
+                plotter.add_mesh(cone, color='red', label='Nosecone')
+            
+            # Fuselage (cylinder)
+            if fuselage_len > 0 and fuselage_diam > 0:
+                cylinder = pv.Cylinder(height=fuselage_len, radius=fuselage_diam/2)
+                cylinder = cylinder.translate([0, 0, fuselage_len/2])
+                plotter.add_mesh(cylinder, color='blue', label='Fuselage')
+            
+            # Add legend and display
+            plotter.add_legend()
+            plotter.show()
+            
+        except Exception as e:
+            logger.error(f"Error creating 3D model: {e}")
+            QMessageBox.critical(self, "3D Visualization Error", f"Failed to create 3D model: {str(e)}")
+    
+    def load_rocket_config_file(self):
+        """Load a rocket configuration from file."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Load Rocket Configuration", "",
+            "JSON Files (*.json)"
+        )
+        
+        if filepath:
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    rocket_data = json.load(f)
+                
+                self.load_rocket_data(rocket_data)
+                logger.info(f"Loaded rocket from {filepath}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to load: {str(e)}")
+                logger.error(f"Error loading rocket: {e}")
+    
+    def delete_rocket_config(self):
+        """Delete selected rocket configuration."""
+        if not self.current_rocket:
+            QMessageBox.warning(self, "Warning", "Select a rocket to delete")
+            return
+        
+        reply = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Delete rocket '{self.current_rocket}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                configs_path = 'data/rockets/configs'
+                safe_name = self.current_rocket.lower().replace(" ", "_")
+                file_path = os.path.join(configs_path, f"{safe_name}.json")
+                
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    QMessageBox.information(self, "Success", f"Deleted '{self.current_rocket}'")
+                    
+                    # Reload configurations
+                    self.rockets.clear()
+                    self.rocket_combo.clear()
+                    self.rocket_combo.addItem("Manual")
+                    self.current_rocket = None
+                    self.load_rocket_configs()
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to delete: {str(e)}")

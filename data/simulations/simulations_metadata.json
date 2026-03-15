@@ -1,0 +1,17 @@
+{
+  "sim_20260315_184944_adcf5baf": {
+    "timestamp": "2026-03-15T18:49:44.806897",
+    "rocket": "agni-1",
+    "location": "Base Aérea de Chamical",
+    "max_altitude": 0.0,
+    "max_velocity": 282535.50,
+    "max_range": 94.24,
+    "flight_duration": 1.0,
+    "max_mach": 821.49,
+    "max_accel_g": 0.0,
+    "temperature": 20.0,
+    "pressure": 101325.0,
+    "parachute_enabled": false,
+    "notes": "Physics integration test simulation"
+  }
+}

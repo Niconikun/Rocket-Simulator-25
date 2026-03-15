@@ -1,21 +1,32 @@
-streamlit
-streamlit_keplergl
-streamlit_globe
-keplergl
+# PyQt6 GUI Framework
+PyQt6
+PyQt6-Qt6
+PyQt6-sip
+PyQtWebEngine
+
+# Scientific and Data Processing
 scipy
 numpy
 pandas
 fluids
 matplotlib
 plotly
-datetime
-flask
 navpy
-pyvista
-stpyvista
-pyarrow
-fastparquet
-fluids
 ephem
 mathlib
+
+# 3D Visualization
+pyvista
+pyopengl
+
+# Data Formats
+pyarrow
+fastparquet
+
+# Document Generation
 reportlab>=4.0.0
+
+# Build and Distribution
+PyInstaller>=6.0.0
+
+# Note: Removed Streamlit dependencies (streamlit, streamlit_keplergl, streamlit_globe, keplergl, stpyvista, flask)
