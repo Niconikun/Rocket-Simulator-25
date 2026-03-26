@@ -1,0 +1,96 @@
+{
+    "name": "Coasting_Test_Rocket",
+    "description": "Low-thrust configuration to test coasting phase and ballistic descent",
+    "category": "test_configuration",
+    "total_mass_initial": 5.0,
+    "propellant_mass": 0.10,
+    "reference_area": 0.035,
+    "I_before_burn": {
+        "x": 0.008,
+        "y": 0.18,
+        "z": 0.18
+    },
+    "CoM_before_burn": {
+        "x": 0.25,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "I_after_burn": {
+        "x": 0.007,
+        "y": 0.17,
+        "z": 0.17
+    },
+    "CoM_after_burn": {
+        "x": 0.24,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "engine": {
+        "type": "Very_Low_Thrust",
+        "burn_time": 2.0,
+        "nozzle_exit_diameter": 8.0,
+        "propellant_mass": 0.10,
+        "specific_impulse": 150,
+        "mean_thrust": 8.0,
+        "max_thrust": 10.0,
+        "mean_chamber_pressure": 200000,
+        "max_chamber_pressure": 250000,
+        "thrust_to_weight_ratio": 0.2,
+        "mass_flux": 0.05,
+        "gas_speed": 1470.0,
+        "exit_pressure": 20000.0,
+        "thrust_curve_mode": "analytical",
+        "chamber_temperature": 2400.0,
+        "notes": "Minimal thrust - tests coasting and ballistic descent without strong propulsion effects"
+    },
+    "geometry": {
+        "total_length": 0.80,
+        "length_nosecone_fins": 0.65,
+        "description": "Minimal thrust rocket for coasting validation"
+    },
+    "nosecone": {
+        "type": "Conical",
+        "length": 0.15,
+        "diameter": 0.065,
+        "shape": "Conical",
+        "material": "Polystyrene"
+    },
+    "fuselage": {
+        "length": 0.50,
+        "diameter": 0.065,
+        "material": "Paper tube",
+        "wall_thickness": 0.001
+    },
+    "fins": {
+        "type": "Triangular",
+        "span": 0.08,
+        "chord_root": 0.080,
+        "chord_tip": 0.010,
+        "mid_chord": 0.045,
+        "N_fins": 3,
+        "material": "Balsa wood",
+        "thickness": 0.002
+    },
+    "rear_section": {
+        "length": 0.15,
+        "diameter": 0.055,
+        "material": "Pop tube"
+    },
+    "parachute": {
+        "type": "Ripstop nylon",
+        "diameter": 0.40,
+        "area": 0.1257,
+        "deployment_altitude": 150.0,
+        "deployment_velocity": 0.3,
+        "drag_coefficient": 1.4,
+        "mass": 0.03
+    },
+    "validation": {
+        "expected_apogee_m": 850,
+        "expected_velocity_max_ms": 40,
+        "expected_drift_m": 200,
+        "apogee_tolerance_m": 100,
+        "coasting_phase_duration_s": 3.0,
+        "test_purpose": "Verify coasting phase dynamics without strong propulsive forces"
+    }
+}

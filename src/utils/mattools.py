@@ -28,7 +28,7 @@ ___ _     _________ _     ___ _
 """
 # Imports
 import numpy as np
-from cmath import pi
+from math import pi
 
 class MatTools:
     """Clase de utilidades matemáticas para operaciones vectoriales y transformaciones."""

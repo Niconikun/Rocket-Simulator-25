@@ -1,0 +1,94 @@
+{
+    "name": "Small_Model_Rocket",
+    "description": "Educational small model rocket for basic physics validation",
+    "category": "model_rocket",
+    "total_mass_initial": 1.5,
+    "propellant_mass": 0.35,
+    "reference_area": 0.018,
+    "I_before_burn": {
+        "x": 0.0015,
+        "y": 0.035,
+        "z": 0.035
+    },
+    "CoM_before_burn": {
+        "x": 0.15,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "I_after_burn": {
+        "x": 0.0012,
+        "y": 0.028,
+        "z": 0.028
+    },
+    "CoM_after_burn": {
+        "x": 0.12,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "engine": {
+        "type": "F_Series",
+        "burn_time": 3.5,
+        "nozzle_exit_diameter": 11.0,
+        "propellant_mass": 0.35,
+        "specific_impulse": 260,
+        "mean_thrust": 100,
+        "max_thrust": 140,
+        "mean_chamber_pressure": 400000,
+        "max_chamber_pressure": 500000,
+        "thrust_to_weight_ratio": 9.3,
+        "mass_flux": 0.1,
+        "gas_speed": 2550.0,
+        "exit_pressure": 50000.0,
+        "thrust_curve_mode": "analytical",
+        "chamber_temperature": 2800.0,
+        "notes": "Typical F12-6 impulse motor characteristics"
+    },
+    "geometry": {
+        "total_length": 0.45,
+        "length_nosecone_fins": 0.35,
+        "description": "Standard 3-inch diameter model rocket"
+    },
+    "nosecone": {
+        "type": "Conical",
+        "length": 0.12,
+        "diameter": 0.076,
+        "shape": "Conical",
+        "material": "Balsa wood"
+    },
+    "fuselage": {
+        "length": 0.25,
+        "diameter": 0.076,
+        "material": "Paper tube",
+        "wall_thickness": 0.002
+    },
+    "fins": {
+        "type": "Trapezoidal",
+        "span": 0.05,
+        "chord_root": 0.060,
+        "chord_tip": 0.020,
+        "mid_chord": 0.040,
+        "N_fins": 3,
+        "material": "Balsa wood",
+        "thickness": 0.003
+    },
+    "rear_section": {
+        "length": 0.08,
+        "diameter": 0.06,
+        "material": "Cardboard"
+    },
+    "parachute": {
+        "type": "Ripstop nylon",
+        "diameter": 0.36,
+        "area": 0.1018,
+        "deployment_altitude": 100.0,
+        "deployment_velocity": 0.5,
+        "drag_coefficient": 1.5,
+        "mass": 0.025
+    },
+    "validation": {
+        "expected_apogee_m": 2800,
+        "expected_velocity_max_ms": 85,
+        "expected_drift_m": 150,
+        "test_purpose": "Verify basic 6-DOF dynamics and stability calculations"
+    }
+}

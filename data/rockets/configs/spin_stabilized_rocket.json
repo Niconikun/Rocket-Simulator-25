@@ -1,0 +1,110 @@
+{
+    "name": "Spin_Stabilized_Rocket",
+    "description": "Spin-stabilized rocket with initial angular velocity for attitude control validation",
+    "category": "spin_stabilized",
+    "total_mass_initial": 12.0,
+    "propellant_mass": 3.5,
+    "reference_area": 0.040,
+    "I_before_burn": {
+        "x": 0.035,
+        "y": 0.65,
+        "z": 0.65
+    },
+    "CoM_before_burn": {
+        "x": 0.35,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "I_after_burn": {
+        "x": 0.028,
+        "y": 0.52,
+        "z": 0.52
+    },
+    "CoM_after_burn": {
+        "x": 0.30,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "engine": {
+        "type": "H_Series",
+        "burn_time": 8.0,
+        "nozzle_exit_diameter": 30.0,
+        "propellant_mass": 3.5,
+        "specific_impulse": 420,
+        "mean_thrust": 1800,
+        "max_thrust": 2400,
+        "mean_chamber_pressure": 3200000,
+        "max_chamber_pressure": 4000000,
+        "thrust_to_weight_ratio": 20.0,
+        "mass_flux": 0.4375,
+        "gas_speed": 4120.0,
+        "exit_pressure": 400000.0,
+        "thrust_curve_mode": "analytical",
+        "chamber_temperature": 2950.0,
+        "notes": "Standard H-class motor for spin-stabilized flight"
+    },
+    "geometry": {
+        "total_length": 1.50,
+        "length_nosecone_fins": 1.20,
+        "description": "3.25-inch diameter spin-stabilized test rocket"
+    },
+    "nosecone": {
+        "type": "Conical",
+        "length": 0.20,
+        "diameter": 0.0825,
+        "shape": "Conical",
+        "material": "Balsa wood"
+    },
+    "fuselage": {
+        "length": 0.90,
+        "diameter": 0.0825,
+        "material": "Paper tube",
+        "wall_thickness": 0.002
+    },
+    "fins": {
+        "type": "Helical",
+        "span": 0.12,
+        "chord_root": 0.140,
+        "chord_tip": 0.040,
+        "mid_chord": 0.090,
+        "N_fins": 3,
+        "twist_angle": 15.0,
+        "material": "Balsa wood",
+        "thickness": 0.004,
+        "note": "Helical fins induce spin for attitude stabilization"
+    },
+    "rear_section": {
+        "length": 0.40,
+        "diameter": 0.070,
+        "material": "Paper tube",
+        "note": "Ejection charge port for parachute deployment"
+    },
+    "initial_conditions_test": {
+        "description": "Special initial conditions for spin validation",
+        "spin_rate_rpm": 250.0,
+        "spin_rate_rad_s": 26.18,
+        "pitch_angle_deg": 85.0,
+        "yaw_angle_deg": 0.0,
+        "roll_rate_rad_s": 0.0,
+        "note": "High spin rate about roll axis induces gyroscopic stabilization"
+    },
+    "parachute": {
+        "type": "Ripstop nylon",
+        "diameter": 0.50,
+        "area": 0.1963,
+        "deployment_altitude": 200.0,
+        "deployment_velocity": 0.5,
+        "drag_coefficient": 1.4,
+        "mass": 0.05,
+        "note": "Deployment occurs after air ejection charge"
+    },
+    "validation": {
+        "expected_apogee_m": 7500,
+        "expected_velocity_max_ms": 155,
+        "expected_drift_m": 650,
+        "apogee_tolerance_m": 300,
+        "velocity_tolerance_ms": 8,
+        "spin_stability_margin": 2.5,
+        "test_purpose": "Validate gyroscopic stabilization from helical fins and initial spin rate"
+    }
+}

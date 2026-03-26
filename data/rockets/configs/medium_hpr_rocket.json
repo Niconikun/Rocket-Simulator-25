@@ -1,0 +1,110 @@
+{
+    "name": "Medium_HPR_Rocket",
+    "description": "Medium high-power rocket for mid-altitude demonstrations",
+    "category": "high_power_rocket",
+    "total_mass_initial": 18.5,
+    "propellant_mass": 6.0,
+    "reference_area": 0.055,
+    "I_before_burn": {
+        "x": 0.085,
+        "y": 1.25,
+        "z": 1.25
+    },
+    "CoM_before_burn": {
+        "x": 0.45,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "I_after_burn": {
+        "x": 0.065,
+        "y": 0.95,
+        "z": 0.95
+    },
+    "CoM_after_burn": {
+        "x": 0.40,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "engine": {
+        "type": "I_Series",
+        "burn_time": 10.5,
+        "nozzle_exit_diameter": 35.0,
+        "propellant_mass": 6.0,
+        "specific_impulse": 455,
+        "mean_thrust": 5600,
+        "max_thrust": 7200,
+        "mean_chamber_pressure": 6000000,
+        "max_chamber_pressure": 7500000,
+        "thrust_to_weight_ratio": 38.6,
+        "mass_flux": 0.571,
+        "gas_speed": 4450.0,
+        "exit_pressure": 750000.0,
+        "thrust_curve_mode": "analytical",
+        "chamber_temperature": 3100.0,
+        "notes": "Solid rocket motor, mid-power characteristics"
+    },
+    "geometry": {
+        "total_length": 2.15,
+        "length_nosecone_fins": 1.80,
+        "description": "Standard 4-inch diameter high-power rocket"
+    },
+    "nosecone": {
+        "type": "Ogival",
+        "length": 0.35,
+        "diameter": 0.1,
+        "shape": "Ogival",
+        "material": "Fiberglass"
+    },
+    "fuselage": {
+        "length": 1.40,
+        "diameter": 0.1,
+        "material": "Carbon fiber composite",
+        "wall_thickness": 0.003
+    },
+    "fins": {
+        "type": "Trapezoidal",
+        "span": 0.15,
+        "chord_root": 0.180,
+        "chord_tip": 0.060,
+        "mid_chord": 0.120,
+        "N_fins": 4,
+        "material": "G10 fiberglass",
+        "thickness": 0.005
+    },
+    "rear_section": {
+        "length": 0.40,
+        "diameter": 0.085,
+        "material": "Aluminum tube"
+    },
+    "parachute": {
+        "type": "Ripstop nylon",
+        "deployment": [
+            {
+                "type": "Drogue",
+                "diameter": 0.60,
+                "area": 0.283,
+                "deployment_altitude": 800.0,
+                "deployment_velocity": 10.0,
+                "drag_coefficient": 1.2,
+                "mass": 0.150
+            },
+            {
+                "type": "Main",
+                "diameter": 1.50,
+                "area": 1.767,
+                "deployment_altitude": 300.0,
+                "deployment_velocity": 2.0,
+                "drag_coefficient": 1.5,
+                "mass": 0.500
+            }
+        ]
+    },
+    "validation": {
+        "expected_apogee_m": 15200,
+        "expected_velocity_max_ms": 265,
+        "expected_drift_m": 850,
+        "apogee_tolerance_m": 500,
+        "velocity_tolerance_ms": 10,
+        "test_purpose": "Validate multi-stage parachute deployment and mid-altitude performance"
+    }
+}
