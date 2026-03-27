@@ -8,25 +8,16 @@ PyQtWebEngine
 scipy
 numpy
 pandas
-fluids
 matplotlib
-plotly
 navpy
 ephem
-mathlib
 
-# 3D Visualization
+# 3D Visualization (Optional)
 pyvista
 pyopengl
-
-# Data Formats
-pyarrow
-fastparquet
 
 # Document Generation
 reportlab>=4.0.0
 
 # Build and Distribution
 PyInstaller>=6.0.0
-
-# Note: Removed Streamlit dependencies (streamlit, streamlit_keplergl, streamlit_globe, keplergl, stpyvista, flask)

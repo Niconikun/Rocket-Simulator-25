@@ -167,6 +167,12 @@ class Rocket(object):
         self.lift = 0.0
         self.forces_drag_b = np.zeros(3)
         self.forces_lift_b = np.zeros(3)
+        self.v_norm = 0.0  # Velocity magnitude for history tracking
+        self.range = 0.0   # Horizontal range for history tracking
+        self.yaw = 0.0     # Yaw angle (Euler angle)
+        self.pitch = 0.0   # Pitch angle (Euler angle)
+        self.roll = 0.0    # Roll angle (Euler angle)
+        self.alpha = 0.0   # Angle of attack
 
         # Enhanced engine tracking attributes
         self.engine_isp = 0.0
@@ -186,6 +192,9 @@ class Rocket(object):
         self.coord = np.array([0.0, 0.0, 0.0])  # [lat, lon, alt]
         self.reference_area = 0.01  # m²
         self.reference_length = 1.0  # m
+        
+        # Center of mass and pressure (not yet computed, will be set during update_aerodynamics)
+        self.cm_b = np.array([0.0, 0.0, 0.0])  # Center of mass in body frame
 
         # Preallocate historical arrays as numpy arrays for O(1) indexing
         self._initialize_history_arrays()
@@ -1058,7 +1067,11 @@ class Rocket(object):
             
             # Masa e inercia
             self.hist_mass[idx] = self.mass
-            self.hist_inertia_b[idx] = self.inertia_b
+            # Store diagonal of inertia matrix (3 principal moments)
+            if isinstance(self.inertia_b, np.ndarray) and self.inertia_b.shape == (3, 3):
+                self.hist_inertia_b[idx] = np.diag(self.inertia_b)
+            else:
+                self.hist_inertia_b[idx] = self.inertia_b if isinstance(self.inertia_b, np.ndarray) else np.zeros(3)
             self.hist_cm_b[idx] = self.cm_b
             self.hist_cp_b[idx] = self.cp_b
             

@@ -268,10 +268,22 @@ class SimulationWorker(QThread):
             # Final metrics
             metrics['flight_duration'] = t
             
-            # Prepare results
+            # Finalize history array data - convert numpy arrays to lists for JSON serialization
+            # This integrates the optimized numpy storage with the dashboard pipeline
+            try:
+                history_data = rocket.finalize_history()
+                logger.info(f"Finalized history: {len(history_data)} fields, "
+                           f"{self._get_history_length(history_data)} timesteps recorded")
+            except Exception as history_error:
+                logger.warning(f"Could not finalize history: {history_error}. "
+                              f"Dashboard will use trajectory data only.")
+                history_data = {}
+            
+            # Prepare results with complete historical data
             results = {
                 'status': 'success',
                 'trajectory': trajectory,
+                'history': history_data,          # Complete 40+ field historical data (numpy→lists)
                 'metrics': metrics,
                 'total_steps': i + 1,
                 'simulation_time': t,
@@ -319,6 +331,26 @@ class SimulationWorker(QThread):
         except Exception as e:
             logger.error(f"Error loading rocket config: {e}")
             return None
+    
+    def _get_history_length(self, history_dict: dict) -> int:
+        """
+        Get the number of timesteps recorded in history data.
+        
+        Args:
+            history_dict: Dictionary returned from rocket.finalize_history()
+        
+        Returns:
+            Number of timesteps, or 0 if empty
+        """
+        if not history_dict:
+            return 0
+        
+        # Get the first available array to determine length
+        for key, value in history_dict.items():
+            if isinstance(value, list) and value:
+                return len(value)
+        
+        return 0
     
     def stop(self):
         """Stop the simulation worker."""
