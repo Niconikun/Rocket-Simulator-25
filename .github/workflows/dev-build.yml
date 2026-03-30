@@ -1,0 +1,59 @@
+name: Dev Build (Manual Testing)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-dev:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller>=6.0.0
+      
+      - name: Build executable
+        run: |
+          python build_exe.py
+      
+      - name: Check build artifacts
+        run: |
+          Write-Host "=== Build Artifacts ==="
+          if (Test-Path "dist\RocketSimulator\RocketSimulator.exe") {
+            $size = (Get-Item "dist\RocketSimulator\RocketSimulator.exe").Length / 1MB
+            Write-Host "✓ Executable created: $($size.ToString('F2')) MB"
+          } else {
+            Write-Host "✗ Executable not found"
+            Get-ChildItem -Path "dist" -Recurse -ErrorAction SilentlyContinue
+            exit 1
+          }
+          
+          Write-Host ""
+          Write-Host "=== Directory Contents ==="
+          Get-ChildItem -Path "dist\RocketSimulator" -Recurse | Select-Object Name | Head -20
+      
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: RocketSimulator-dev-build
+          path: dist/RocketSimulator/
+          retention-days: 7
+      
+      - name: Summary
+        run: |
+          Write-Host "=== Build Summary ==="
+          Write-Host "✓ Build completed successfully"
+          Write-Host "📦 Artifacts available for download"
+          Write-Host "📝 Retention: 7 days"
