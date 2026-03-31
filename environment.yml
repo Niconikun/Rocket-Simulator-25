@@ -1,0 +1,30 @@
+name: rocket-simulator-gui
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pyqt=6
+  - pyqt6
+  - pyqt6-qt6
+  - pyqt6-sip
+  - pyqt6-webengine
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - navpy
+  - ephem
+  - folium>=0.14.0
+  - pyvista
+  - pyopengl
+  - reportlab>=4.0.0
+  - pyinstaller>=6.0.0
+  - fluids
+  - pip
+  - pip:
+      # Si algún paquete no está en conda-forge, se instalará por pip
+      # (puedes mover aquí navpy, fluids, ephem si conda-forge no los tiene)
+      # - navpy
+      # - fluids
+      # - ephem
