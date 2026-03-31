@@ -13,6 +13,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+
     
     steps:
       - name: Checkout code
@@ -50,7 +53,7 @@ jobs:
           Compress-Archive -Path "dist\RocketSimulator" -DestinationPath "RocketSimulator-windows.zip"
           Write-Host "Archive created successfully"
       
-      - name: Get version from tag
+      - name: Get version
         id: get_version
         run: |
           $version = "${{ github.ref }}".Replace("refs/tags/v", "")

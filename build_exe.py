@@ -10,6 +10,10 @@ import shutil
 import os
 from pathlib import Path
 
+# Fix Unicode encoding on Windows
+if sys.platform.startswith('win'):
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 
 class BuildEXE:
     """Build executable using PyInstaller."""
@@ -102,6 +106,7 @@ class BuildEXE:
                     pass
         
         print("[✓] Clean complete")
+        return True
     
     def build(self):
         """Build executable."""

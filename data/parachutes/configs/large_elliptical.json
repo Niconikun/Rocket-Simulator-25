@@ -1,0 +1,22 @@
+{
+    "name": "Large Elliptical Parachute",
+    "description": "Large elliptical parachute for high-altitude rockets",
+    "diameter": 1.2,
+    "Cd": 1.6,
+    "material": "ripstop_nylon",
+    "mass": 0.15,
+    "deployment": {
+        "altitude": 500.0,
+        "min_velocity": 10.0,
+        "max_velocity": 100.0,
+        "deployment_time": 0.7
+    },
+    "drogue": {
+        "enabled": true,
+        "diameter": 0.3,
+        "Cd": 1.5,
+        "mass": 0.04,
+        "deployment_altitude": 800.0,
+        "deployment_time": 0.3
+    }
+}

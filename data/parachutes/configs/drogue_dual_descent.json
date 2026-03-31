@@ -1,0 +1,22 @@
+{
+    "name": "Drogue + Main Dual Descent",
+    "description": "Two-stage descent system with drogue and main parachute",
+    "diameter": 0.8,
+    "Cd": 1.55,
+    "material": "silnylon",
+    "mass": 0.12,
+    "deployment": {
+        "altitude": 250.0,
+        "min_velocity": 15.0,
+        "max_velocity": 120.0,
+        "deployment_time": 0.6
+    },
+    "drogue": {
+        "enabled": true,
+        "diameter": 0.25,
+        "Cd": 1.45,
+        "mass": 0.03,
+        "deployment_altitude": 1000.0,
+        "deployment_time": 0.25
+    }
+}

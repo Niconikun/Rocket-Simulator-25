@@ -94,6 +94,9 @@ class LocationSettingsWidget(QWidget):
         self.latitude_spinbox.setRange(-90, 90)
         self.latitude_spinbox.setDecimals(6)
         self.latitude_spinbox.setSuffix(" °")
+        self.latitude_spinbox.valueChanged.connect(
+            lambda v: self.state.set('launch_latitude', v)
+        )
         props_layout.addRow("Latitude:", self.latitude_spinbox)
         
         # Longitude
@@ -101,6 +104,9 @@ class LocationSettingsWidget(QWidget):
         self.longitude_spinbox.setRange(-180, 180)
         self.longitude_spinbox.setDecimals(6)
         self.longitude_spinbox.setSuffix(" °")
+        self.longitude_spinbox.valueChanged.connect(
+            lambda v: self.state.set('launch_longitude', v)
+        )
         props_layout.addRow("Longitude:", self.longitude_spinbox)
         
         # Elevation

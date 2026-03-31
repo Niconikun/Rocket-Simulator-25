@@ -151,6 +151,11 @@ class Rocket(object):
         self.torques_aero_b = np.array([0.0, 0.0, 0.0])
         self.cm2cp_b = np.array([0.0, 0.0, 0.0])
         self.accel_b = np.zeros(3)
+        
+        # Wind effects (Phase 2: Wind model integration)
+        self.wind_vector_enu = np.array([0.0, 0.0, 0.0])  # Wind velocity in ENU frame [m/s]
+        self.v_rel_enu = np.array([0.0, 0.0, 0.0])        # Relative velocity (rocket - wind) [m/s]
+        self.v_rel_norm = 0.0                             # Magnitude of relative velocity [m/s]
 
         self.parachute = None
         self.has_parachute = False
@@ -353,17 +358,18 @@ class Rocket(object):
                 self.cm_b = np.array([cm_after_x, cm_after_y, cm_after_z])
                 self.inertia_b = np.array([I_after_x, I_after_y, I_after_z])     # [kg m2]    # Inertia after burning obtained via Autodesk Inventor 
 
-    def update_pos_vel(self,coordinates):
+    def update_pos_vel(self, coordinates, wind_vector_enu=None):
         """
         Actualiza todas las variables relacionadas con posición y velocidad.
 
         Args:
             coordinates (np.ndarray): Coordenadas de la plataforma [lat, lon, alt]
+            wind_vector_enu (np.ndarray, optional): Wind velocity in ENU frame [m/s]
 
         Cálculos:
             1. Actitud (ángulos de Euler desde cuaternión)
-            2. Velocidades en marco del cuerpo
-            3. Ángulo de ataque
+            2. Velocidades en marco del cuerpo (incluyendo efectos de viento)
+            3. Ángulo de ataque (corregido por viento)
             4. Posiciones en diferentes marcos de referencia
             5. Velocidades angulares
 
@@ -380,11 +386,23 @@ class Rocket(object):
         self.roll=angles[2]      # Rotación sobre eje longitudinal [deg]
 
         #_______Velocity related calculation_____#
-        self.v_b=Mat.q_rot(self.v_enu,self.q_enu2b,0)    # [m/s]   # Rotation of velocity from East-North-Up system to bodyframe
-        self.v_norm=np.linalg.norm(self.v_enu)           # [m/s]   # Norm or magnitude of velocity from a East-North-Up system
+        # Handle wind effects (Phase 2: Wind model integration)
+        if wind_vector_enu is not None:
+            self.wind_vector_enu = np.array(wind_vector_enu, dtype=float)
+        else:
+            self.wind_vector_enu = np.array([0.0, 0.0, 0.0])
+        
+        # Calculate relative velocity (rocket velocity - wind velocity)
+        self.v_rel_enu = self.v_enu - self.wind_vector_enu
+        self.v_rel_norm = np.linalg.norm(self.v_rel_enu)
+        
+        # Use relative velocity for aerodynamic calculations
+        self.v_b = Mat.q_rot(self.v_rel_enu, self.q_enu2b, 0)    # [m/s]   # Body frame velocity (relative to air)
+        self.v_norm = self.v_rel_norm                             # [m/s]   # Velocity magnitude for aerodynamics (relative)
 
         #_______Angle of attack___________#
-        self.alpha=Mat.angle_vector_z(self.v_b)          # [deg]    # Angle of attack in a XZ plane (see [Oroz22])       
+        # Angle of attack based on relative velocity (wind-corrected)
+        self.alpha = Mat.angle_vector_z(self.v_b)          # [deg]    # Angle of attack in a XZ plane (see [Oroz22])       
 
         #______Location related calculations_____#
         self.r_platform_ecef=Geo.geo2ecef(coordinates)              # [m]     # Platform's Earth Centered-Earth Fixed location  
@@ -427,15 +445,21 @@ class Rocket(object):
         self.press_amb = press_amb       # [Pa] Atmospheric pressure
         self.v_sonic = v_sonic           # [m/s] Speed of sound 
 
-    def update_aerodynamics(self, rocket_name):
+    def update_aerodynamics(self, rocket_name, wind_vector_enu=None):
         """
         Actualiza las características aerodinámicas del cohete.
         
         Validates rocket configuration JSON structure before processing and provides
         detailed error messages for missing or invalid fields.
         
+        Wind Effects (Phase 2):
+        When wind is provided, aerodynamic forces are calculated using the relative
+        velocity between rocket and air. This affects angle of attack, dynamic pressure,
+        and all resulting aerodynamic forces.
+        
         Args:
             rocket_name (str): Name of rocket configuration file (without .json extension)
+            wind_vector_enu (np.ndarray, optional): Wind velocity in ENU frame [m/s]
             
         Raises:
             ConfigurationError: If required aerodynamics configuration keys are missing

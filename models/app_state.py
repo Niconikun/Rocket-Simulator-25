@@ -47,8 +47,8 @@ class ApplicationState:
         self._state['simulation_data'] = None
         
         # Time and location parameters
-        self._state['sim_runtime'] = 600
-        self._state['sim_time_step'] = 0.001
+        self._state['sim_runtime'] = 600  # seconds
+        self._state['sim_time_step'] = 0.001  # seconds
         self._state['sim_date'] = date.today()
         self._state['sim_time'] = time(12, 0)
         self._state['sim_timezone'] = "UTC"
@@ -57,38 +57,57 @@ class ApplicationState:
         self._state['average_temperature'] = 20.0  # Celsius
         self._state['average_pressure'] = 101325.0  # Pa
         self._state['launch_elevation'] = 60.0  # meters
-        self._state['launch_site_orientation'] = 20.0  # degrees
-        self._state['vel_initial'] = 0.0  # m/s
-        self._state['conditions'] = []
+        self._state['launch_site_orientation'] = 20.0  # degrees (magnetic declination at launch site)
+        self._state['conditions'] = []  # Environmental conditions list (can be used for weather/wind data)
         
         # ========== ROCKET SELECTION & SETTINGS ==========
-        self._state['sim_rocket'] = None
         self._state['selected_rocket'] = 'agni-1'  # Default rocket
-        self._state['sim_location'] = None
+        self._state['sim_location'] = None  # Currently selected location name
         
         # Launch site parameters
         self._state['launch_latitude'] = 0.0  # degrees
         self._state['launch_longitude'] = 0.0  # degrees
+        self._state['launch_elevation_angle'] = 85.0  # degrees (launch rod elevation angle)
         self._state['launch_azimuth'] = 0.0  # degrees (direction of launch)
         self._state['launch_roll'] = 0.0  # degrees (rocket roll angle at launch)
         
         # Rocket properties (editable)
-        self._state['rocket_name'] = ""
-        self._state['initial_mass'] = 0.0
-        self._state['burn_time'] = 0.0
-        self._state['reference_area'] = 0.0
-        self._state['I_before_burn'] = {"x": 0.0, "y": 0.0, "z": 0.0}
-        self._state['I_after_burn'] = {"x": 0.0, "y": 0.0, "z": 0.0}
+        self._state['initial_mass'] = 0.0  # kg
+        self._state['burn_time'] = 0.0  # seconds
+        self._state['reference_area'] = 0.0  # m²
+        self._state['I_before_burn'] = {"x": 0.0, "y": 0.0, "z": 0.0}  # kg·m²
+        self._state['I_after_burn'] = {"x": 0.0, "y": 0.0, "z": 0.0}  # kg·m²
         
         # ========== PARACHUTE SETTINGS ==========
         self._state['parachute_enabled'] = False
-        self._state['parachute_deployment_altitude'] = 300.0
-        self._state['parachute_area'] = 1.0
-        self._state['parachute_drag_coefficient'] = 1.5
+        self._state['parachute_deployment_altitude'] = 300.0  # meters
+        self._state['parachute_diameter'] = 0.6  # meters
+        self._state['parachute_cd'] = 1.5  # drag coefficient
+        self._state['parachute_min_velocity'] = 5.0  # m/s
+        self._state['parachute_max_velocity'] = 80.0  # m/s
+        self._state['parachute_inflation_time'] = 0.5  # seconds
+        self._state['selected_parachute'] = None  # Selected parachute name
+        
+        # Drogue parachute settings
+        self._state['drogue_enabled'] = False
+        self._state['drogue_diameter'] = 0.25  # meters
+        self._state['drogue_cd'] = 1.5  # drag coefficient
+        self._state['drogue_deployment_altitude'] = 800.0  # meters
+        
+        # ========== WIND MODEL PARAMETERS ==========
+        self._state['wind_enabled'] = False  # Enable/disable wind simulation
+        self._state['wind_model_type'] = 'logarithmic'  # Model type: constant, logarithmic, power_law, gust, shear
+        self._state['wind_speed_ref'] = 5.0  # Reference wind speed [m/s]
+        self._state['wind_reference_height'] = 10.0  # Reference height [m]
+        self._state['wind_direction'] = 180.0  # Wind direction FROM (meteorological convention) [degrees]
+        self._state['wind_roughness_length'] = 0.1  # Surface roughness z0 [m] (for logarithmic profile)
+        self._state['wind_exponent'] = 0.2  # Power law exponent alpha [unitless] (for power_law profile)
+        self._state['wind_gust_intensity'] = 0.0  # Turbulence intensity [0-1] (for gust model)
+        self._state['wind_gust_length_scale'] = 300.0  # Gust length scale [m] (for gust model)
         
         # ========== MONTE CARLO PARAMETERS ==========
-        self._state['monte_carlo_runs'] = 100
-        self._state['monte_carlo_variations'] = {}
+        self._state['monte_carlo_runs'] = 100  # number of simulation runs
+        self._state['monte_carlo_variations'] = {}  # variation parameters dict
         
         # ========== UI STATE ==========
         self._state['current_tab'] = 0

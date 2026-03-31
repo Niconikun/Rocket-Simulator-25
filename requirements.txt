@@ -2,7 +2,7 @@
 PyQt6
 PyQt6-Qt6
 PyQt6-sip
-PyQtWebEngine
+PyQt6-WebEngine
 
 # Scientific and Data Processing
 scipy
@@ -11,6 +11,9 @@ pandas
 matplotlib
 navpy
 ephem
+
+# Interactive Maps
+folium>=0.14.0
 
 # 3D Visualization (Optional)
 pyvista

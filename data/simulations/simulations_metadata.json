@@ -65,5 +65,31 @@
     "pressure": 101325.0,
     "parachute_enabled": false,
     "notes": ""
+  },
+  "sim_20260327_234542_03ca9a77": {
+    "timestamp": "2026-03-27T23:45:42.307362",
+    "rocket": "Rayo",
+    "location": "El Álamo",
+    "max_altitude": 0.0,
+    "max_velocity": 248.0503854249824,
+    "max_range": 0.10038980286170943,
+    "flight_duration": 1.0000000000000007,
+    "temperature": 20.0,
+    "pressure": 101325.0,
+    "parachute_enabled": false,
+    "notes": ""
+  },
+  "sim_20260328_121344_f8c1fa5d": {
+    "timestamp": "2026-03-28T12:13:44.240042",
+    "rocket": "Rayo",
+    "location": "Base Aérea de Chamical",
+    "max_altitude": 0.0,
+    "max_velocity": 248.0503854249824,
+    "max_range": 0.10038980286170943,
+    "flight_duration": 1.0000000000000007,
+    "temperature": 20.0,
+    "pressure": 101325.0,
+    "parachute_enabled": false,
+    "notes": ""
   }
 }

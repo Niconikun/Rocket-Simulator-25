@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         from ui.widgets.dashboard_widget import DashboardWidget
         from ui.widgets.units_converter_widget import UnitsConverterWidget
         from ui.widgets.parachute_settings_widget import ParachuteSettingsWidget
+        from ui.widgets.wind_settings_widget import WindSettingsWidget
         
         # Create widget instances
         self.simulation_widget = SimulationWidget()
@@ -64,15 +65,20 @@ class MainWindow(QMainWindow):
         self.dashboard_widget = DashboardWidget()
         self.units_widget = UnitsConverterWidget()
         self.parachute_widget = ParachuteSettingsWidget()
+        self.wind_widget = WindSettingsWidget()
         
         # Add tabs in order matching original Streamlit app
         self.tabs.addTab(self.simulation_widget, "🚀 Simulation")
         self.tabs.addTab(self.rocket_widget, "🛸 Rocket Settings")
         self.tabs.addTab(self.location_widget, "📍 Location")
+        self.tabs.addTab(self.wind_widget, "💨 Wind")
         self.tabs.addTab(self.dashboard_widget, "📊 Dashboard")
         self.tabs.addTab(self.monte_carlo_widget, "📈 Monte Carlo")
         self.tabs.addTab(self.units_widget, "⚖️ Units")
         self.tabs.addTab(self.parachute_widget, "🪂 Parachute")
+        
+        # Connect widget signals for wind updates
+        self.wind_widget.wind_changed.connect(self.on_wind_settings_changed)
         
         # Connect tab change signal
         self.tabs.currentChanged.connect(self.on_tab_changed)
@@ -134,6 +140,10 @@ class MainWindow(QMainWindow):
         """Handle tab change events."""
         self.state.set('current_tab', index)
         logger.info(f"Switched to tab {index}")
+    
+    def on_wind_settings_changed(self):
+        """Handle wind settings changes from the wind widget."""
+        logger.info("Wind settings changed - updating simulation parameters")
     
     def new_simulation(self):
         """Create a new simulation."""

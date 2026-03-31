@@ -97,6 +97,13 @@ class SimulationManager:
                 "temperature": metadata.get("temperature", 20.0),
                 "pressure": metadata.get("pressure", 101325.0),
                 "parachute_enabled": metadata.get("parachute_enabled", False),
+                "parachute_deployed": metadata.get("parachute_deployed", False),
+                "parachute_deployment_time": metadata.get("parachute_deployment_time", None),
+                "parachute_deployment_altitude": metadata.get("parachute_deployment_altitude", None),
+                "parachute_deployment_velocity": metadata.get("parachute_deployment_velocity", None),
+                "drogue_deployed": metadata.get("drogue_deployed", False),
+                "drogue_deployment_time": metadata.get("drogue_deployment_time", None),
+                "drogue_deployment_altitude": metadata.get("drogue_deployment_altitude", None),
                 "notes": metadata.get("notes", "")
             }
             self._save_metadata()

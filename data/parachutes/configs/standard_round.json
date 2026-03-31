@@ -1,0 +1,22 @@
+{
+    "name": "Standard Round Parachute",
+    "description": "Standard round parachute for model rockets",
+    "diameter": 0.6,
+    "Cd": 1.5,
+    "material": "ripstop_nylon",
+    "mass": 0.05,
+    "deployment": {
+        "altitude": 300.0,
+        "min_velocity": 5.0,
+        "max_velocity": 80.0,
+        "deployment_time": 0.5
+    },
+    "drogue": {
+        "enabled": false,
+        "diameter": 0.2,
+        "Cd": 1.5,
+        "mass": 0.02,
+        "deployment_altitude": 600.0,
+        "deployment_time": 0.2
+    }
+}

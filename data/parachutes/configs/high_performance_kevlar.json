@@ -1,0 +1,22 @@
+{
+    "name": "High Performance Kevlar",
+    "description": "High performance Kevlar parachute for extreme conditions",
+    "diameter": 0.9,
+    "Cd": 1.65,
+    "material": "kevlar",
+    "mass": 0.08,
+    "deployment": {
+        "altitude": 400.0,
+        "min_velocity": 20.0,
+        "max_velocity": 150.0,
+        "deployment_time": 0.4
+    },
+    "drogue": {
+        "enabled": true,
+        "diameter": 0.35,
+        "Cd": 1.6,
+        "mass": 0.05,
+        "deployment_altitude": 1200.0,
+        "deployment_time": 0.3
+    }
+}

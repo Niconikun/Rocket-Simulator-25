@@ -6,7 +6,9 @@ from src.models.rocket import Rocket
 from src.models.planet import Planet
 from src.models.atmosphere import Atmosphere
 from src.models.clock import Clock
+from src.models.parachute import Parachute
 from src.utils.mattools import MatTools as Mat
+from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
 import logging
 import json
 import os
@@ -55,10 +57,50 @@ class SimulationWorker(QThread):
             rocket_name = self.state.get('selected_rocket', 'agni-1')
             location_name = self.state.get('sim_location', 'Unknown')
             
+            # ===== PARACHUTE INITIALIZATION =====
+            parachute = None
+            if self.state.get('parachute_enabled', False):
+                parachute_config = {
+                    'name': self.state.get('selected_parachute', 'Main Parachute'),
+                    'diameter': self.state.get('parachute_diameter', 0.6),
+                    'Cd': self.state.get('parachute_cd', 1.5),
+                    'material': 'ripstop_nylon',
+                    'deployment_altitude': self.state.get('parachute_deployment_altitude', 300.0),
+                    'min_velocity': self.state.get('parachute_min_velocity', 5.0),
+                    'max_velocity': self.state.get('parachute_max_velocity', 80.0),
+                    'inflation_time': self.state.get('parachute_inflation_time', 0.5),
+                    'drogue_enabled': self.state.get('drogue_enabled', False),
+                }
+                
+                if parachute_config['drogue_enabled']:
+                    parachute_config.update({
+                        'drogue_diameter': self.state.get('drogue_diameter', 0.25),
+                        'drogue_Cd': self.state.get('drogue_cd', 1.5),
+                        'drogue_deployment_altitude': self.state.get('drogue_deployment_altitude', 800.0),
+                    })
+                
+                parachute = Parachute(parachute_config)
+                logger.info(f"Parachute system initialized: {parachute_config['name']}")
+            
             # Load rocket configuration
             rocket_config = self._load_rocket_config(rocket_name)
             if not rocket_config:
                 raise ValueError(f"Could not load rocket configuration: {rocket_name}")
+            
+            # Validate rocket configuration (Option 3)
+            validation_report = self._validate_rocket_config(rocket_config, rocket_name)
+            self.state.set('config_validation_report', validation_report)
+            
+            # Check for critical errors
+            if not validation_report['valid']:
+                error_msg = "Configuration validation failed:\n" + "\n".join(validation_report['errors'])
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            # Warn about configuration warnings
+            if validation_report['warnings']:
+                logger.warning(f"Configuration has {len(validation_report['warnings'])} warnings. "
+                              "Simulation may have unexpected results.")
             
             # Get environmental parameters
             temperature = self.state.get('average_temperature', 20.0)  # Celsius
@@ -67,7 +109,7 @@ class SimulationWorker(QThread):
             altitude = self.state.get('launch_elevation', 60.0)  # meters
             
             # Get launch parameters
-            launch_elevation_angle = self.state.get('launch_elevation', 85.0)  # degrees
+            launch_elevation_angle = self.state.get('launch_elevation_angle', 85.0)  # degrees
             launch_azimuth = self.state.get('launch_azimuth', 0.0)  # degrees
             launch_roll = self.state.get('launch_roll', 0.0)  # degrees
             
@@ -127,9 +169,17 @@ class SimulationWorker(QThread):
             atmosphere = Atmosphere(temperature)
             rocket = Rocket(r_enu_0, v_enu_0, q_enu2b_0, w_enu_0, initial_mass)
             
+            # ===== WIND MODEL INITIALIZATION (Phase 2) =====
+            wind = create_wind_model_from_state(self.state._state)
+            if wind is not None:
+                log_wind_config(self.state._state, wind)
+                logger.info(f"Wind simulation enabled: {wind.get_info()['model_type']}")
+            else:
+                logger.info("Wind simulation disabled")
+            
             # Simulation parameters
             num_steps = int(runtime / timestep)
-            reference_area = rocket_config.get('reference_area', 1.0)
+            reference_area = rocket_config.get('reference_area', 1.0)  # m² - cross-sectional area for drag
             
             # Termination conditions
             max_altitude = 200000.0  # 200 km
@@ -187,12 +237,24 @@ class SimulationWorker(QThread):
                     # Update position in Earth reference frame
                     rocket.update_pos_vel(coordinates)
                     
-                    # Update atmospheric properties
+                    # ===== WIND VECTOR CALCULATION (Phase 2) =====
+                    wind_vector_enu = np.array([0.0, 0.0, 0.0])  # Default: no wind
+                    if wind is not None:
+                        # Get wind vector at current altitude and update wind state
+                        altitude_above_ground = rocket.r_enu[2]
+                        wind_vector_enu = wind.get_wind_vector(altitude_above_ground)
+                        wind.update(timestep)
+                    
+                    # Update position/velocity again with wind vector for proper relative velocity calculation
+                    rocket.update_pos_vel(coordinates, wind_vector_enu=wind_vector_enu)
+                    
+                    # Update atmospheric properties using absolute altitude
                     current_altitude = rocket.r_enu[2]
+                    absolute_altitude = altitude + current_altitude  # Account for launch site elevation
                     rocket.update_atmosphere(
-                        atmosphere.give_dens(current_altitude),
-                        atmosphere.give_press(current_altitude),
-                        atmosphere.give_v_sonic(current_altitude)
+                        atmosphere.give_dens(absolute_altitude),
+                        atmosphere.give_press(absolute_altitude),
+                        atmosphere.give_v_sonic(absolute_altitude)
                     )
                     
                     # Update aerodynamics
@@ -209,12 +271,45 @@ class SimulationWorker(QThread):
                     
                     # Integrate dynamics using RK4
                     rocket.RK4_update(timestep)
-                    rocket.save_data()
                     
                     # Update metrics
                     current_altitude = rocket.r_enu[2]
                     current_velocity = np.linalg.norm(rocket.v_enu)
                     current_range = np.linalg.norm(rocket.r_enu[:2])
+                    
+                    # ===== PARACHUTE HANDLING =====
+                    if parachute is not None:
+                        # Calculate vertical velocity (positive downward)
+                        vertical_velocity = abs(rocket.v_enu[2]) if rocket.v_enu[2] < 0 else rocket.v_enu[2]
+                        
+                        # Check for parachute deployment
+                        if parachute.check_deployment(current_altitude, vertical_velocity, t):
+                            logger.info(f"Parachute deployed at altitude {current_altitude:.1f}m, velocity {vertical_velocity:.1f}m/s")
+                        
+                        # Check for drogue deployment
+                        if parachute.check_drogue_deployment(current_altitude, t):
+                            logger.info(f"Drogue deployed at altitude {current_altitude:.1f}m")
+                        
+                        # Update inflation progress
+                        parachute.update_inflation(timestep)
+                        
+                        # Apply parachute drag if deployed
+                        if parachute.deployed:
+                            velocity_magnitude = np.linalg.norm(rocket.v_enu)
+                            drag_force = parachute.calculate_drag_force(velocity_magnitude, rocket.density)
+                            
+                            # Apply drag force in direction opposite to velocity
+                            if velocity_magnitude > 0:
+                                drag_direction = -rocket.v_enu / velocity_magnitude
+                                parachute_force = drag_direction * drag_force
+                                # Add to rocket's aerodynamic forces (simplified: apply along vertical)
+                                rocket.forces_aero_b[2] += drag_force
+                                
+                                # Track max descent rate
+                                descent_rate = parachute.calculate_descent_rate(rocket.mass, rocket.density)
+                                parachute.max_descent_rate = max(parachute.max_descent_rate, vertical_velocity)
+                    
+                    rocket.save_data()
                     
                     metrics['max_altitude'] = max(metrics['max_altitude'], current_altitude)
                     metrics['max_velocity'] = max(metrics['max_velocity'], current_velocity)
@@ -268,6 +363,14 @@ class SimulationWorker(QThread):
             # Final metrics
             metrics['flight_duration'] = t
             
+            # ===== PARACHUTE METRICS =====
+            if parachute is not None:
+                parachute_metrics = parachute.finalize()
+                metrics.update(parachute_metrics)
+                if parachute.deployed:
+                    logger.info(f"Parachute deployed at {parachute.deployment_altitude_actual:.1f}m, "
+                               f"deployment time: {parachute.deployment_time:.2f}s")
+            
             # Finalize history array data - convert numpy arrays to lists for JSON serialization
             # This integrates the optimized numpy storage with the dashboard pipeline
             try:
@@ -291,6 +394,9 @@ class SimulationWorker(QThread):
                 'location': location_name,
             }
             
+            if parachute is not None:
+                results['parachute_info'] = parachute.get_deployment_info()
+            
             logger.info(f"Simulation completed successfully: {i+1} steps, {t:.2f}s flight time")
             logger.info(f"Max altitude: {metrics['max_altitude']:.2f}m, Max velocity: {metrics['max_velocity']:.2f}m/s")
             
@@ -301,7 +407,7 @@ class SimulationWorker(QThread):
             self.error.emit(f"Simulation failed: {str(e)}")
     
     def _load_rocket_config(self, rocket_name: str) -> dict:
-        """Load rocket configuration from JSON file."""
+        """Load rocket configuration from JSON file with validation."""
         try:
             config_path = f"data/rockets/configs/{rocket_name}.json"
             if not os.path.exists(config_path):
@@ -311,9 +417,20 @@ class SimulationWorker(QThread):
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             
+            # Option 2: Accept both 'initial_mass' and 'total_mass_initial' keys
+            if 'initial_mass' not in config:
+                if 'total_mass_initial' in config:
+                    config['initial_mass'] = config['total_mass_initial']
+                    logger.info(f"Using 'total_mass_initial' as 'initial_mass': {config['initial_mass']} kg")
+                else:
+                    logger.error("Configuration must have either 'initial_mass' or 'total_mass_initial'")
+                    return None
+            
             # Validate and fix moment of inertia values (prevent singular matrices)
-            # If inertia values are zero or too small, set minimum values
-            min_inertia = 1.0  # kg·m² minimum to prevent singular matrices
+            # Use physics-based minimum: 0.1 of body mass times reference length squared
+            body_mass = config.get('initial_mass', config.get('total_mass_initial', 1.0))
+            reference_length = 0.5  # Typical rocket reference dimension in meters
+            min_inertia = max(0.01, body_mass * reference_length**2 * 0.01)  # Small fraction of typical value
             
             for inertia_key in ['I_before_burn', 'I_after_burn']:
                 if inertia_key in config:
@@ -321,8 +438,8 @@ class SimulationWorker(QThread):
                         current_value = config[inertia_key].get(axis, 0)
                         if current_value < min_inertia:
                             logger.warning(
-                                f"Inertia {inertia_key}[{axis}] = {current_value} is too small, "
-                                f"setting to {min_inertia} kg·m² to prevent singularity"
+                                f"Inertia {inertia_key}[{axis}] = {current_value:.3f} kg·m² is very small, "
+                                f"setting to {min_inertia:.3f} kg·m² to prevent numerical issues"
                             )
                             config[inertia_key][axis] = min_inertia
             
@@ -331,6 +448,171 @@ class SimulationWorker(QThread):
         except Exception as e:
             logger.error(f"Error loading rocket config: {e}")
             return None
+    
+    def _validate_rocket_config(self, config: dict, rocket_name: str) -> dict:
+        """
+        Option 3: Validate rocket configuration and return diagnostic report.
+        
+        Checks:
+        - Total mass vs dry mass ratio
+        - Expected propellant consumption vs mass_flux × burn_time
+        - Inertia tensor properties
+        
+        Returns:
+            Dictionary with validation results: {'valid': bool, 'warnings': [], 'errors': []}
+        """
+        report = {
+            'rocket': rocket_name,
+            'valid': True,
+            'warnings': [],
+            'errors': [],
+            'diagnostics': {}
+        }
+        
+        try:
+            # Extract key parameters
+            total_mass = config.get('initial_mass', config.get('total_mass_initial', 0))
+            propellant_mass = config.get('propellant_mass', 0)
+            engine_data = config.get('engine', {})
+            burn_time = engine_data.get('burn_time', 0)
+            mass_flux = engine_data.get('mass_flux', 0)
+            
+            dry_mass = total_mass - propellant_mass
+            
+            # ===== Check 1: Mass Ratio =====
+            if dry_mass <= 0:
+                report['errors'].append(
+                    f"Invalid mass configuration: Dry mass ({dry_mass:.2f} kg) must be positive. "
+                    f"Total={total_mass:.2f} kg, Propellant={propellant_mass:.2f} kg"
+                )
+                report['valid'] = False
+            elif propellant_mass / total_mass > 0.9:
+                report['warnings'].append(
+                    f"High propellant ratio: {propellant_mass/total_mass*100:.1f}% of total mass is propellant. "
+                    f"Dry mass is only {dry_mass:.2f} kg"
+                )
+            elif propellant_mass / total_mass < 0.05:
+                report['warnings'].append(
+                    f"Low propellant ratio: {propellant_mass/total_mass*100:.1f}% of total mass is propellant. "
+                    f"May not achieve significant altitude"
+                )
+            
+            report['diagnostics']['mass_ratio'] = {
+                'total_mass_kg': total_mass,
+                'propellant_mass_kg': propellant_mass,
+                'dry_mass_kg': dry_mass,
+                'propellant_percentage': f"{propellant_mass/total_mass*100:.1f}%"
+            }
+            
+            # ===== Check 2: Propellant Consumption Rate =====
+            if burn_time > 0 and mass_flux > 0:
+                expected_fuel_consumed = mass_flux * burn_time
+                
+                if abs(expected_fuel_consumed - propellant_mass) > propellant_mass * 0.1:
+                    report['warnings'].append(
+                        f"Propellant mismatch: mass_flux ({mass_flux:.3f} kg/s) × burn_time ({burn_time:.2f}s) = "
+                        f"{expected_fuel_consumed:.2f} kg, but config specifies {propellant_mass:.2f} kg. "
+                        f"This may cause mass calculation errors."
+                    )
+                
+                report['diagnostics']['consumption'] = {
+                    'mass_flux_kg_per_s': mass_flux,
+                    'burn_time_s': burn_time,
+                    'expected_fuel_consumed_kg': expected_fuel_consumed,
+                    'configured_fuel_kg': propellant_mass,
+                    'mismatch_kg': abs(expected_fuel_consumed - propellant_mass)
+                }
+            
+            # ===== Check 3: Inertia Tensor Properties =====
+            inertia_before = config.get('I_before_burn', {})
+            inertia_after = config.get('I_after_burn', {})
+            
+            for label, inertia_dict in [('before burn', inertia_before), ('after burn', inertia_after)]:
+                if inertia_dict:
+                    ix = inertia_dict.get('x', 0)
+                    iy = inertia_dict.get('y', 0)
+                    iz = inertia_dict.get('z', 0)
+                    
+                    # Check triangle inequality: largest <= sum of other two
+                    sorted_inertias = sorted([ix, iy, iz])
+                    largest = sorted_inertias[2]
+                    sum_others = sorted_inertias[0] + sorted_inertias[1]
+                    
+                    if largest > sum_others:
+                        report['warnings'].append(
+                            f"Inertia violation {label}: largest component ({largest:.3f}) > "
+                            f"sum of others ({sum_others:.3f}). Matrix may be physically unrealistic."
+                        )
+                    
+                    # Check for very small values
+                    min_inertia = min([ix, iy, iz])
+                    if min_inertia < 0.01:
+                        report['warnings'].append(
+                            f"Very small inertia {label}: {min_inertia:.4f} kg·m². "
+                            f"May cause numerical instability in attitude dynamics."
+                        )
+                    
+                    report['diagnostics'][f'inertia_{label.replace(" ", "_")}'] = {
+                        'Ixx_kg·m²': ix,
+                        'Iyy_kg·m²': iy,
+                        'Izz_kg·m²': iz,
+                        'ratio_Izz/Ixx': iz/ix if ix > 0 else 'inf',
+                        'stability_check': 'OK' if largest <= sum_others else 'FAIL'
+                    }
+            
+            # ===== Check 4: Thrust-to-Weight Ratio =====
+            mean_thrust = engine_data.get('mean_thrust', 0)
+            thrust_to_weight = mean_thrust / (total_mass * 9.81) if total_mass > 0 else 0
+            
+            if thrust_to_weight < 5:
+                report['warnings'].append(
+                    f"Low thrust-to-weight ratio: {thrust_to_weight:.1f}. "
+                    f"Rocket may not achieve vertical flight (should be >5)."
+                )
+            elif thrust_to_weight > 100:
+                report['warnings'].append(
+                    f"Very high thrust-to-weight ratio: {thrust_to_weight:.1f}. "
+                    f"May be unstable or unrealistic."
+                )
+            
+            report['diagnostics']['thrust_performance'] = {
+                'mean_thrust_N': mean_thrust,
+                'thrust_to_weight_ratio': f"{thrust_to_weight:.1f}",
+                'assessment': 'Good' if 5 <= thrust_to_weight <= 50 else 'Unusual'
+            }
+            
+            # Log comprehensive report
+            logger.info(f"\n{'='*70}")
+            logger.info(f"ROCKET CONFIGURATION VALIDATION: {rocket_name}")
+            logger.info(f"{'='*70}")
+            logger.info(f"Status: {'✓ VALID' if report['valid'] else '✗ INVALID'}")
+            
+            if report['diagnostics']:
+                logger.info("\nDiagnostics Summary:")
+                for section, data in report['diagnostics'].items():
+                    logger.info(f"  [{section}]")
+                    for key, value in data.items():
+                        logger.info(f"    {key}: {value}")
+            
+            if report['warnings']:
+                logger.warning(f"\nConfiguration Warnings ({len(report['warnings'])}):")
+                for i, warning in enumerate(report['warnings'], 1):
+                    logger.warning(f"  {i}. {warning}")
+            
+            if report['errors']:
+                logger.error(f"\nConfiguration Errors ({len(report['errors'])}):")
+                for i, error in enumerate(report['errors'], 1):
+                    logger.error(f"  {i}. {error}")
+            
+            logger.info(f"{'='*70}\n")
+            
+            return report
+            
+        except Exception as e:
+            logger.error(f"Error during configuration validation: {e}")
+            report['errors'].append(f"Validation error: {str(e)}")
+            report['valid'] = False
+            return report
     
     def _get_history_length(self, history_dict: dict) -> int:
         """

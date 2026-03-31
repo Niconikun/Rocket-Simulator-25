@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, 
     QGridLayout, QPushButton, QTableWidget, QTableWidgetItem,
-    QComboBox, QMessageBox, QFileDialog
+    QComboBox, QMessageBox, QFileDialog, QScrollArea
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -18,7 +18,31 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib import colors
-from datetime import datetime
+
+# Import matplotlib for plotting
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
+
+# Try to import folium for maps
+try:
+    import folium
+    from folium.plugins import AntPath
+    HAS_FOLIUM = True
+except ImportError:
+    HAS_FOLIUM = False
+
+# Try to import QWebEngineView for map display
+try:
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
+    HAS_WEBENGINE = True
+except ImportError:
+    HAS_WEBENGINE = False
+
+import tempfile
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -126,16 +150,65 @@ class DashboardWidget(QWidget):
         info_group.setLayout(info_layout)
         main_layout.addWidget(info_group)
         
-        # ===== CHARTS PLACEHOLDER =====
+        # ===== FLIGHT PROFILES CHARTS =====
         charts_group = QGroupBox("Flight Profiles")
         charts_layout = QVBoxLayout()
         
-        chart_label = QLabel("Charts will be displayed here\n(Altitude vs Time, Velocity vs Time, etc.)")
-        chart_label.setStyleSheet("color: gray; padding: 40px;")
-        charts_layout.addWidget(chart_label)
+        # Scrollable area for charts
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMinimumHeight(900)  # Set minimum height for charts
+        scroll_area.setMinimumWidth(1200)  # Set minimum width to prevent squeezing
+        
+        self.charts_container = QWidget()
+        self.charts_grid_layout = QGridLayout()
+        self.charts_grid_layout.setSpacing(15)  # Add spacing between charts
+        self.charts_grid_layout.setContentsMargins(10, 10, 10, 10)  # Add margins around charts
+        self.charts_container.setLayout(self.charts_grid_layout)
+        
+        scroll_area.setWidget(self.charts_container)
+        charts_layout.addWidget(scroll_area)
         
         charts_group.setLayout(charts_layout)
-        main_layout.addWidget(charts_group)
+        # Make charts group expandable
+        main_layout.addWidget(charts_group, 1)  # Stretch factor of 1 to expand
+        
+        # ===== TRAJECTORY MAPS =====
+        maps_group = QGroupBox("Trajectory Overview")
+        maps_layout = QHBoxLayout()
+        
+        # 2D Trajectory Map
+        map_2d_subgroup = QGroupBox("2D Trajectory Map")
+        map_2d_layout = QVBoxLayout()
+        
+        if HAS_WEBENGINE:
+            self.map_2d_view = QWebEngineView()
+            self.map_2d_view.setMinimumHeight(400)
+            map_2d_layout.addWidget(self.map_2d_view)
+        else:
+            self.map_2d_view = None
+            self.map_2d_container = QWidget()
+            self.map_2d_container.setLayout(QVBoxLayout())
+            map_2d_layout.addWidget(self.map_2d_container)
+            map_2d_layout.addWidget(QLabel("QWebEngineView not available\nUsing matplotlib fallback"))
+        
+        map_2d_subgroup.setLayout(map_2d_layout)
+        maps_layout.addWidget(map_2d_subgroup)
+        
+        # 3D Flight Path
+        map_3d_subgroup = QGroupBox("3D Flight Path")
+        map_3d_layout = QVBoxLayout()
+        
+        self.map_3d_canvas = None
+        self.map_3d_container = QWidget()
+        self.map_3d_container.setLayout(QVBoxLayout())
+        map_3d_layout.addWidget(self.map_3d_container)
+        
+        map_3d_subgroup.setLayout(map_3d_layout)
+        maps_layout.addWidget(map_3d_subgroup)
+        
+        maps_group.setLayout(maps_layout)
+        main_layout.addWidget(maps_group)
         
         # ===== EXPORT BUTTONS =====
         export_layout = QHBoxLayout()
@@ -247,6 +320,10 @@ class DashboardWidget(QWidget):
             f"{metadata.get('pressure', 0):.0f} Pa"
         )
         
+        # Generate charts and maps from simulation data
+        self.generate_performance_charts(sim_data)
+        self.generate_trajectory_maps(sim_data, metadata)
+        
         logger.info(f"Loaded simulation: {sim_id}")
         QMessageBox.information(self, "Success", f"Loaded simulation {sim_id}")
     
@@ -271,6 +348,358 @@ class DashboardWidget(QWidget):
                 logger.info(f"Deleted simulation: {sim_id}")
             else:
                 QMessageBox.critical(self, "Error", "Could not delete simulation")
+    
+    def generate_performance_charts(self, sim_data):
+        """Generate 9 performance charts from simulation data."""
+        # Clear previous charts
+        while self.charts_grid_layout.count():
+            item = self.charts_grid_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        if not sim_data or isinstance(sim_data, dict) and 'trajectory' not in sim_data:
+            logger.warning("No trajectory data available for charts")
+            return
+        
+        try:
+            trajectory = sim_data.get('trajectory', [])
+            history = sim_data.get('history', {})
+            
+            if not trajectory:
+                logger.warning("Empty trajectory data")
+                return
+            
+            # Convert trajectory to numpy arrays for easier manipulation
+            times = np.array([p.get('time', 0) for p in trajectory])
+            altitudes = np.array([p.get('altitude', 0) for p in trajectory])
+            velocities = np.array([p.get('velocity', 0) for p in trajectory])
+            ranges = np.array([p.get('range', 0) for p in trajectory])
+            machs = np.array([p.get('mach', 0) for p in trajectory])
+            
+            # Chart 1: Altitude & Velocity vs Time
+            fig1 = self._create_chart(
+                "Altitude [m] & Velocity [m/s] vs Time [s]",
+                times, [altitudes, velocities], 
+                ['Altitude', 'Velocity'], ['blue', 'red']
+            )
+            self._add_chart_to_grid(fig1, 0, 0)
+            
+            # Chart 2: Flight Path - Altitude vs Range
+            fig2 = self._create_simple_chart(
+                "Flight Path - Altitude [m] vs Range [m]",
+                ranges, altitudes, 'Range', 'Altitude'
+            )
+            self._add_chart_to_grid(fig2, 0, 1)
+            
+            # Chart 3: Mach & AoA vs Time  (placeholder - use mach data)
+            fig3 = self._create_simple_chart(
+                "Mach Number vs Time [s]",
+                times, machs, 'Time', 'Mach'
+            )
+            self._add_chart_to_grid(fig3, 0, 2)
+            
+            # Charts 4-9: Additional performance data if available from history
+            if history:
+                # Try to extract data from history
+                if isinstance(history, dict):
+                    # Chart 4: Placeholder for forces (if available)
+                    fig4 = self._create_placeholder_chart("Forces Analysis [N] vs Time [s]")
+                    self._add_chart_to_grid(fig4, 1, 0)
+                    
+                    # Chart 5: Placeholder for mass
+                    fig5 = self._create_placeholder_chart("Mass [kg] & Altitude [m] vs Time [s]")
+                    self._add_chart_to_grid(fig5, 1, 1)
+                    
+                    # Chart 6: Placeholder for attitude
+                    fig6 = self._create_placeholder_chart("Attitude Analysis - Euler Angles [°] vs Time [s]")
+                    self._add_chart_to_grid(fig6, 1, 2)
+                    
+                    # Chart 7: Placeholder for velocity components
+                    fig7 = self._create_placeholder_chart("Velocity Components [m/s] vs Time [s]")
+                    self._add_chart_to_grid(fig7, 2, 0)
+                    
+                    # Chart 8: Placeholder for atmospheric
+                    fig8 = self._create_placeholder_chart("Atmospheric Conditions vs Altitude [m]")
+                    self._add_chart_to_grid(fig8, 2, 1)
+                    
+                    # Chart 9: Placeholder for aero coefficients
+                    fig9 = self._create_placeholder_chart("Aerodynamic Coefficients [-] vs Time [s]")
+                    self._add_chart_to_grid(fig9, 2, 2)
+            else:
+                # Fill remaining charts with placeholders
+                for i in range(1, 3):
+                    for j in range(3):
+                        if not (i == 0 and j >= 3):
+                            fig = self._create_placeholder_chart(f"Chart ({i}, {j})")
+                            self._add_chart_to_grid(fig, i, j)
+            
+            logger.info("Performance charts generated successfully")
+            
+        except Exception as e:
+            logger.error(f"Error generating charts: {e}")
+            QMessageBox.warning(self, "Chart Error", f"Failed to generate charts: {str(e)}")
+    
+    def _create_chart(self, title, x_data, y_data_list, labels, colors_list):
+        """Create a matplotlib figure with multiple y-axes."""
+        fig, ax1 = plt.subplots(figsize=(8, 6), dpi=100)
+        fig.suptitle(title, fontsize=12, fontweight='bold')
+        
+        # Plot first dataset
+        color = colors_list[0]
+        ax1.set_xlabel('Time [s]')
+        ax1.set_ylabel(labels[0], color=color)
+        ax1.plot(x_data, y_data_list[0], color=color, linewidth=2)
+        ax1.tick_params(axis='y', labelcolor=color)
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot second dataset on secondary y-axis
+        if len(y_data_list) > 1:
+            ax2 = ax1.twinx()
+            color = colors_list[1]
+            ax2.set_ylabel(labels[1], color=color)
+            ax2.plot(x_data, y_data_list[1], color=color, linewidth=2)
+            ax2.tick_params(axis='y', labelcolor=color)
+        
+        plt.tight_layout()
+        return fig
+    
+    def _create_simple_chart(self, title, x_data, y_data, x_label, y_label):
+        """Create a simple matplotlib figure with single dataset."""
+        fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
+        fig.suptitle(title, fontsize=12, fontweight='bold')
+        
+        ax.plot(x_data, y_data, 'b-', linewidth=2)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        return fig
+    
+    def _create_placeholder_chart(self, title):
+        """Create a placeholder chart."""
+        fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
+        fig.suptitle(title, fontsize=12, fontweight='bold')
+        
+        ax.text(0.5, 0.5, 'Data not available\nin current simulation', 
+               horizontalalignment='center', verticalalignment='center',
+               transform=ax.transAxes, fontsize=12, color='gray')
+        ax.axis('off')
+        
+        plt.tight_layout()
+        return fig
+    
+    def _add_chart_to_grid(self, fig, row, col):
+        """Add a matplotlib figure to the grid layout."""
+        canvas = FigureCanvas(fig)
+        canvas.setMinimumHeight(500)
+        canvas.setMinimumWidth(650)
+        self.charts_grid_layout.addWidget(canvas, row, col)
+    
+    def generate_trajectory_maps(self, sim_data, metadata):
+        """Generate 2D and 3D trajectory maps from simulation data."""
+        try:
+            trajectory = sim_data.get('trajectory', [])
+            
+            if not trajectory:
+                logger.warning("No trajectory data for maps")
+                return
+            
+            # Extract trajectory data
+            times = np.array([p.get('time', 0) for p in trajectory])
+            altitudes = np.array([p.get('altitude', 0) for p in trajectory])
+            ranges = np.array([p.get('range', 0) for p in trajectory])
+            
+            # Generate 2D trajectory map
+            self._generate_2d_map(ranges, altitudes, metadata)
+            
+            # Generate 3D flight path
+            self._generate_3d_flight_path(times, ranges, altitudes)
+            
+            logger.info("Trajectory maps generated successfully")
+            
+        except Exception as e:
+            logger.error(f"Error generating maps: {e}")
+    
+    def _generate_2d_map(self, ranges, altitudes, metadata):
+        """Generate a 2D trajectory map showing flight path from above."""
+        try:
+            if not HAS_WEBENGINE or not self.map_2d_view:
+                return
+            
+            # Create a 2D map using folium if available
+            if HAS_FOLIUM:
+                # Get launch coordinates from metadata or use default
+                launch_lat = metadata.get('launch_latitude', 0.0)
+                launch_lon = metadata.get('launch_longitude', 0.0)
+                
+                # Create base map
+                m = folium.Map(
+                    location=[launch_lat, launch_lon],
+                    zoom_start=14,
+                    tiles='OpenStreetMap'
+                )
+                
+                # Add launch site marker
+                folium.CircleMarker(
+                    location=[launch_lat, launch_lon],
+                    radius=8,
+                    popup='Launch Site',
+                    color='red',
+                    fill=True,
+                    fillColor='red',
+                    fillOpacity=0.7,
+                    weight=2
+                ).add_to(m)
+                
+                # Calculate approximate landing coordinates
+                # Assuming ranges are downrange distances (simplified)
+                max_range_km = ranges.max() / 1000  # Convert m to km
+                lat_delta = max_range_km / 111.32  # 1 degree ≈ 111.32 km
+                
+                landing_lat = launch_lat + lat_delta
+                landing_lon = launch_lon
+                
+                # Add landing site marker
+                folium.CircleMarker(
+                    location=[landing_lat, landing_lon],
+                    radius=8,
+                    popup='Landing Site',
+                    color='green',
+                    fill=True,
+                    fillColor='green',
+                    fillOpacity=0.7,
+                    weight=2
+                ).add_to(m)
+                
+                # Draw trajectory approximation (simplified as line between launch and landing)
+                coords = [[launch_lat, launch_lon], [landing_lat, landing_lon]]
+                folium.PolyLine(
+                    coords,
+                    color='blue',
+                    weight=3,
+                    opacity=0.8,
+                    popup='Flight Path'
+                ).add_to(m)
+                
+                # Add max altitude circle
+                max_alt_km = altitudes.max() / 1000
+                folium.CircleMarker(
+                    location=[launch_lat + lat_delta/2, launch_lon],
+                    radius=6,
+                    popup=f'Apogee: {max_alt_km:.2f} km',
+                    color='orange',
+                    fill=True,
+                    fillColor='orange',
+                    fillOpacity=0.5,
+                    weight=2
+                ).add_to(m)
+                
+                # Save map to HTML and display
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+                    m.save(f.name)
+                    self.map_2d_view.setUrl(f"file:///{f.name}")
+                    
+            else:
+                # Fallback: Create a simple 2D matplotlib plot
+                self._generate_2d_matplotlib_map(ranges, altitudes)
+                
+        except Exception as e:
+            logger.error(f"Error generating 2D map: {e}")
+    
+    def _generate_2d_matplotlib_map(self, ranges, altitudes):
+        """Generate a simple 2D map using matplotlib (fallback)."""
+        fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
+        
+        # Plot range vs altitude as trajectory
+        ax.plot(ranges / 1000, altitudes / 1000, 'b-', linewidth=2, label='Flight Path')
+        ax.scatter([0], [0], color='red', s=100, marker='*', label='Launch', zorder=5)
+        ax.scatter([ranges.max()/1000], [0], color='green', s=100, marker='X', label='Landing', zorder=5)
+        ax.scatter([ranges[altitudes.argmax()]/1000], [altitudes.max()/1000], 
+                  color='orange', s=100, marker='o', label='Apogee', zorder=5)
+        
+        ax.set_xlabel('Range [km]')
+        ax.set_ylabel('Altitude [km]')
+        ax.set_title('2D Flight Trajectory')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Create canvas
+        canvas = FigureCanvas(fig)
+        canvas.setMinimumHeight(500)
+        
+        # Add to map container if it exists
+        if hasattr(self, 'map_2d_container') and self.map_2d_container:
+            map_layout = self.map_2d_container.layout()
+            if map_layout is None:
+                map_layout = QVBoxLayout()
+                self.map_2d_container.setLayout(map_layout)
+            
+            # Clear previous widgets
+            while map_layout.count():
+                map_layout.takeAt(0).widget().deleteLater()
+            
+            map_layout.addWidget(canvas)
+    
+    def _generate_3d_flight_path(self, times, ranges, altitudes):
+        """Generate a 3D flight path visualization."""
+        try:
+            # Clear previous canvas
+            if self.map_3d_canvas:
+                self.map_3d_canvas.deleteLater()
+            
+            # Create 3D plot
+            fig = plt.figure(figsize=(8, 7), dpi=100)
+            ax = fig.add_subplot(111, projection='3d')
+            
+            # Convert to km for better scale
+            ranges_km = ranges / 1000
+            altitudes_km = altitudes / 1000
+            
+            # Create 3D trajectory
+            ax.plot(ranges_km, np.zeros_like(ranges_km), altitudes_km, 'b-', linewidth=2, label='Flight Path')
+            
+            # Mark key points
+            ax.scatter([0], [0], [0], color='red', s=100, marker='*', label='Launch', zorder=5)
+            ax.scatter([ranges_km[-1]], [0], [0], color='green', s=100, marker='X', label='Landing', zorder=5)
+            
+            # Find and mark apogee
+            apogee_idx = np.argmax(altitudes_km)
+            ax.scatter([ranges_km[apogee_idx]], [0], [altitudes_km[apogee_idx]], 
+                      color='orange', s=100, marker='o', label='Apogee', zorder=5)
+            
+            # Ground plane
+            ax.plot([0, ranges_km.max()], [0, 0], [0, 0], 'k--', alpha=0.3)
+            
+            ax.set_xlabel('Range [km]')
+            ax.set_ylabel('Lateral [km]')
+            ax.set_zlabel('Altitude [km]')
+            ax.set_title('3D Flight Path')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            
+            # Add to container
+            self.map_3d_canvas = FigureCanvas(fig)
+            self.map_3d_canvas.setMinimumHeight(500)
+            
+            # Clear and add to layout
+            map_3d_layout = self.map_3d_container.layout()
+            if map_3d_layout is None:
+                map_3d_layout = QVBoxLayout()
+                self.map_3d_container.setLayout(map_3d_layout)
+            
+            # Clear previous widgets
+            while map_3d_layout.count():
+                map_3d_layout.takeAt(0).widget().deleteLater()
+            
+            map_3d_layout.addWidget(self.map_3d_canvas)
+            
+        except Exception as e:
+            logger.error(f"Error generating 3D flight path: {e}")
     
     def export_csv(self):
         """Export simulation data to CSV."""

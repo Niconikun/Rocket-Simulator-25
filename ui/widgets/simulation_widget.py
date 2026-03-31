@@ -141,6 +141,49 @@ class SimulationWidget(QWidget):
         env_group.setLayout(env_layout)
         main_layout.addWidget(env_group)
         
+        # ===== LAUNCH PARAMETERS GROUP =====
+        launch_group = QGroupBox("Launch Parameters")
+        launch_layout = QFormLayout()
+        
+        # Launch elevation angle (rod angle)
+        self.launch_angle_spinbox = QDoubleSpinBox()
+        self.launch_angle_spinbox.setRange(0, 90)
+        self.launch_angle_spinbox.setValue(self.state.get('launch_elevation_angle', 85.0))
+        self.launch_angle_spinbox.setSingleStep(1.0)
+        self.launch_angle_spinbox.setDecimals(1)
+        self.launch_angle_spinbox.setSuffix(" °")
+        self.launch_angle_spinbox.valueChanged.connect(
+            lambda v: self.state.set('launch_elevation_angle', v)
+        )
+        launch_layout.addRow("Launch Angle:", self.launch_angle_spinbox)
+        
+        # Launch azimuth
+        self.launch_azimuth_spinbox = QDoubleSpinBox()
+        self.launch_azimuth_spinbox.setRange(0, 360)
+        self.launch_azimuth_spinbox.setValue(self.state.get('launch_azimuth', 0.0))
+        self.launch_azimuth_spinbox.setSingleStep(1.0)
+        self.launch_azimuth_spinbox.setDecimals(1)
+        self.launch_azimuth_spinbox.setSuffix(" °")
+        self.launch_azimuth_spinbox.valueChanged.connect(
+            lambda v: self.state.set('launch_azimuth', v)
+        )
+        launch_layout.addRow("Launch Azimuth:", self.launch_azimuth_spinbox)
+        
+        # Launch roll
+        self.launch_roll_spinbox = QDoubleSpinBox()
+        self.launch_roll_spinbox.setRange(-180, 180)
+        self.launch_roll_spinbox.setValue(self.state.get('launch_roll', 0.0))
+        self.launch_roll_spinbox.setSingleStep(1.0)
+        self.launch_roll_spinbox.setDecimals(1)
+        self.launch_roll_spinbox.setSuffix(" °")
+        self.launch_roll_spinbox.valueChanged.connect(
+            lambda v: self.state.set('launch_roll', v)
+        )
+        launch_layout.addRow("Launch Roll:", self.launch_roll_spinbox)
+        
+        launch_group.setLayout(launch_layout)
+        main_layout.addWidget(launch_group)
+        
         # ===== SIMULATION CONTROL =====
         control_group = QGroupBox("Simulation Control")
         control_layout = QVBoxLayout()
