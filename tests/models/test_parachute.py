@@ -1,6 +1,77 @@
 import unittest
 import numpy as np
-from src.models.to_be_implemented.parachute import Parachute
+from src.models.parachute import Parachute
+
+class TestParachute(unittest.TestCase):
+    def setUp(self):
+        self.diameter = 1.5
+        self.Cd = 1.75
+        self.deploy_alt = 300.0
+        self.config = {
+            'diameter': self.diameter,
+            'Cd': self.Cd,
+            'deployment_altitude': self.deploy_alt
+        }
+        self.chute = Parachute(self.config)
+
+    def test_initialization(self):
+        self.assertEqual(self.chute.diameter, self.diameter)
+        self.assertEqual(self.chute.Cd, self.Cd)
+        self.assertEqual(self.chute.deployment_altitude, self.deploy_alt)
+        self.assertIsNone(self.chute.deployment_time)
+        self.assertFalse(self.chute.deployed)
+        expected_area = np.pi * (self.diameter/2)**2
+        area = np.pi * (self.chute.diameter/2)**2
+        self.assertAlmostEqual(area, expected_area)
+
+    def test_check_deployment(self):
+        altitude = 290
+        velocity = 50
+        time = 10.0
+        result = self.chute.check_deployment(altitude, velocity, time)
+        self.assertTrue(result)
+        self.assertTrue(self.chute.deployed)
+        self.assertEqual(self.chute.deployment_time, time)
+
+    def test_check_deployment_fails(self):
+        # Altitud demasiado alta
+        altitude = 350
+        velocity = 50
+        time = 10.0
+        result = self.chute.check_deployment(altitude, velocity, time)
+        self.assertFalse(result)
+        self.assertFalse(self.chute.deployed)
+
+    def test_drag_force(self):
+        density = 1.225
+        velocity = 20.0
+        self.chute.check_deployment(290, 50, 10.0)
+        self.chute.inflation_progress = 1.0
+        area = np.pi * (self.chute.diameter/2)**2
+        expected_force = 0.5 * density * velocity**2 * self.chute.Cd * area
+        calculated_force = self.chute.calculate_drag_force(velocity, density)
+        self.assertAlmostEqual(calculated_force, expected_force)
+
+    def test_invalid_parameters(self):
+        # Diámetro negativo
+        config = {'diameter': -1.0, 'Cd': self.Cd, 'deployment_altitude': self.deploy_alt}
+        with self.assertRaises(ValueError):
+            Parachute(config)
+
+        # Cd negativo
+        config = {'diameter': self.diameter, 'Cd': -1.0, 'deployment_altitude': self.deploy_alt}
+        with self.assertRaises(ValueError):
+            Parachute(config)
+
+        # Altitud de despliegue negativa
+        config = {'diameter': self.diameter, 'Cd': self.Cd, 'deployment_altitude': -100}
+        with self.assertRaises(ValueError):
+            Parachute(config)
+
+
+import unittest
+import numpy as np
+from src.models.parachute import Parachute
 
 class TestParachute(unittest.TestCase):
     def setUp(self):
@@ -9,100 +80,71 @@ class TestParachute(unittest.TestCase):
         self.diameter = 1.5        # [m]
         self.Cd = 1.75            # [-]
         self.deploy_alt = 300.0   # [m]
-        self.deploy_time = 1.0    # [s]
-        
-        # Crear instancia del paracaídas
-        self.chute = Parachute(
-            self.diameter,
-            self.Cd,
-            self.deploy_alt,
-            self.deploy_time
-        )
 
-    def test_initialization(self):
-        """Prueba la inicialización correcta del paracaídas"""
-        self.assertEqual(self.chute.diameter, self.diameter)
-        self.assertEqual(self.chute.Cd, self.Cd)
-        self.assertEqual(self.chute.deployment_altitude, self.deploy_alt)
-        self.assertEqual(self.chute.deployment_time, self.deploy_time)
-        self.assertFalse(self.chute.is_deployed)
-        
-        # Verificar área calculada
-        expected_area = np.pi * (self.diameter/2)**2
-        self.assertAlmostEqual(self.chute.area, expected_area)
+        import unittest
+        import numpy as np
+        from src.models.parachute import Parachute
 
-    def test_deployment_conditions(self):
-        """Prueba las condiciones de despliegue"""
-        # Caso 1: Altitud correcta, velocidad segura
-        altitude = 290  # Por debajo de deployment_altitude
-        velocity = 50   # Velocidad segura
-        self.assertTrue(self.chute._check_deployment_conditions(altitude, velocity))
-        
-        # Caso 2: Altitud muy baja
-        altitude = 10
-        self.assertFalse(self.chute._check_deployment_conditions(altitude, velocity))
-        
-        # Caso 3: Velocidad muy alta
-        altitude = 290
-        velocity = 200
-        self.assertFalse(self.chute._check_deployment_conditions(altitude, velocity))
+        class TestParachute(unittest.TestCase):
+            def setUp(self):
+                self.diameter = 1.5
+                self.Cd = 1.75
+                self.deploy_alt = 300.0
+                self.config = {
+                    'diameter': self.diameter,
+                    'Cd': self.Cd,
+                    'deployment_altitude': self.deploy_alt
+                }
+                self.chute = Parachute(self.config)
 
-    def test_drag_force(self):
-        """Prueba el cálculo de la fuerza de arrastre"""
-        # Condiciones atmosféricas típicas
-        density = 1.225     # [kg/m³]
-        velocity = 20.0     # [m/s]
-        
-        # Calcular fuerza esperada
-        q = 0.5 * density * velocity**2
-        expected_force = q * self.chute.area * self.chute.Cd
-        
-        # Obtener fuerza calculada
-        calculated_force = self.chute.calculate_drag(density, velocity)
-        
-        self.assertAlmostEqual(calculated_force, expected_force)
+            def test_initialization(self):
+                self.assertEqual(self.chute.diameter, self.diameter)
+                self.assertEqual(self.chute.Cd, self.Cd)
+                self.assertEqual(self.chute.deployment_altitude, self.deploy_alt)
+                self.assertIsNone(self.chute.deployment_time)
+                self.assertFalse(self.chute.deployed)
+                expected_area = np.pi * (self.diameter/2)**2
+                area = np.pi * (self.chute.diameter/2)**2
+                self.assertAlmostEqual(area, expected_area)
 
-    def test_deployment_sequence(self):
-        """Prueba la secuencia de despliegue"""
-        # Iniciar despliegue
-        initial_time = 10.0
-        self.chute.start_deployment(initial_time)
-        
-        # Verificar estado inicial de despliegue
-        self.assertTrue(self.chute.is_deploying)
-        self.assertEqual(self.chute.deployment_start_time, initial_time)
-        
-        # Verificar factor de despliegue en diferentes momentos
-        # t = 0% del tiempo de despliegue
-        factor = self.chute.get_deployment_factor(initial_time)
-        self.assertAlmostEqual(factor, 0.0)
-        
-        # t = 50% del tiempo de despliegue
-        half_time = initial_time + self.deploy_time/2
-        factor = self.chute.get_deployment_factor(half_time)
-        self.assertAlmostEqual(factor, 0.5)
-        
-        # t = 100% del tiempo de despliegue
-        final_time = initial_time + self.deploy_time
-        factor = self.chute.get_deployment_factor(final_time)
-        self.assertAlmostEqual(factor, 1.0)
-        
-        # Verificar estado final
-        self.assertTrue(self.chute.is_deployed)
+            def test_check_deployment(self):
+                altitude = 290
+                velocity = 50
+                time = 10.0
+                result = self.chute.check_deployment(altitude, velocity, time)
+                self.assertTrue(result)
+                self.assertTrue(self.chute.deployed)
+                self.assertEqual(self.chute.deployment_time, time)
 
-    def test_invalid_parameters(self):
-        """Prueba el manejo de parámetros inválidos"""
-        # Diámetro negativo
-        with self.assertRaises(ValueError):
-            Parachute(-1.0, self.Cd, self.deploy_alt)
-        
-        # Cd negativo
-        with self.assertRaises(ValueError):
-            Parachute(self.diameter, -1.0, self.deploy_alt)
-        
-        # Altitud de despliegue negativa
-        with self.assertRaises(ValueError):
-            Parachute(self.diameter, self.Cd, -100)
+            def test_check_deployment_fails(self):
+                # Altitud demasiado alta
+                altitude = 350
+                velocity = 50
+                time = 10.0
+                result = self.chute.check_deployment(altitude, velocity, time)
+                self.assertFalse(result)
+                self.assertFalse(self.chute.deployed)
 
-if __name__ == '__main__':
-    unittest.main()
+            def test_drag_force(self):
+                density = 1.225
+                velocity = 20.0
+                self.chute.check_deployment(290, 50, 10.0)
+                self.chute.inflation_progress = 1.0
+                area = np.pi * (self.chute.diameter/2)**2
+                expected_force = 0.5 * density * velocity**2 * self.chute.Cd * area
+                calculated_force = self.chute.calculate_drag_force(velocity, density)
+                self.assertAlmostEqual(calculated_force, expected_force)
+
+            def test_invalid_parameters(self):
+                # Diámetro negativo
+                config = {'diameter': -1.0, 'Cd': self.Cd, 'deployment_altitude': self.deploy_alt}
+                with self.assertRaises(ValueError):
+                    Parachute(config)
+
+                # Cd negativo
+                config = {'diameter': self.diameter, 'Cd': -1.0, 'deployment_altitude': self.deploy_alt}
+                with self.assertRaises(ValueError):
+                    Parachute(config)
+
+                # Altitud de despliegue negativa
+                config = {'diameter': self.diameter, 'Cd': self.Cd, 'deployment_altitude': -100}

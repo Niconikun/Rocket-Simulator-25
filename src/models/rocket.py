@@ -40,7 +40,6 @@ import numpy as np
 import navpy as nav
 from math import pi
 import json
-import streamlit as st
 import logging
 from src.models.engine import EnhancedEngine
 from src.models.aerodynamics_wrapper import AerodynamicsWrapper
@@ -52,6 +51,7 @@ from src.utils.simulation_errors import (
     InputValidationError, ConfigurationError
 )
 from src.utils.simulation_constants import SimulationConstants as SIM_CONST
+from PyQt6.QtWidgets import QMessageBox
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -703,8 +703,9 @@ class Rocket(object):
             - Ángulo de ataque entre -180° y 180°
             - Velocidad mínima para cálculos
             - Límites de fuerzas máximas
-        """
-        try:
+                dynamic_pressure = 0.5 * self.density * (self.v_norm**2)
+                self.drag = dynamic_pressure * self.drag_coeff * reference_area
+                self.lift = dynamic_pressure * self.lift_coeff * reference_area
             # Validar valores críticos
             if not (-180 <= self.alpha <= 180):
                 raise ValueError(f"Ángulo de ataque inválido: {self.alpha}°")
@@ -718,7 +719,7 @@ class Rocket(object):
             dynamic_pressure = 0.5 * self.density * (self.v_norm**2)
             
             self.drag = dynamic_pressure * self.drag_coeff * reference_area
-            self.lift = dynamic_pressure * self.lift_coeff * reference_area
+                QMessageBox.critical(None, "Error", f"Error en fuerzas aerodinámicas: {str(e)}")
 
             # Verificar valores razonables contra límites configurables
             if abs(self.drag) > SIM_CONST.MAX_AERODYNAMIC_FORCE or abs(self.lift) > SIM_CONST.MAX_AERODYNAMIC_FORCE:
@@ -735,7 +736,7 @@ class Rocket(object):
             st.error(f"Error en fuerzas aerodinámicas: {str(e)}")
 
     def update_forces_engine(self):
-        """
+        
         Calcula las fuerzas y torques producidos por el motor.
 
         Cálculos:
@@ -1133,7 +1134,7 @@ class Rocket(object):
 
         except Exception as e:
             logging.error(f"Error en save_data: {str(e)}")
-            st.error(f"Error guardando datos históricos: {str(e)}")
+            QMessageBox.critical(None, "Error", f"Error guardando datos históricos: {str(e)}")
 
     def _expand_history_capacity(self, new_capacity):
         """

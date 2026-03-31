@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from src.models.engine import Engine
+from src.models.engine import EnhancedEngine as Engine
 
 class TestEngine(unittest.TestCase):
     def setUp(self):

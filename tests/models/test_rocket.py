@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from src.models.rocket import Rocket
-from src.models.engine import Engine
+from src.models.engine import EnhancedEngine as Engine
 from src.utils.mattools import MatTools as Mat
 
 class TestRocket(unittest.TestCase):
