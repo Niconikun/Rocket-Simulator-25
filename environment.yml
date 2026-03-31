@@ -18,9 +18,10 @@ dependencies:
   - pyinstaller>=6.0.0
   - fluids
   - pip
-  - pip:
+pip:
       - navpy
       - pyqt6-webengine
+      - streamlit
       # Si algún paquete no está en conda-forge, se instalará por pip
       # - fluids
       # - ephem
