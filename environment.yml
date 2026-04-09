@@ -4,7 +4,7 @@ channels:
   - defaults
 dependencies:
   - python=3.12
-  - pyqt6
+  - pyqt6=6.10.0
   - pyqt6-sip
   - numpy
   - scipy
@@ -12,15 +12,17 @@ dependencies:
   - matplotlib
   - ephem
   - folium>=0.14.0
+  - plotly
   - pyvista
   - pyopengl
   - reportlab>=4.0.0
+  - jsonschema
   - pyinstaller>=6.0.0
   - fluids
   - pip
 pip:
       - navpy
-      - pyqt6-webengine
+      - pyqt6-webengine==6.10.0
       # Si algún paquete no está en conda-forge, se instalará por pip
       # - fluids
       # - ephem

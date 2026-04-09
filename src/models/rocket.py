@@ -51,7 +51,6 @@ from src.utils.simulation_errors import (
     InputValidationError, ConfigurationError
 )
 from src.utils.simulation_constants import SimulationConstants as SIM_CONST
-from PyQt6.QtWidgets import QMessageBox
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -693,50 +692,37 @@ class Rocket(object):
 
         Args:
             reference_area (float): Área de referencia [m²]
+        """
+        try:
+            if not (-180 <= self.alpha <= 180):
+                raise ValueError(f"Ángulo de ataque inválido: {self.alpha}°")
 
-        Cálculos:
-            1. Presión dinámica: q = 1/2 ρV²
-            2. Fuerzas: F = qSC
-            3. Momentos: M = r × F
-
-        Validaciones:
-            - Ángulo de ataque entre -180° y 180°
-            - Velocidad mínima para cálculos
-            - Límites de fuerzas máximas
+            if self.v_norm < SIM_CONST.MIN_VELOCITY_FOR_AERODYNAMICS:
+                self.drag = 0.0
+                self.lift = 0.0
+            else:
                 dynamic_pressure = 0.5 * self.density * (self.v_norm**2)
                 self.drag = dynamic_pressure * self.drag_coeff * reference_area
                 self.lift = dynamic_pressure * self.lift_coeff * reference_area
-            # Validar valores críticos
-            if not (-180 <= self.alpha <= 180):
-                raise ValueError(f"Ángulo de ataque inválido: {self.alpha}°")
-                
-            if self.v_norm < SIM_CONST.MIN_VELOCITY_FOR_AERODYNAMICS:
-                self.drag = 0
-                self.lift = 0
-                return
-                
-            # Cálculo de fuerzas con validación
-            dynamic_pressure = 0.5 * self.density * (self.v_norm**2)
-            
-            self.drag = dynamic_pressure * self.drag_coeff * reference_area
-                QMessageBox.critical(None, "Error", f"Error en fuerzas aerodinámicas: {str(e)}")
 
-            # Verificar valores razonables contra límites configurables
-            if abs(self.drag) > SIM_CONST.MAX_AERODYNAMIC_FORCE or abs(self.lift) > SIM_CONST.MAX_AERODYNAMIC_FORCE:
-                raise ValueError(f"Fuerzas excesivas: Drag={self.drag:.2f}N, Lift={self.lift:.2f}N (max={SIM_CONST.MAX_AERODYNAMIC_FORCE:.0f}N)")
-                
+                if abs(self.drag) > SIM_CONST.MAX_AERODYNAMIC_FORCE or abs(self.lift) > SIM_CONST.MAX_AERODYNAMIC_FORCE:
+                    raise ValueError(
+                        f"Fuerzas excesivas: Drag={self.drag:.2f}N, Lift={self.lift:.2f}N "
+                        f"(max={SIM_CONST.MAX_AERODYNAMIC_FORCE:.0f}N)"
+                    )
+
             self.forces_drag_b = np.array([-self.drag, 0, 0])
             self.forces_lift_b = np.array([0, 0, self.lift])
-            self.cm2cp_b=self.cm_b-self.cp_b                              # [m]   # Distance of centre of pressure from centre of mass
-            self.forces_aero_b=self.forces_drag_b  + self.forces_lift_b   # [N]   # Lift can be neglected if necessary for evaluation
-            self.torques_aero_b=np.cross(self.cm2cp_b,self.forces_aero_b) # [N m] # Torques produced by aerodynamic forces (lift mainly)
-            
+            self.cm2cp_b = self.cm_b - self.cp_b
+            self.forces_aero_b = self.forces_drag_b + self.forces_lift_b
+            self.torques_aero_b = np.cross(self.cm2cp_b, self.forces_aero_b)
+
         except Exception as e:
             logging.error(f"Error en cálculo aerodinámico: {str(e)}")
-            st.error(f"Error en fuerzas aerodinámicas: {str(e)}")
+            raise PhysicsCalculationError(f"Error en fuerzas aerodinámicas: {str(e)}") from e
 
     def update_forces_engine(self):
-        
+        """
         Calcula las fuerzas y torques producidos por el motor.
 
         Cálculos:
@@ -1134,7 +1120,7 @@ class Rocket(object):
 
         except Exception as e:
             logging.error(f"Error en save_data: {str(e)}")
-            QMessageBox.critical(None, "Error", f"Error guardando datos históricos: {str(e)}")
+            raise RocketSimulationError(f"Error guardando datos históricos: {str(e)}") from e
 
     def _expand_history_capacity(self, new_capacity):
         """

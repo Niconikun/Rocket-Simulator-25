@@ -2,7 +2,6 @@
 Rocket Simulator Pro - PyQt6 Application Entry Point
 
 This is the main entry point for the PyQt6 version of the Rocket Simulator GUI.
-Replaces the Streamlit-based streamlit_app.py.
 
 To run:
     python main.py

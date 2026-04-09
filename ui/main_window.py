@@ -20,8 +20,7 @@ class MainWindow(QMainWindow):
     """
     Main application window with tabbed interface.
     
-    Replaces Streamlit's multi-page approach with PyQt6 QTabWidget.
-    Each tab represents a page from the original Streamlit app.
+    Uses a PyQt6 QTabWidget to present the application pages.
     """
     
     def __init__(self):
@@ -67,7 +66,7 @@ class MainWindow(QMainWindow):
         self.parachute_widget = ParachuteSettingsWidget()
         self.wind_widget = WindSettingsWidget()
         
-        # Add tabs in order matching original Streamlit app
+        # Add tabs in order matching the application workflow
         self.tabs.addTab(self.simulation_widget, "🚀 Simulation")
         self.tabs.addTab(self.rocket_widget, "🛸 Rocket Settings")
         self.tabs.addTab(self.location_widget, "📍 Location")

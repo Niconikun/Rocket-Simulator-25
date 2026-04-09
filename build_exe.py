@@ -66,8 +66,9 @@ class BuildEXE:
         """Check all required packages."""
         print("[*] Checking dependencies...")
         required = [
-            'PyQt6', 'numpy', 'scipy', 'pandas',
-            'matplotlib', 'pyvista', 'plotly'
+            'PyQt6', 'PyQt6.QtWebEngineWidgets',
+            'numpy', 'scipy', 'pandas', 'matplotlib', 'pyvista',
+            'plotly', 'reportlab', 'folium', 'navpy', 'fluids'
         ]
         
         missing = []

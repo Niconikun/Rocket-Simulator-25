@@ -1,8 +1,8 @@
 # PyQt6 GUI Framework
-PyQt6
-PyQt6-Qt6
+PyQt6==6.10.0
+PyQt6-Qt6==6.10.2
 PyQt6-sip
-PyQt6-WebEngine
+PyQt6-WebEngine==6.10.0
 
 # Scientific and Data Processing
 scipy
@@ -10,10 +10,13 @@ numpy
 pandas
 matplotlib
 navpy
+fluids
 ephem
 
 # Interactive Maps
 folium>=0.14.0
+plotly
+jsonschema
 
 # 3D Visualization (Optional)
 pyvista
