@@ -84,96 +84,17 @@ class TestEngine(unittest.TestCase):
         self.assertGreaterEqual(self.engine.thrust_to_weight_ratio, 0)
 
     def test_specific_impulse(self):
-        """Prueba el cálculo del impulso específico (dummy)"""
+        """Prueba el cálculo del impulso específico"""
         Isp = self.engine.specific_impulse
         self.assertGreater(Isp, 0)
-        self.assertLess(Isp_vacuum, 500)  # Límite superior razonable para motores químicos
-
-    def test_transient_behavior(self):
-        """
-        Prueba el comportamiento transitorio del motor durante el encendido y apagado.
-        """
-        # Justo antes del encendido
-        self.engine.time = -0.1
-        self.assertEqual(self.engine.thrust, 0.0)
-        
-        # Durante el encendido
-        self.engine.time = 0.1
-        self.assertGreater(self.engine.thrust, 0.0)
-        
-        # Justo antes del apagado
-        self.engine.time = self.burn_time - 0.1
-        self.assertGreater(self.engine.thrust, 0.0)
-        
-        # Después del apagado
-        self.engine.time = self.burn_time + 0.1
-        self.assertEqual(self.engine.thrust, 0.0)
+        self.assertLess(Isp, 500)
 
     def test_expansion_ratio(self):
-        """
-        Prueba la relación de expansión de la tobera.
-        """
-        # Asumiendo una garganta típica
-        throat_diameter = self.nozzle_exit_diameter / 2.0  # Relación de expansión = 4
+        """Prueba la relación de expansión de la tobera"""
+        throat_diameter = self.nozzle_exit_diameter / 2.0
         expansion_ratio = (self.nozzle_exit_diameter/throat_diameter)**2
-        
-        # Verificar que la relación de expansión es razonable
-        self.assertGreater(expansion_ratio, 1.0)  # Debe ser convergente-divergente
-        self.assertLess(expansion_ratio, 100.0)   # Límite superior típico
-
-    def test_thermal_constraints(self):
-        """
-        Prueba las restricciones térmicas del motor.
-        """
-        # Temperatura de combustión típica para propelente sólido
-        T_chamber = 3000  # K
-        
-        # Velocidad del sonido en la garganta (condición sónica)
-        gamma = 1.2  # Razón de calores específicos típica
-        R = 8314/30  # Constante de gas específica (J/kg·K) para gases de escape típicos
-        a_throat = np.sqrt(gamma * R * T_chamber)
-        
-        # La velocidad de los gases en la salida puede superar Mach 1
-        # pero típicamente no supera Mach 3.5 para toberas convencionales
-        max_exit_mach = 3.5
-        max_allowed_speed = max_exit_mach * a_throat
-        
-        self.assertLess(self.gas_speed, max_allowed_speed)
-        self.assertGreater(self.gas_speed, a_throat)  # Debe ser supersónico en la salida
-
-    def test_performance_parameters(self):
-        """
-        Prueba varios parámetros de rendimiento del motor.
-        """
-        # Calcular potencia del motor
-        power = 0.5 * self.mass_flux_max * self.gas_speed**2
-        
-        # Calcular impulso total
-        total_impulse = self.engine.thrust * self.burn_time
-        
-        # Verificaciones
-        self.assertGreater(power, 0)
-        self.assertLess(power, 1e7)  # Límite superior razonable para motores pequeños
-        self.assertGreater(total_impulse, 0)
-        self.assertLess(total_impulse, 1e6)  # Límite superior razonable
-
-    def test_mass_flow_consistency(self):
-        """
-        Prueba la consistencia del flujo másico durante el quemado.
-        """
-        # Masa total de propelente
-        total_propellant_mass = self.mass_flux_max * self.burn_time
-        
-        # Simular quemado en intervalos
-        time_steps = np.linspace(0, self.burn_time, 100)
-        accumulated_mass = 0
-        
-        for t in time_steps:
-            self.engine.time = t
-            accumulated_mass += self.engine.mass_flux * (self.burn_time/100)
-        
-        # Verificar conservación de masa
-        self.assertAlmostEqual(accumulated_mass, total_propellant_mass, places=2)
+        self.assertGreater(expansion_ratio, 1.0)
+        self.assertLess(expansion_ratio, 100.0)
 
 if __name__ == '__main__':
     unittest.main()

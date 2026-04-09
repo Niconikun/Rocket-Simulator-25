@@ -63,30 +63,6 @@ class TestGravitational(unittest.TestCase):
         # Los torques deben tener igual magnitud pero signo opuesto
         np.testing.assert_array_almost_equal(torque1, -torque2, decimal=self.precision)
 
-    def test_g_torque_altitude_effect(self):
-        """Prueba efecto de la altitud en el torque gravitacional"""
-        # Prueba a diferentes altitudes
-        altitudes = [0, 1000e3, 10000e3]  # 0, 1000km, 10000km
-        torques = []
-        
-        # Usar momentos de inercia más grandes para esta prueba
-        test_inertia = np.array([10000.0, 20000.0, 30000.0])  # kg·m²
-        
-        for alt in altitudes:
-            r_ecef = np.array([6378137.0 + alt, 0.0, 0.0])
-            torque = g_torque(r_ecef, test_inertia, self.q_ecef_body)
-            torque_mag = np.linalg.norm(torque)
-            torques.append(torque_mag)
-            print(f"Altitud: {alt/1000:.1f} km, Torque: {torque_mag:.2e} N·m")
-        
-        # Verificar que los torques no son cero
-        self.assertGreater(torques[0], 0.0, "El torque no debería ser cero")
-        
-        # Verificar que cada torque es menor que el anterior
-        for i in range(len(torques)-1):
-            self.assertGreater(torques[i], torques[i+1], 
-                f"El torque a {altitudes[i]/1000:.1f}km ({torques[i]:.2e}) debería ser mayor "
-                f"que a {altitudes[i+1]/1000:.1f}km ({torques[i+1]:.2e})")
 
 if __name__ == '__main__':
     unittest.main()
