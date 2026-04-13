@@ -1,6 +1,10 @@
 {
     "name": "Rayo",
+    "description": "Rayo sounding rocket - tactical class vehicle with solid motor propulsion",
+    "category": "sounding_rocket",
     "initial_mass": 9.48,
+    "propellant_mass": 3.33,
+    "dry_mass_kg": 6.15,
     "reference_area": 0.006204,
     "I_before_burn": {
             "x": 0.009057381,

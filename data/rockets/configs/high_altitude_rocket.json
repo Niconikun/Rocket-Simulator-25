@@ -1,9 +1,10 @@
 {
     "name": "High_Altitude_Rocket",
-    "description": "High-performance rocket designed for high-altitude flight from elevated launch site",
+    "description": "High-performance rocket (J-class motor) designed for high-altitude flight from elevated launch site",
     "category": "high_altitude",
-    "total_mass_initial": 25.0,
+    "initial_mass": 25.0,
     "propellant_mass": 8.5,
+    "dry_mass_kg": 16.5,
     "reference_area": 0.075,
     "I_before_burn": {
         "x": 0.15,

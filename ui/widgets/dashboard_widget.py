@@ -402,36 +402,134 @@ class DashboardWidget(QWidget):
             if history:
                 # Try to extract data from history
                 if isinstance(history, dict):
-                    # Chart 4: Placeholder for forces (if available)
-                    fig4 = self._create_placeholder_chart("Forces Analysis [N] vs Time [s]")
+                    # Chart 4: Forces Analysis
+                    try:
+                        times = np.array(history.get('hist_time', []))
+                        thrust = np.array(history.get('hist_thrust', []))
+                        drag = np.array(history.get('hist_drag', []))
+                        lift = np.array(history.get('hist_lift', []))
+                        
+                        if len(times) > 0:
+                            fig4 = self._create_multiline_chart(
+                                "Forces Analysis [N] vs Time [s]",
+                                times, [thrust, drag, lift],
+                                ['Thrust', 'Drag', 'Lift'],
+                                ['green', 'red', 'blue']
+                            )
+                        else:
+                            fig4 = self._create_placeholder_chart("Forces Analysis [N] vs Time [s]")
+                    except Exception as e:
+                        logger.warning(f"Could not create forces chart: {e}")
+                        fig4 = self._create_placeholder_chart("Forces Analysis [N] vs Time [s]")
                     self._add_chart_to_grid(fig4, 1, 0)
                     
-                    # Chart 5: Placeholder for mass
-                    fig5 = self._create_placeholder_chart("Mass [kg] & Altitude [m] vs Time [s]")
+                    # Chart 5: Mass & Altitude
+                    try:
+                        times = np.array(history.get('hist_time', []))
+                        mass = np.array(history.get('hist_mass', []))
+                        altitude = np.array(history.get('hist_alt', []))
+                        
+                        if len(times) > 0:
+                            fig5 = self._create_chart(
+                                "Mass [kg] & Altitude [m] vs Time [s]",
+                                times, [mass, altitude],
+                                ['Mass', 'Altitude'], ['purple', 'cyan']
+                            )
+                        else:
+                            fig5 = self._create_placeholder_chart("Mass [kg] & Altitude [m] vs Time [s]")
+                    except Exception as e:
+                        logger.warning(f"Could not create mass chart: {e}")
+                        fig5 = self._create_placeholder_chart("Mass [kg] & Altitude [m] vs Time [s]")
                     self._add_chart_to_grid(fig5, 1, 1)
                     
-                    # Chart 6: Placeholder for attitude
-                    fig6 = self._create_placeholder_chart("Attitude Analysis - Euler Angles [°] vs Time [s]")
+                    # Chart 6: Attitude (Euler Angles)
+                    try:
+                        times = np.array(history.get('hist_time', []))
+                        yaw = np.array(history.get('hist_yaw', []))
+                        pitch = np.array(history.get('hist_pitch', []))
+                        roll = np.array(history.get('hist_roll', []))
+                        
+                        if len(times) > 0:
+                            fig6 = self._create_multiline_chart(
+                                "Attitude - Euler Angles [°] vs Time [s]",
+                                times, [np.degrees(yaw), np.degrees(pitch), np.degrees(roll)],
+                                ['Yaw', 'Pitch', 'Roll'],
+                                ['orange', 'green', 'purple']
+                            )
+                        else:
+                            fig6 = self._create_placeholder_chart("Attitude Analysis - Euler Angles [°] vs Time [s]")
+                    except Exception as e:
+                        logger.warning(f"Could not create attitude chart: {e}")
+                        fig6 = self._create_placeholder_chart("Attitude Analysis - Euler Angles [°] vs Time [s]")
                     self._add_chart_to_grid(fig6, 1, 2)
                     
-                    # Chart 7: Placeholder for velocity components
-                    fig7 = self._create_placeholder_chart("Velocity Components [m/s] vs Time [s]")
+                    # Chart 7: Velocity Components
+                    try:
+                        times = np.array(history.get('hist_time', []))
+                        v_bx = np.array(history.get('hist_v_bx', []))
+                        v_by = np.array(history.get('hist_v_by', []))
+                        v_bz = np.array(history.get('hist_v_bz', []))
+                        
+                        if len(times) > 0:
+                            fig7 = self._create_multiline_chart(
+                                "Velocity Components [m/s] vs Time [s]",
+                                times, [v_bx, v_by, v_bz],
+                                ['Vx', 'Vy', 'Vz'],
+                                ['red', 'green', 'blue']
+                            )
+                        else:
+                            fig7 = self._create_placeholder_chart("Velocity Components [m/s] vs Time [s]")
+                    except Exception as e:
+                        logger.warning(f"Could not create velocity chart: {e}")
+                        fig7 = self._create_placeholder_chart("Velocity Components [m/s] vs Time [s]")
                     self._add_chart_to_grid(fig7, 2, 0)
                     
-                    # Chart 8: Placeholder for atmospheric
-                    fig8 = self._create_placeholder_chart("Atmospheric Conditions vs Altitude [m]")
+                    # Chart 8: Atmospheric Conditions
+                    try:
+                        altitude = np.array(history.get('hist_alt', []))
+                        density = np.array(history.get('hist_density', []))
+                        pressure = np.array(history.get('hist_press_amb', []))
+                        
+                        if len(altitude) > 0 and len(density) > 0:
+                            fig8 = self._create_chart(
+                                "Atmospheric Conditions vs Altitude [m]",
+                                altitude, [density, pressure],
+                                ['Density [kg/m³]', 'Pressure [Pa]'],
+                                ['darkblue', 'darkgreen']
+                            )
+                        else:
+                            fig8 = self._create_placeholder_chart("Atmospheric Conditions vs Altitude [m]")
+                    except Exception as e:
+                        logger.warning(f"Could not create atmosphere chart: {e}")
+                        fig8 = self._create_placeholder_chart("Atmospheric Conditions vs Altitude [m]")
                     self._add_chart_to_grid(fig8, 2, 1)
                     
-                    # Chart 9: Placeholder for aero coefficients
-                    fig9 = self._create_placeholder_chart("Aerodynamic Coefficients [-] vs Time [s]")
+                    # Chart 9: Aerodynamic Coefficients
+                    try:
+                        times = np.array(history.get('hist_time', []))
+                        drag_coeff = np.array(history.get('hist_drag_coeff', []))
+                        lift_coeff = np.array(history.get('hist_lift_coeff', []))
+                        mach = np.array(history.get('hist_mach', []))
+                        
+                        if len(times) > 0:
+                            fig9 = self._create_multiline_chart(
+                                "Aerodynamic Coefficients [-] vs Time [s]",
+                                times, [drag_coeff, lift_coeff, mach],
+                                ['Cd', 'Cl', 'Mach'],
+                                ['brown', 'pink', 'gray']
+                            )
+                        else:
+                            fig9 = self._create_placeholder_chart("Aerodynamic Coefficients [-] vs Time [s]")
+                    except Exception as e:
+                        logger.warning(f"Could not create aero coefficients chart: {e}")
+                        fig9 = self._create_placeholder_chart("Aerodynamic Coefficients [-] vs Time [s]")
                     self._add_chart_to_grid(fig9, 2, 2)
             else:
-                # Fill remaining charts with placeholders
+                # Fill remaining charts with placeholders if no history
                 for i in range(1, 3):
                     for j in range(3):
-                        if not (i == 0 and j >= 3):
-                            fig = self._create_placeholder_chart(f"Chart ({i}, {j})")
-                            self._add_chart_to_grid(fig, i, j)
+                        fig = self._create_placeholder_chart(f"Chart ({i}, {j})")
+                        self._add_chart_to_grid(fig, i, j)
             
             logger.info("Performance charts generated successfully")
             
@@ -471,6 +569,23 @@ class DashboardWidget(QWidget):
         ax.plot(x_data, y_data, 'b-', linewidth=2)
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        return fig
+    
+    def _create_multiline_chart(self, title, x_data, y_data_list, labels, colors_list):
+        """Create a matplotlib figure with multiple lines on same y-axis."""
+        fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
+        fig.suptitle(title, fontsize=12, fontweight='bold')
+        
+        for i, y_data in enumerate(y_data_list):
+            if len(y_data) > 0:
+                ax.plot(x_data, y_data, color=colors_list[i], linewidth=2, label=labels[i])
+        
+        ax.set_xlabel('Time [s]')
+        ax.set_ylabel('Value')
+        ax.legend(loc='best')
         ax.grid(True, alpha=0.3)
         
         plt.tight_layout()

@@ -60,5 +60,6 @@
     "rear_section": {
         "length": 1.0,
         "diameter": 103.0
-    }
+    },
+    "dry_mass_kg": 6.3
 }

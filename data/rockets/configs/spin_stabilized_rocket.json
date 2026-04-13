@@ -1,9 +1,10 @@
 {
     "name": "Spin_Stabilized_Rocket",
-    "description": "Spin-stabilized rocket with initial angular velocity for attitude control validation",
+    "description": "Spin-stabilized rocket with helical fins for attitude control validation via gyroscopic stabilization",
     "category": "spin_stabilized",
-    "total_mass_initial": 12.0,
+    "initial_mass": 12.0,
     "propellant_mass": 3.5,
+    "dry_mass_kg": 8.5,
     "reference_area": 0.040,
     "I_before_burn": {
         "x": 0.035,

@@ -9,6 +9,7 @@ from src.models.clock import Clock
 from src.models.parachute import Parachute
 from src.utils.mattools import MatTools as Mat
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
+from src.utils.simulation_validator import SimulationValidator
 import logging
 import json
 import os
@@ -200,7 +201,13 @@ class SimulationWorker(QThread):
                 'location': location_name,
             }
             
+            # Phase 1: Diagnostic tracking
+            termination_reason = None
+            termination_step = None
+            
             logger.info(f"Starting simulation loop: {num_steps} steps, {timestep}s timestep")
+            logger.info(f"Requested runtime: {runtime}s, Timestep: {timestep}s")
+            logger.info(f"Termination limits - Max altitude: {max_altitude/1000:.0f} km, Max range: {max_range/1000:.0f} km")
             
             # Main simulation loop
             t = 0.0
@@ -209,7 +216,9 @@ class SimulationWorker(QThread):
             
             for i in range(num_steps):
                 if not self.is_running:
-                    logger.info("Simulation stopped by user")
+                    termination_reason = "USER_STOP: Simulation cancelled by user"
+                    termination_step = i
+                    logger.info(f"[TERMINATION] {termination_reason} at t={t:.2f}s (step {i}/{num_steps})")
                     break
                 
                 try:
@@ -339,18 +348,31 @@ class SimulationWorker(QThread):
                     
                     # Check termination conditions
                     if current_altitude <= 0 and t > 1.0:
-                        logger.info(f"Simulation terminated: rocket hit ground at t={t:.2f}s")
+                        termination_reason = "LANDING: Altitude <= 0m"
+                        termination_step = i
+                        logger.info(f"[TERMINATION] {termination_reason} at t={t:.2f}s (step {i}/{num_steps})")
+                        logger.info(f"  Altitude: {current_altitude:.2f}m, Velocity: {current_velocity:.2f}m/s")
                         break
                     
                     if current_altitude > max_altitude:
-                        logger.warning(f"Simulation terminated: maximum altitude exceeded at t={t:.2f}s")
+                        termination_reason = "MAX_ALTITUDE: Exceeded 200km"
+                        termination_step = i
+                        logger.warning(f"[TERMINATION] {termination_reason} at t={t:.2f}s (step {i}/{num_steps})")
+                        logger.warning(f"  Altitude: {current_altitude/1000:.1f}km, Velocity: {current_velocity:.2f}m/s")
                         break
                     
                     if current_range > max_range:
-                        logger.warning(f"Simulation terminated: maximum range exceeded at t={t:.2f}s")
+                        termination_reason = "MAX_RANGE: Exceeded 500km"
+                        termination_step = i
+                        logger.warning(f"[TERMINATION] {termination_reason} at t={t:.2f}s (step {i}/{num_steps})")
+                        logger.warning(f"  Range: {current_range/1000:.1f}km, Altitude: {current_altitude:.2f}m")
                         break
                     
                     if np.any(np.isnan([current_altitude, current_velocity])):
+                        termination_reason = "NAN_DETECTED: Numerical instability"
+                        termination_step = i
+                        logger.error(f"[TERMINATION] {termination_reason} at t={t:.2f}s (step {i}/{num_steps})")
+                        logger.error(f"  Altitude: {current_altitude}, Velocity: {current_velocity}")
                         raise RuntimeError(f"Numerical instability detected at t={t:.2f}s")
                     
                     t += timestep
@@ -362,6 +384,31 @@ class SimulationWorker(QThread):
             
             # Final metrics
             metrics['flight_duration'] = t
+            
+            # ===== PHASE 1: RUNTIME DIAGNOSTICS =====
+            runtime_diagnostics = {
+                'requested_runtime_s': runtime,
+                'actual_runtime_s': t,
+                'requested_steps': num_steps,
+                'actual_steps': i + 1,
+                'timestep_s': timestep,
+                'completion_percentage': f"{((i+1)/num_steps)*100:.1f}%",
+                'termination_reason': termination_reason or "NORMAL: Completed all steps",
+                'termination_step': termination_step or i,
+            }
+            metrics['runtime_diagnostics'] = runtime_diagnostics
+            
+            logger.info(f"\n{'='*70}")
+            logger.info(f"SIMULATION RUNTIME DIAGNOSTICS")
+            logger.info(f"{'='*70}")
+            logger.info(f"Requested runtime: {runtime}s → Actual: {t:.2f}s ({((t/runtime)*100 if runtime > 0 else 0):.1f}%)")
+            logger.info(f"Steps: {num_steps} requested → {i+1} executed")
+            logger.info(f"Termination: {termination_reason or 'NORMAL (all steps completed)'}")
+            logger.info(f"Max altitude: {metrics['max_altitude']:.2f}m")
+            logger.info(f"Max velocity: {metrics['max_velocity']:.2f}m/s ({metrics['max_mach']:.2f} Mach)")
+            logger.info(f"Max range: {metrics['max_range']:.2f}m")
+            logger.info(f"Apogee time: {metrics['apogee_time']:.2f}s")
+            logger.info(f"{'='*70}\n")
             
             # ===== PARACHUTE METRICS =====
             if parachute is not None:
@@ -399,6 +446,35 @@ class SimulationWorker(QThread):
             
             logger.info(f"Simulation completed successfully: {i+1} steps, {t:.2f}s flight time")
             logger.info(f"Max altitude: {metrics['max_altitude']:.2f}m, Max velocity: {metrics['max_velocity']:.2f}m/s")
+            
+            # ===== PHASE 2: POST-SIMULATION VALIDATION =====
+            try:
+                validator = SimulationValidator()
+                validation_report = validator.validate(results)
+                results['validation'] = validation_report
+                
+                # Log validation summary
+                if validation_report['valid']:
+                    logger.info(f"✓ VALIDATION PASS: {validator.summary()}")
+                else:
+                    logger.warning(f"✗ VALIDATION WARNINGS: {validator.summary()}")
+                    if validation_report['errors']:
+                        logger.error(f"  Critical errors: {len(validation_report['errors'])}")
+                        for err in validation_report['errors'][:3]:  # Show first 3
+                            logger.error(f"    - {err}")
+                    if validation_report['warnings']:
+                        logger.warning(f"  Warnings: {len(validation_report['warnings'])}")
+                        for warn in validation_report['warnings'][:3]:  # Show first 3
+                            logger.warning(f"    - {warn}")
+            except Exception as validation_error:
+                logger.warning(f"Could not validate simulation results: {validation_error}")
+                results['validation'] = {
+                    'valid': None,
+                    'error': str(validation_error),
+                    'checks': {},
+                    'warnings': [],
+                    'errors': [str(validation_error)]
+                }
             
             self.finished.emit(results)
             

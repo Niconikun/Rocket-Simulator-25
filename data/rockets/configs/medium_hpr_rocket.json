@@ -1,9 +1,10 @@
 {
     "name": "Medium_HPR_Rocket",
-    "description": "Medium high-power rocket for mid-altitude demonstrations",
+    "description": "Medium high-power rocket (I-class motor) for mid-altitude demonstrations with parachute deployment",
     "category": "high_power_rocket",
-    "total_mass_initial": 18.5,
+    "initial_mass": 18.5,
     "propellant_mass": 6.0,
+    "dry_mass_kg": 12.5,
     "reference_area": 0.055,
     "I_before_burn": {
         "x": 0.085,

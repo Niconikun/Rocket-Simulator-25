@@ -1,9 +1,10 @@
 {
     "name": "Coasting_Test_Rocket",
-    "description": "Low-thrust configuration to test coasting phase and ballistic descent",
+    "description": "Low-thrust configuration to test coasting phase and ballistic descent dynamics",
     "category": "test_configuration",
-    "total_mass_initial": 5.0,
+    "initial_mass": 5.0,
     "propellant_mass": 0.10,
+    "dry_mass_kg": 4.9,
     "reference_area": 0.035,
     "I_before_burn": {
         "x": 0.008,

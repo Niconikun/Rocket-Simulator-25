@@ -1,9 +1,10 @@
 {
     "name": "Small_Model_Rocket",
-    "description": "Educational small model rocket for basic physics validation",
+    "description": "Educational small model rocket (F-class) for basic physics validation",
     "category": "model_rocket",
-    "total_mass_initial": 1.5,
+    "initial_mass": 1.5,
     "propellant_mass": 0.35,
+    "dry_mass_kg": 1.15,
     "reference_area": 0.018,
     "I_before_burn": {
         "x": 0.0015,
