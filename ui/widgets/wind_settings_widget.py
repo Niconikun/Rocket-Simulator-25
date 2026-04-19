@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from models.app_state import ApplicationState
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
+from typing import Tuple
 import logging
 import numpy as np
 
@@ -26,6 +27,71 @@ class WindSettingsWidget(QWidget):
     
     # Signal to notify main window of wind changes
     wind_changed = pyqtSignal()
+    
+    # Valid wind model types
+    VALID_MODELS = {'constant', 'logarithmic', 'power_law', 'gust'}
+    
+    @staticmethod
+    def validate_wind_parameters(model_type: str, params: dict) -> Tuple[bool, str]:
+        """Validate wind model parameters.
+        
+        Args:
+            model_type (str): Wind model type
+            params (dict): Parameter dict with wind settings
+        
+        Returns:
+            Tuple[bool, str]: (is_valid, error_message)
+        
+        Validates:
+            - model_type is in VALID_MODELS
+            - wind_speed >= 0
+            - wind_direction in [0, 360)
+            - wind_reference_height > 0
+            - Model-specific parameters exist and are in valid ranges
+        """
+        if model_type not in WindSettingsWidget.VALID_MODELS:
+            return False, f"Invalid wind model: {model_type}"
+        
+        try:
+            wind_speed = float(params.get('wind_speed', 0))
+            wind_dir = float(params.get('wind_direction', 0))
+            ref_height = float(params.get('wind_reference_height', 10))
+        except (TypeError, ValueError):
+            return False, "Wind parameters must be numeric"
+        
+        if wind_speed < 0:
+            return False, "Wind speed cannot be negative"
+        if wind_speed > 100:
+            return False, "Wind speed > 100 m/s is unrealistic"
+        
+        if not (0 <= wind_dir < 360):
+            return False, "Wind direction must be in [0, 360)"
+        
+        if ref_height <= 0:
+            return False, "Reference height must be positive"
+        if ref_height > 10000:
+            return False, "Reference height > 10000 m is unrealistic"
+        
+        # Model-specific validation
+        if model_type in ['logarithmic', 'power_law']:
+            roughness = float(params.get('wind_roughness_length', 0.1))
+            if roughness < 0.001 or roughness > 10:
+                return False, "Roughness length should be in [0.001, 10] m"
+        
+        if model_type == 'power_law':
+            exponent = float(params.get('wind_exponent', 0.2))
+            if not (0.05 <= exponent <= 0.5):
+                return False, "Power law exponent should be in [0.05, 0.5]"
+        
+        if model_type == 'gust':
+            intensity = float(params.get('wind_gust_intensity', 0.1))
+            length = float(params.get('wind_gust_length_scale', 300))
+            if not (0 <= intensity <= 1):
+                return False, "Gust intensity must be in [0, 1]"
+            if length < 10 or length > 10000:
+                return False, "Gust length scale should be in [10, 10000] m"
+        
+        return True, ""
     
     def __init__(self):
         super().__init__()
@@ -204,6 +270,7 @@ class WindSettingsWidget(QWidget):
         self.preview_altitude_spin.setRange(0, 10000)
         self.preview_altitude_spin.setValue(1000)
         self.preview_altitude_spin.setSuffix(" m")
+        self.preview_altitude_spin.valueChanged.connect(self.update_preview)
         altitude_layout.addWidget(self.preview_altitude_spin)
         
         preview_button = QPushButton("Update Preview")
@@ -221,7 +288,14 @@ class WindSettingsWidget(QWidget):
         return widget
     
     def load_wind_settings(self):
-        """Load current wind settings from app state."""
+        """Load current wind settings from app state and populate UI.
+        
+        Reads all wind parameters from ApplicationState and updates UI controls.
+        Calls update_wind_model_ui() to show/hide model-specific parameters.
+        Calls update_preview() to populate wind profile table with initial values.
+        
+        Logs errors but continues operation if settings load fails.
+        """
         try:
             # Update UI with current state values
             self.wind_enabled_check.setChecked(self.state.get('wind_enabled', False))
@@ -236,12 +310,22 @@ class WindSettingsWidget(QWidget):
             
             # Update wind model UI
             self.update_wind_model_ui()
+            # Populate preview table with initial values
+            self.update_preview()
+            
             logger.info("Wind settings loaded successfully")
         except Exception as e:
             logger.error(f"Error loading wind settings: {e}")
     
     def on_wind_enabled_changed(self, state):
-        """Handle wind enable/disable toggle."""
+        """Handle wind enable/disable toggle.
+        
+        Args:
+            state: Qt checkbox state signal (ignored, uses button checked status).
+        
+        Updates ApplicationState wind_enabled flag. Enables/disables all other
+        wind controls based on checkbox state. Emits wind_changed signal.
+        """
         enabled = self.wind_enabled_check.isChecked()
         self.state.set('wind_enabled', enabled)
         
@@ -259,14 +343,29 @@ class WindSettingsWidget(QWidget):
         self.wind_changed.emit()
     
     def on_wind_model_changed(self, model_type):
-        """Handle wind model selection change."""
+        """Handle wind model selection change.
+        
+        Args:
+            model_type (str): Selected model type (constant, logarithmic, power_law, gust).
+        
+        Updates ApplicationState wind_model_type. Calls update_wind_model_ui() to
+        show/hide model-specific parameters. Emits wind_changed signal.
+        """
         self.state.set('wind_model_type', model_type)
         self.update_wind_model_ui()
         logger.info(f"Wind model changed to: {model_type}")
         self.wind_changed.emit()
     
     def on_parameter_changed(self, value):
-        """Handle wind parameter changes."""
+        """Handle wind parameter changes from spinboxes.
+        
+        Args:
+            value: Spinbox signal value (unused, reads directly from spinboxes).
+        
+        Syncs all wind parameters to ApplicationState. Emits wind_changed signal.
+        Called when wind speed, direction, reference height, roughness, exponent,
+        gust intensity, or gust length scale changes.
+        """
         # Update state with new values
         self.state.set('wind_speed', self.wind_speed_spin.value())
         self.state.set('wind_direction', self.wind_direction_spin.value())
@@ -279,7 +378,15 @@ class WindSettingsWidget(QWidget):
         self.wind_changed.emit()
     
     def update_wind_model_ui(self):
-        """Update UI visibility based on wind model type."""
+        """Update UI visibility based on wind model type.
+        
+        Hides all model-specific parameter controls by default, then shows
+        only the controls relevant to the selected model:
+        - logarithmic: shows roughness length (z₀)
+        - power_law: shows power law exponent (α)
+        - gust: shows gust intensity and length scale
+        - constant: shows no additional parameters
+        """
         model_type = self.wind_model_combo.currentText()
         
         # Hide all model-specific controls by default
@@ -307,8 +414,28 @@ class WindSettingsWidget(QWidget):
         # 'constant' model has no additional parameters
     
     def update_wind_model(self):
-        """Update and validate wind model."""
+        """Update and validate wind model from current state.
+        
+        Creates wind model using create_wind_model_from_state() utility.
+        Logs wind configuration if model created successfully.
+        Updates preview table with new model data.
+        
+        Displays information dialog if model created successfully, or warning
+        dialog if wind simulation is disabled.
+        
+        Raises:
+            Exception: Logs and displays error dialog if model creation fails.
+        """
         try:
+            # Validate parameters before creating model
+            model_type = self.wind_model_combo.currentText()
+            is_valid, error_msg = self.validate_wind_parameters(model_type, self.state._state)
+            
+            if not is_valid:
+                QMessageBox.warning(self, "Parameter Validation Error", error_msg)
+                logger.warning(f"Wind parameter validation failed: {error_msg}")
+                return
+            
             self.wind_model = create_wind_model_from_state(self.state._state)
             
             if self.wind_model is not None:
@@ -329,16 +456,30 @@ class WindSettingsWidget(QWidget):
             QMessageBox.critical(self, "Error", f"Failed to update wind model: {str(e)}")
     
     def update_preview(self):
-        """Update wind preview table and info."""
+        """Update wind preview table and vector components display.
+        
+        Generates wind velocity profile at altitudes [0, 100, 500, 1000, 2000, 5000, 10000] m.
+        Populates wind_table with altitude and calculated wind speed.
+        Shows wind vector components (East u, North v, Up w) at selected preview altitude.
+        
+        Validates wind enabled and model creation before populating table.
+        Row-level error handling fills cells with "Error" if wind calculation fails.
+        Applies styling to info text based on success/error state.
+        
+        Logs errors encountered during preview generation.
+        """
         try:
+            # Check if wind is enabled
             if not self.wind_enabled_check.isChecked():
                 self.wind_table.setRowCount(0)
-                self.wind_info_text.setText("Wind simulation is disabled.")
+                self.wind_info_text.setText("Wind simulation is disabled.\nEnable wind to see preview.")
                 return
             
+            # Create wind model from current state
             self.wind_model = create_wind_model_from_state(self.state._state)
             if self.wind_model is None:
                 self.wind_table.setRowCount(0)
+                self.wind_info_text.setText("Unable to create wind model with current settings.")
                 return
             
             # Generate wind profiles at different altitudes
@@ -346,39 +487,62 @@ class WindSettingsWidget(QWidget):
             self.wind_table.setRowCount(len(altitudes))
             
             for row, alt in enumerate(altitudes):
-                wind_vec = self.wind_model.get_wind_vector(alt)
-                wind_speed = np.linalg.norm(wind_vec)
-                
-                alt_item = QTableWidgetItem(f"{alt}")
-                alt_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.wind_table.setItem(row, 0, alt_item)
-                
-                speed_item = QTableWidgetItem(f"{wind_speed:.2f}")
-                speed_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.wind_table.setItem(row, 1, speed_item)
+                try:
+                    wind_vec = self.wind_model.get_wind_vector(alt)
+                    wind_speed = np.linalg.norm(wind_vec)
+                    
+                    # Altitude column
+                    alt_item = QTableWidgetItem(f"{alt}")
+                    alt_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    self.wind_table.setItem(row, 0, alt_item)
+                    
+                    # Wind speed column
+                    speed_item = QTableWidgetItem(f"{wind_speed:.2f}")
+                    speed_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    self.wind_table.setItem(row, 1, speed_item)
+                except Exception as row_error:
+                    logger.warning(f"Error calculating wind at {alt}m: {row_error}")
+                    # Fill with error placeholder
+                    self.wind_table.setItem(row, 0, QTableWidgetItem(f"{alt}"))
+                    self.wind_table.setItem(row, 1, QTableWidgetItem("Error"))
             
             # Show wind vector at selected altitude
             preview_alt = self.preview_altitude_spin.value()
             wind_vec = self.wind_model.get_wind_vector(preview_alt)
             wind_speed = np.linalg.norm(wind_vec)
+            wind_direction = self.wind_model.get_wind_direction_at_altitude(preview_alt)
             
+            # Format wind vector info with model type
+            model_type = self.wind_model_combo.currentText()
             info_text = (
+                f"Wind Model: {model_type.replace('_', ' ').title()}\n"
                 f"Altitude: {preview_alt:.1f} m\n"
                 f"Wind Speed: {wind_speed:.2f} m/s\n"
-                f"Components (East, North, Up):\n"
-                f"  East: {wind_vec[0]:+.2f} m/s\n"
-                f"  North: {wind_vec[1]:+.2f} m/s\n"
-                f"  Up: {wind_vec[2]:+.2f} m/s\n"
-                f"Direction FROM: {self.wind_model.get_wind_direction_at_altitude(preview_alt):.1f}°"
+                f"Direction FROM: {wind_direction:.1f}°\n\n"
+                f"Vector Components (East, North, Up):\n"
+                f"  East (u):  {wind_vec[0]:+.3f} m/s\n"
+                f"  North (v): {wind_vec[1]:+.3f} m/s\n"
+                f"  Up (w):    {wind_vec[2]:+.3f} m/s"
             )
             self.wind_info_text.setText(info_text)
+            self.wind_info_text.setStyleSheet("background-color: #f0f0f0; padding: 5px; border-radius: 3px;")
+            
+            logger.info(f"Wind preview updated for altitude {preview_alt}m")
             
         except Exception as e:
-            logger.error(f"Error updating preview: {e}")
-            self.wind_info_text.setText(f"Error: {str(e)}")
+            logger.error(f"Error updating wind preview: {e}")
+            self.wind_info_text.setText(f"Error generating preview:\n{str(e)}")
+            self.wind_info_text.setStyleSheet("background-color: #ffe0e0; padding: 5px; color: #cc0000;")
     
     def show_wind_info(self):
-        """Show wind model information."""
+        """Show wind model information in dialog.
+        
+        Displays comprehensive wind model details by calling wind_model.get_info().
+        Shows warning if wind is disabled, or error dialog if model creation fails.
+        
+        Raises:
+            Exception: Logs and displays error dialog if info retrieval fails.
+        """
         try:
             if not self.wind_enabled_check.isChecked():
                 QMessageBox.information(self, "Wind Info", "Wind simulation is currently disabled.")
@@ -400,7 +564,21 @@ class WindSettingsWidget(QWidget):
             QMessageBox.critical(self, "Error", f"Failed to get wind info: {str(e)}")
     
     def reset_to_default(self):
-        """Reset wind settings to default values."""
+        """Reset all wind settings to default values with confirmation.
+        
+        Prompts user for confirmation before resetting. Sets:
+        - wind_enabled: False
+        - wind_model_type: logarithmic
+        - wind_speed: 0.0 m/s
+        - wind_direction: 0.0°
+        - wind_reference_height: 10.0 m
+        - wind_roughness_length: 0.1 m
+        - wind_exponent: 0.2
+        - wind_gust_intensity: 0.1
+        - wind_gust_length_scale: 300.0 m
+        
+        Emits wind_changed signal after reset. Logs reset action.
+        """
         reply = QMessageBox.question(
             self,
             "Reset Wind Settings",

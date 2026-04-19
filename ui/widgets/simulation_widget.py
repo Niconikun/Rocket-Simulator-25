@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QFormLayout, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QDate, QTime
+from datetime import datetime
 from models.app_state import ApplicationState
 from workers.simulation_worker import SimulationWorker
 from src.utils.simulation_manager import SimulationManager
@@ -259,18 +260,24 @@ class SimulationWidget(QWidget):
                 'pressure': self.state.get('average_pressure', 101325.0),
                 'launch_date': str(self.state.get('sim_date', '')),
                 'launch_time': str(self.state.get('sim_time', '')),
-                'timestamp': __import__('datetime').datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat()
             }
             
+            # Validate results structure before processing
+            if not results or not isinstance(results, dict):
+                raise ValueError("Invalid simulation results: expected dict with metrics")
+            
             # Extract key metrics from results - they are nested in 'metrics' dict
-            if results and isinstance(results, dict):
-                metrics = results.get('metrics', {})
-                metadata['max_altitude'] = metrics.get('max_altitude', 0) / 1000.0  # Convert to km
-                metadata['max_velocity'] = metrics.get('max_velocity', 0)
-                metadata['max_range'] = metrics.get('max_range', 0) / 1000.0  # Convert to km
-                metadata['flight_duration'] = metrics.get('flight_duration', 0)
-                metadata['max_mach'] = metrics.get('max_mach', 0)
-                metadata['max_accel_g'] = metrics.get('max_accel_g', 0)
+            metrics = results.get('metrics', {})
+            if not metrics or not isinstance(metrics, dict):
+                raise ValueError("Missing metrics in simulation results")
+            
+            metadata['max_altitude'] = metrics.get('max_altitude', 0) / 1000.0  # Convert to km
+            metadata['max_velocity'] = metrics.get('max_velocity', 0)
+            metadata['max_range'] = metrics.get('max_range', 0) / 1000.0  # Convert to km
+            metadata['flight_duration'] = metrics.get('flight_duration', 0)
+            metadata['max_mach'] = metrics.get('max_mach', 0)
+            metadata['max_accel_g'] = metrics.get('max_accel_g', 0)
             
             # Save to persistent storage
             sim_id = self.simulation_manager.save_simulation(results, metadata)
@@ -301,7 +308,22 @@ class SimulationWidget(QWidget):
         logger.error(f"Simulation error: {error_msg}")
     
     def reset_simulation(self):
-        """Reset simulation parameters."""
+        """Reset simulation parameters to defaults."""
+        # Reset UI elements
         self.progress_bar.setValue(0)
+        self.runtime_spinbox.setValue(600)
+        self.timestep_spinbox.setValue(0.001)
+        self.temp_spinbox.setValue(20.0)
+        self.pressure_spinbox.setValue(101325.0)
+        self.elevation_spinbox.setValue(60.0)
+        self.launch_angle_spinbox.setValue(85.0)
+        self.launch_azimuth_spinbox.setValue(0.0)
+        self.launch_roll_spinbox.setValue(0.0)
+        self.timezone_combo.setCurrentText('UTC')
+        
+        # Reset state
         self.state.set('simulation_results', None)
         self.state.set('simulation_error', None)
+        self.state.set('simulation_running', False)
+        
+        logger.info("Simulation parameters reset to defaults")

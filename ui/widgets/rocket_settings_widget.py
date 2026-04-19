@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox,
     QPushButton, QComboBox, QGroupBox, QFormLayout, QMessageBox, QTabWidget,
-    QFileDialog, QScrollArea, QSpinBox, QScrollArea, QTextEdit
+    QFileDialog, QScrollArea, QSpinBox, QTextEdit
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
@@ -11,6 +11,7 @@ from models.app_state import ApplicationState
 import json
 import os
 import logging
+from typing import Tuple, Optional
 import numpy as np
 
 # Try to import PyVista for 3D visualization
@@ -49,6 +50,34 @@ class RocketSettingsWidget(QWidget):
     - 3D visualization of rocket geometry
     - Support for all JSON parameters (CoM, fuselage, fins, nosecone, etc.)
     """
+    
+    @staticmethod
+    def validate_rocket_name(name: str) -> Tuple[bool, str]:
+        """Validate rocket name for file system safety.
+        
+        Args:
+            name (str): Rocket name to validate
+        
+        Returns:
+            Tuple[bool, str]: (is_valid, error_message)
+        
+        Validates:
+            - Non-empty string
+            - No invalid filesystem characters
+            - Only alphanumeric, spaces, dashes, underscores
+        """
+        if not name or not name.strip():
+            return False, "Rocket name cannot be empty"
+        
+        # Allow alphanumeric, spaces, dashes, underscores
+        if not all(c.isalnum() or c in ' -_' for c in name):
+            return False, "Rocket name can only contain letters, numbers, spaces, dashes, and underscores"
+        
+        # Prevent overly long names
+        if len(name) > 100:
+            return False, "Rocket name must be 100 characters or less"
+        
+        return True, ""
     
     def __init__(self):
         super().__init__()
@@ -137,7 +166,16 @@ class RocketSettingsWidget(QWidget):
         self.setLayout(main_layout)
     
     def _create_basic_properties_tab(self):
-        """Create the Properties tab."""
+        """Create Properties tab with rocket basic information.
+        
+        Fields:
+            - Rocket Name (string): User-defined rocket identifier
+            - Initial Mass (0.1-100000 kg): Wet mass including propellant
+            - Reference Area (0.01-100M mm²): Rocket cross-section area for drag
+        
+        Returns:
+            QWidget: Configured form widget with input controls
+        """
         widget = QWidget()
         layout = QFormLayout()
         
@@ -162,7 +200,17 @@ class RocketSettingsWidget(QWidget):
         return widget
     
     def _create_inertia_tab(self):
-        """Create the Inertia & Center of Mass tab."""
+        """Create Inertia tab with center of mass and moments of inertia.
+        
+        Fields:
+            - CoM Before Burnout (mm): Center of mass measured from nose tip
+            - CoM After Burnout (mm): CoM position after propellant depletion
+            - Ixx, Iyy, Izz (kg*m²): Principal moments of inertia
+            - Ixy, Ixz, Iyz (kg*m²): Product of inertia terms
+        
+        Returns:
+            QWidget: Dual-panel widget showing before/after CoM states
+        """
         widget = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -249,7 +297,18 @@ class RocketSettingsWidget(QWidget):
         return widget
     
     def _create_engine_tab(self):
-        """Create the Engine tab."""
+        """Create Engine tab for propulsion configuration.
+        
+        Fields:
+            - Engine Type: Selection of available engine models
+            - Burn Time (s): Duration of engine thrust
+            - Thrust Profile: Thrust vs. time configuration
+            - Propellant Type: Chemical composition selector
+            - Performance Data: ISP, mass flow, chamber pressure
+        
+        Returns:
+            QWidget: Engine configuration interface with visual thrust curve
+        """
         widget = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -319,7 +378,18 @@ class RocketSettingsWidget(QWidget):
         return widget
     
     def _create_geometry_tab(self):
-        """Create the Geometry tab."""
+        """Create Geometry tab for rocket structural dimensions.
+        
+        Fields:
+            - Total Length (mm): Nose tip to motor end
+            - Body Diameter (mm): Fuselage outer diameter
+            - Fin Root Chord (mm): Span from root to tip
+            - Fin Semi-Span (mm): Fin height at root
+            - Launch Lug Diameter (mm): Clearance for rail/rod
+        
+        Returns:
+            QWidget: Geometric parameter input interface
+        """
         widget = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -372,7 +442,18 @@ class RocketSettingsWidget(QWidget):
         return widget
     
     def _create_nosecone_tab(self):
-        """Create the Nosecone tab."""
+        """Create Nosecone tab for aerodynamic nose design.
+        
+        Fields:
+            - Nosecone Type: Conical, Ogive, Parabolic, Power Law
+            - Nosecone Length (mm): Tip to base distance
+            - Nosecone Base Diameter (mm): Diameter at attachment point
+            - Power Law Coeff: Exponent for power law shape (n=0.5,1.0,2.0)
+            - Shoulder Length (mm): Transition to body
+        
+        Returns:
+            QWidget: Aerodynamic design interface with shape preview
+        """
         widget = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -428,7 +509,19 @@ class RocketSettingsWidget(QWidget):
         return widget
     
     def _create_fins_tab(self):
-        """Create the Fins tab."""
+        """Create Fins tab for stabilization surface design.
+        
+        Fields:
+            - Fin Quantity: Number of fins (typically 3-4)
+            - Root Chord (mm): Fin dimension at body attachment
+            - Tip Chord (mm): Fin dimension at trailing tip
+            - Semi-Span (mm): Fin height perpendicular to body
+            - Sweep Length (mm): Distance from leading to trailing edge
+            - Fin Midchord Thickness (mm): For drag calculation
+        
+        Returns:
+            QWidget: Fin geometry configuration interface
+        """
         widget = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -483,7 +576,18 @@ class RocketSettingsWidget(QWidget):
         return widget
     
     def _create_thrust_curves_tab(self):
-        """Create the Thrust Curves tab."""
+        """Create Thrust Curves tab for engine performance data.
+        
+        Features:
+            - CSV file loader: Time (s) vs. Thrust (N) data pairs
+            - Data visualization: Interactive Plotly chart display
+            - Data validation: Monotonic time, positive thrust checks
+            - Data summary: Total impulse, peak thrust statistics
+            - File management: Load, edit inline, or create custom curves
+        
+        Returns:
+            QWidget: Thrust curve visualization and management interface
+        """
         widget = QWidget()
         layout = QVBoxLayout()
         
@@ -820,8 +924,27 @@ class RocketSettingsWidget(QWidget):
             logger.error(f"Error loading thrust curve: {e}")
     
     def save_rocket_config(self):
-        """Save rocket configuration to JSON file."""
-        # Validate before saving
+        """Save rocket configuration to JSON file.
+        
+        Validates rocket name for filesystem safety and configuration data
+        before saving. Prompts user on validation errors.
+        
+        Raises:
+            OSError: If file operations fail
+            JSONDecodeError: If data serialization fails
+        """
+        # Validate rocket name first
+        rocket_name = self.name_edit.text()
+        is_name_valid, name_error = self.validate_rocket_name(rocket_name)
+        
+        if not is_name_valid:
+            QMessageBox.critical(
+                self, "Invalid Rocket Name",
+                f"Rocket name validation failed:\n{name_error}"
+            )
+            return
+        
+        # Validate configuration
         is_valid, errors, warnings = self.validate_rocket_config()
         
         if not is_valid:
@@ -1019,4 +1142,5 @@ class RocketSettingsWidget(QWidget):
                     self.current_rocket = None
                     self.load_rocket_configs()
             except Exception as e:
+                logger.error(f"Error deleting rocket: {e}")
                 QMessageBox.critical(self, "Error", f"Failed to delete: {str(e)}")

@@ -403,14 +403,14 @@ class ParachuteSettingsWidget(QWidget):
     
     def on_parachute_enabled(self, state):
         """Handle parachute enable/disable."""
-        enabled = state == Qt.CheckState.Checked.value
+        enabled = state == Qt.CheckState.Checked
         self.state.set('parachute_enabled', enabled)
         self.enable_parachute_controls(enabled)
         logger.info(f"Main parachute {'enabled' if enabled else 'disabled'}")
     
     def on_drogue_enabled(self, state):
         """Handle drogue chute enable/disable."""
-        enabled = state == Qt.CheckState.Checked.value
+        enabled = state == Qt.CheckState.Checked
         self.state.set('drogue_enabled', enabled)
         self.drogue_diameter.setEnabled(enabled)
         self.drogue_cd.setEnabled(enabled)
