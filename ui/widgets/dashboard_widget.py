@@ -3,9 +3,10 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, 
     QGridLayout, QPushButton, QTableWidget, QTableWidgetItem,
-    QComboBox, QMessageBox, QFileDialog, QScrollArea
+    QComboBox, QMessageBox, QFileDialog, QScrollArea, QTabWidget,
+    QHeaderView
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QColor
 from models.app_state import ApplicationState
 from src.utils.simulation_manager import SimulationManager
@@ -70,6 +71,16 @@ class DashboardWidget(QWidget):
     
     def init_ui(self):
         """Initialize the dashboard UI."""
+        # Outer layout holds the scroll area
+        outer_layout = QVBoxLayout()
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        
+        # Inner widget contains all dashboard content
+        inner_widget = QWidget()
         main_layout = QVBoxLayout()
         
         # ===== SIMULATION SELECTION =====
@@ -150,65 +161,68 @@ class DashboardWidget(QWidget):
         info_group.setLayout(info_layout)
         main_layout.addWidget(info_group)
         
-        # ===== FLIGHT PROFILES CHARTS =====
-        charts_group = QGroupBox("Flight Profiles")
-        charts_layout = QVBoxLayout()
+        # ===== FLIGHT EVENTS TIMELINE =====
+        events_group = QGroupBox("Flight Events Timeline")
+        events_layout = QVBoxLayout()
         
-        # Scrollable area for charts
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setMinimumHeight(900)  # Set minimum height for charts
-        scroll_area.setMinimumWidth(1200)  # Set minimum width to prevent squeezing
+        self.events_table = QTableWidget()
+        self.events_table.setColumnCount(4)
+        self.events_table.setHorizontalHeaderLabels(["Event", "Time [s]", "Altitude [m]", "Velocity [m/s]"])
+        header = self.events_table.horizontalHeader()
+        if header:
+            header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.events_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.events_table.setAlternatingRowColors(True)
+        self.events_table.setMaximumHeight(200)
+        events_layout.addWidget(self.events_table)
         
-        self.charts_container = QWidget()
-        self.charts_grid_layout = QGridLayout()
-        self.charts_grid_layout.setSpacing(15)  # Add spacing between charts
-        self.charts_grid_layout.setContentsMargins(10, 10, 10, 10)  # Add margins around charts
-        self.charts_container.setLayout(self.charts_grid_layout)
+        events_group.setLayout(events_layout)
+        main_layout.addWidget(events_group)
         
-        scroll_area.setWidget(self.charts_container)
-        charts_layout.addWidget(scroll_area)
+        # ===== PARACHUTE RECOVERY SUMMARY =====
+        self.parachute_group = QGroupBox("Parachute Recovery")
+        parachute_layout = QGridLayout()
         
-        charts_group.setLayout(charts_layout)
-        # Make charts group expandable
-        main_layout.addWidget(charts_group, 1)  # Stretch factor of 1 to expand
+        self.parachute_labels = {}
+        parachute_fields = [
+            ("deploy_alt", "Deployment Altitude"),
+            ("deploy_vel", "Deployment Velocity"),
+            ("deploy_time", "Deployment Time"),
+            ("landing_speed", "Landing Speed"),
+            ("max_descent", "Max Descent Rate"),
+            ("drogue_status", "Drogue Status"),
+        ]
         
-        # ===== TRAJECTORY MAPS =====
-        maps_group = QGroupBox("Trajectory Overview")
-        maps_layout = QHBoxLayout()
+        for i, (key, label) in enumerate(parachute_fields):
+            row = i // 3
+            col = (i % 3) * 2
+            parachute_layout.addWidget(QLabel(f"{label}:"), row, col)
+            value_label = QLabel("N/A")
+            value_label.setStyleSheet("font-weight: bold;")
+            self.parachute_labels[key] = value_label
+            parachute_layout.addWidget(value_label, row, col + 1)
         
-        # 2D Trajectory Map
-        map_2d_subgroup = QGroupBox("2D Trajectory Map")
-        map_2d_layout = QVBoxLayout()
+        self.parachute_group.setLayout(parachute_layout)
+        self.parachute_group.setVisible(False)  # Hidden by default
+        main_layout.addWidget(self.parachute_group)
         
+        # ===== FLIGHT VISUALIZATION (all charts as tabs) =====
+        viz_group = QGroupBox("Flight Visualization")
+        viz_layout = QVBoxLayout()
+        self.charts_tab_widget = QTabWidget()
+        self.charts_tab_widget.setMinimumHeight(550)
+        viz_layout.addWidget(self.charts_tab_widget)
+        viz_group.setLayout(viz_layout)
+        main_layout.addWidget(viz_group, 1)  # Stretch factor to expand
+        
+        # --- 2D Trajectory Map (kept as a tab or webengine fallback) ---
         if HAS_WEBENGINE:
             self.map_2d_view = QWebEngineView()
             self.map_2d_view.setMinimumHeight(400)
-            map_2d_layout.addWidget(self.map_2d_view)
         else:
             self.map_2d_view = None
             self.map_2d_container = QWidget()
             self.map_2d_container.setLayout(QVBoxLayout())
-            map_2d_layout.addWidget(self.map_2d_container)
-            map_2d_layout.addWidget(QLabel("QWebEngineView not available\nUsing matplotlib fallback"))
-        
-        map_2d_subgroup.setLayout(map_2d_layout)
-        maps_layout.addWidget(map_2d_subgroup)
-        
-        # 3D Flight Path
-        map_3d_subgroup = QGroupBox("3D Flight Path")
-        map_3d_layout = QVBoxLayout()
-        
-        self.map_3d_canvas = None
-        self.map_3d_container = QWidget()
-        self.map_3d_container.setLayout(QVBoxLayout())
-        map_3d_layout.addWidget(self.map_3d_container)
-        
-        map_3d_subgroup.setLayout(map_3d_layout)
-        maps_layout.addWidget(map_3d_subgroup)
-        
-        maps_group.setLayout(maps_layout)
-        main_layout.addWidget(maps_group)
         
         # ===== EXPORT BUTTONS =====
         export_layout = QHBoxLayout()
@@ -228,12 +242,18 @@ class DashboardWidget(QWidget):
         main_layout.addLayout(export_layout)
         
         main_layout.addStretch()
-        self.setLayout(main_layout)
+        inner_widget.setLayout(main_layout)
+        scroll_area.setWidget(inner_widget)
+        outer_layout.addWidget(scroll_area)
+        self.setLayout(outer_layout)
     
     def load_simulation_history(self):
         """Load list of simulations from manager."""
         self.sim_combo.blockSignals(True)
         self.sim_combo.clear()
+        
+        # Reload metadata from disk to pick up new simulations
+        self.sim_manager.reload_metadata()
         
         simulations = self.sim_manager.list_simulations()
         
@@ -293,6 +313,13 @@ class DashboardWidget(QWidget):
         
         metadata = self.sim_manager.metadata.get(sim_id, {})
         
+        # Fallback: if metadata lacks max_mach/max_accel_g, compute from sim_data
+        sim_metrics = sim_data.get('metrics', {}) if isinstance(sim_data, dict) else {}
+        if not metadata.get('max_mach') and sim_metrics.get('max_mach'):
+            metadata['max_mach'] = sim_metrics['max_mach']
+        if not metadata.get('max_accel_g') and sim_metrics.get('max_accel_g'):
+            metadata['max_accel_g'] = sim_metrics['max_accel_g']
+        
         # Update current simulation ID
         self.current_sim_id = sim_id
         
@@ -306,8 +333,14 @@ class DashboardWidget(QWidget):
         self.metric_labels['max_range'].setText(
             f"{metadata.get('max_range', 0):.2f} km"
         )
+        self.metric_labels['max_mach'].setText(
+            f"{metadata.get('max_mach', 0):.2f}"
+        )
         self.metric_labels['flight_duration'].setText(
             f"{metadata.get('flight_duration', 0):.2f} s"
+        )
+        self.metric_labels['max_accel_g'].setText(
+            f"{metadata.get('max_accel_g', 0):.2f} g"
         )
         
         # Update info
@@ -319,6 +352,12 @@ class DashboardWidget(QWidget):
         self.info_labels['pressure'].setText(
             f"{metadata.get('pressure', 0):.0f} Pa"
         )
+        
+        # Populate flight events timeline
+        self._populate_flight_events(sim_data)
+        
+        # Populate parachute summary
+        self._populate_parachute_summary(sim_data, metadata)
         
         # Generate charts and maps from simulation data
         self.generate_performance_charts(sim_data)
@@ -349,13 +388,130 @@ class DashboardWidget(QWidget):
             else:
                 QMessageBox.critical(self, "Error", "Could not delete simulation")
     
+    def _populate_flight_events(self, sim_data):
+        """Detect and display flight events in the events table."""
+        self.events_table.setRowCount(0)
+        
+        if not sim_data or not isinstance(sim_data, dict):
+            return
+        
+        history = sim_data.get('history', {})
+        metrics = sim_data.get('metrics', {})
+        parachute_info = sim_data.get('parachute_info', {})
+        
+        events = []
+        
+        # Event 1: Ignition (always at t=0)
+        events.append(("🔥 Ignition", 0.0, 0.0, 0.0))
+        
+        if isinstance(history, dict) and history:
+            times = np.array(history.get('hist_time', []))
+            altitudes = np.array(history.get('hist_alt', []))
+            velocities = np.array(history.get('hist_v_norm', []))
+            thrust = np.array(history.get('hist_thrust', []))
+            
+            if len(times) > 0:
+                # Event 2: Burnout (thrust drops to ~0)
+                if len(thrust) > 0:
+                    burn_mask = thrust > 0.1
+                    if burn_mask.any() and not burn_mask.all():
+                        burnout_idx = np.where(burn_mask)[0][-1]
+                        events.append(("🛑 Burnout", 
+                                      times[burnout_idx],
+                                      altitudes[burnout_idx] if len(altitudes) > burnout_idx else 0,
+                                      velocities[burnout_idx] if len(velocities) > burnout_idx else 0))
+                
+                # Event 3: Max-Q
+                density = np.array(history.get('hist_density', []))
+                if len(density) > 0 and len(velocities) > 0:
+                    q = 0.5 * density * velocities**2
+                    maxq_idx = np.argmax(q)
+                    events.append(("💨 Max-Q",
+                                  times[maxq_idx],
+                                  altitudes[maxq_idx] if len(altitudes) > maxq_idx else 0,
+                                  velocities[maxq_idx] if len(velocities) > maxq_idx else 0))
+                
+                # Event 4: Apogee
+                if len(altitudes) > 0:
+                    apogee_idx = np.argmax(altitudes)
+                    events.append(("🏔️ Apogee",
+                                  times[apogee_idx],
+                                  altitudes[apogee_idx],
+                                  velocities[apogee_idx] if len(velocities) > apogee_idx else 0))
+                
+                # Event 5: Parachute deployment
+                if parachute_info and parachute_info.get('deployed', False):
+                    events.append(("🪂 Parachute Deploy",
+                                  parachute_info.get('deployment_time', 0),
+                                  parachute_info.get('deployment_altitude', 0),
+                                  parachute_info.get('deployment_velocity', 0)))
+                
+                # Event 6: Drogue deployment
+                if parachute_info and parachute_info.get('drogue_deployed', False):
+                    events.append(("🪂 Drogue Deploy",
+                                  parachute_info.get('drogue_deployment_time', 0),
+                                  parachute_info.get('drogue_deployment_altitude', 0),
+                                  0))
+                
+                # Event 7: Landing (last data point)
+                events.append(("🎯 Landing",
+                              times[-1],
+                              altitudes[-1] if len(altitudes) > 0 else 0,
+                              velocities[-1] if len(velocities) > 0 else 0))
+        
+        # Sort events by time
+        events.sort(key=lambda x: x[1])
+        
+        # Populate table
+        self.events_table.setRowCount(len(events))
+        for row, (event, time, alt, vel) in enumerate(events):
+            self.events_table.setItem(row, 0, QTableWidgetItem(event))
+            self.events_table.setItem(row, 1, QTableWidgetItem(f"{time:.3f}"))
+            self.events_table.setItem(row, 2, QTableWidgetItem(f"{alt:.2f}"))
+            self.events_table.setItem(row, 3, QTableWidgetItem(f"{vel:.2f}"))
+    
+    def _populate_parachute_summary(self, sim_data, metadata):
+        """Populate the parachute recovery summary panel."""
+        parachute_info = sim_data.get('parachute_info', {}) if isinstance(sim_data, dict) else {}
+        metrics = sim_data.get('metrics', {}) if isinstance(sim_data, dict) else {}
+        
+        has_parachute = bool(
+            metadata.get('parachute_enabled', False) or
+            (parachute_info and parachute_info.get('deployed', False))
+        )
+        
+        self.parachute_group.setVisible(has_parachute)
+        
+        if not has_parachute:
+            return
+        
+        deploy_alt = (parachute_info.get('deployment_altitude', 0) or
+                     metrics.get('parachute_deployment_altitude', 0))
+        deploy_vel = (parachute_info.get('deployment_velocity', 0) or
+                     metrics.get('parachute_deployment_velocity', 0))
+        deploy_time = (parachute_info.get('deployment_time', 0) or
+                      metrics.get('parachute_deployment_time', 0))
+        landing_speed = metrics.get('parachute_landing_speed', 0)
+        max_descent = metrics.get('parachute_max_descent_rate', 0)
+        drogue = parachute_info.get('drogue_deployed', False)
+        
+        self.parachute_labels['deploy_alt'].setText(f"{deploy_alt:.1f} m")
+        self.parachute_labels['deploy_vel'].setText(f"{deploy_vel:.1f} m/s")
+        self.parachute_labels['deploy_time'].setText(f"{deploy_time:.2f} s")
+        self.parachute_labels['landing_speed'].setText(
+            f"{landing_speed:.1f} m/s" if landing_speed else "N/A"
+        )
+        self.parachute_labels['max_descent'].setText(
+            f"{max_descent:.1f} m/s" if max_descent else "N/A"
+        )
+        self.parachute_labels['drogue_status'].setText(
+            "Deployed ✅" if drogue else "Not deployed"
+        )
+    
     def generate_performance_charts(self, sim_data):
-        """Generate 9 performance charts from simulation data."""
-        # Clear previous charts
-        while self.charts_grid_layout.count():
-            item = self.charts_grid_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        """Generate performance charts as tabs from simulation data."""
+        # Clear previous tabs
+        self.charts_tab_widget.clear()
         
         if not sim_data or isinstance(sim_data, dict) and 'trajectory' not in sim_data:
             logger.warning("No trajectory data available for charts")
@@ -382,21 +538,21 @@ class DashboardWidget(QWidget):
                 times, [altitudes, velocities], 
                 ['Altitude', 'Velocity'], ['blue', 'red']
             )
-            self._add_chart_to_grid(fig1, 0, 0)
+            self._add_chart_as_tab(fig1, "Altitude & Velocity")
             
             # Chart 2: Flight Path - Altitude vs Range
             fig2 = self._create_simple_chart(
                 "Flight Path - Altitude [m] vs Range [m]",
                 ranges, altitudes, 'Range', 'Altitude'
             )
-            self._add_chart_to_grid(fig2, 0, 1)
+            self._add_chart_as_tab(fig2, "Flight Path")
             
             # Chart 3: Mach & AoA vs Time  (placeholder - use mach data)
             fig3 = self._create_simple_chart(
                 "Mach Number vs Time [s]",
                 times, machs, 'Time', 'Mach'
             )
-            self._add_chart_to_grid(fig3, 0, 2)
+            self._add_chart_as_tab(fig3, "Mach Number")
             
             # Charts 4-9: Additional performance data if available from history
             if history:
@@ -421,7 +577,7 @@ class DashboardWidget(QWidget):
                     except Exception as e:
                         logger.warning(f"Could not create forces chart: {e}")
                         fig4 = self._create_placeholder_chart("Forces Analysis [N] vs Time [s]")
-                    self._add_chart_to_grid(fig4, 1, 0)
+                    self._add_chart_as_tab(fig4, "Forces")
                     
                     # Chart 5: Mass & Altitude
                     try:
@@ -440,7 +596,7 @@ class DashboardWidget(QWidget):
                     except Exception as e:
                         logger.warning(f"Could not create mass chart: {e}")
                         fig5 = self._create_placeholder_chart("Mass [kg] & Altitude [m] vs Time [s]")
-                    self._add_chart_to_grid(fig5, 1, 1)
+                    self._add_chart_as_tab(fig5, "Mass & Altitude")
                     
                     # Chart 6: Attitude (Euler Angles)
                     try:
@@ -461,7 +617,7 @@ class DashboardWidget(QWidget):
                     except Exception as e:
                         logger.warning(f"Could not create attitude chart: {e}")
                         fig6 = self._create_placeholder_chart("Attitude Analysis - Euler Angles [°] vs Time [s]")
-                    self._add_chart_to_grid(fig6, 1, 2)
+                    self._add_chart_as_tab(fig6, "Attitude")
                     
                     # Chart 7: Velocity Components
                     try:
@@ -482,7 +638,7 @@ class DashboardWidget(QWidget):
                     except Exception as e:
                         logger.warning(f"Could not create velocity chart: {e}")
                         fig7 = self._create_placeholder_chart("Velocity Components [m/s] vs Time [s]")
-                    self._add_chart_to_grid(fig7, 2, 0)
+                    self._add_chart_as_tab(fig7, "Velocity Components")
                     
                     # Chart 8: Atmospheric Conditions
                     try:
@@ -502,7 +658,7 @@ class DashboardWidget(QWidget):
                     except Exception as e:
                         logger.warning(f"Could not create atmosphere chart: {e}")
                         fig8 = self._create_placeholder_chart("Atmospheric Conditions vs Altitude [m]")
-                    self._add_chart_to_grid(fig8, 2, 1)
+                    self._add_chart_as_tab(fig8, "Atmosphere")
                     
                     # Chart 9: Aerodynamic Coefficients
                     try:
@@ -523,13 +679,126 @@ class DashboardWidget(QWidget):
                     except Exception as e:
                         logger.warning(f"Could not create aero coefficients chart: {e}")
                         fig9 = self._create_placeholder_chart("Aerodynamic Coefficients [-] vs Time [s]")
-                    self._add_chart_to_grid(fig9, 2, 2)
+                    self._add_chart_as_tab(fig9, "Aero Coefficients")
+                    
+                    # Chart 10: Dynamic Pressure (Q)
+                    try:
+                        times = np.array(history.get('hist_time', []))
+                        density = np.array(history.get('hist_density', []))
+                        v_norm = np.array(history.get('hist_v_norm', []))
+                        
+                        if len(times) > 0 and len(density) > 0 and len(v_norm) > 0:
+                            q_dynamic = 0.5 * density * v_norm**2
+                            max_q_idx = np.argmax(q_dynamic)
+                            
+                            fig10, ax = plt.subplots(figsize=(8, 6), dpi=100)
+                            fig10.suptitle("Dynamic Pressure (Q) [Pa] vs Time [s]", fontsize=12, fontweight='bold')
+                            ax.plot(times, q_dynamic, color='darkred', linewidth=2, label='Q')
+                            ax.axvline(x=times[max_q_idx], color='orange', linestyle='--', linewidth=1.5,
+                                      label=f'Max-Q: {q_dynamic[max_q_idx]:.0f} Pa @ {times[max_q_idx]:.2f}s')
+                            ax.set_xlabel('Time [s]')
+                            ax.set_ylabel('Dynamic Pressure [Pa]')
+                            ax.legend(loc='best')
+                            ax.grid(True, alpha=0.3)
+                            plt.tight_layout()
+                        else:
+                            fig10 = self._create_placeholder_chart("Dynamic Pressure (Q) [Pa] vs Time [s]")
+                    except Exception as e:
+                        logger.warning(f"Could not create dynamic pressure chart: {e}")
+                        fig10 = self._create_placeholder_chart("Dynamic Pressure (Q) [Pa] vs Time [s]")
+                    self._add_chart_as_tab(fig10, "Dynamic Pressure")
+                    
+                    # Chart 11: Thrust-to-Weight Ratio
+                    try:
+                        times = np.array(history.get('hist_time', []))
+                        thrust = np.array(history.get('hist_thrust', []))
+                        mass = np.array(history.get('hist_mass', []))
+                        
+                        if len(times) > 0 and len(thrust) > 0 and len(mass) > 0:
+                            g0 = 9.80665
+                            twr = np.where(mass > 0, thrust / (mass * g0), 0)
+                            
+                            fig11, ax = plt.subplots(figsize=(8, 6), dpi=100)
+                            fig11.suptitle("Thrust-to-Weight Ratio vs Time [s]", fontsize=12, fontweight='bold')
+                            ax.plot(times, twr, color='green', linewidth=2, label='TWR')
+                            ax.axhline(y=1.0, color='red', linestyle='--', linewidth=1.5, label='TWR = 1.0')
+                            ax.set_xlabel('Time [s]')
+                            ax.set_ylabel('TWR [-]')
+                            ax.legend(loc='best')
+                            ax.grid(True, alpha=0.3)
+                            plt.tight_layout()
+                        else:
+                            fig11 = self._create_placeholder_chart("Thrust-to-Weight Ratio vs Time [s]")
+                    except Exception as e:
+                        logger.warning(f"Could not create TWR chart: {e}")
+                        fig11 = self._create_placeholder_chart("Thrust-to-Weight Ratio vs Time [s]")
+                    self._add_chart_as_tab(fig11, "Thrust/Weight")
+                    
+                    # Chart 12: Energy Analysis
+                    try:
+                        times = np.array(history.get('hist_time', []))
+                        mass = np.array(history.get('hist_mass', []))
+                        v_norm = np.array(history.get('hist_v_norm', []))
+                        altitude = np.array(history.get('hist_alt', []))
+                        
+                        if len(times) > 0 and len(mass) > 0 and len(v_norm) > 0:
+                            g0 = 9.80665
+                            ke = 0.5 * mass * v_norm**2
+                            pe = mass * g0 * np.maximum(altitude, 0)
+                            total_e = ke + pe
+                            
+                            # Convert to kJ for readability
+                            fig12 = self._create_multiline_chart(
+                                "Energy Analysis [kJ] vs Time [s]",
+                                times, [ke / 1000, pe / 1000, total_e / 1000],
+                                ['Kinetic', 'Potential', 'Total'],
+                                ['red', 'blue', 'purple']
+                            )
+                        else:
+                            fig12 = self._create_placeholder_chart("Energy Analysis [kJ] vs Time [s]")
+                    except Exception as e:
+                        logger.warning(f"Could not create energy chart: {e}")
+                        fig12 = self._create_placeholder_chart("Energy Analysis [kJ] vs Time [s]")
+                    self._add_chart_as_tab(fig12, "Energy")
+                    
+                    # Chart 13: Stability Margin (CM to CP distance)
+                    try:
+                        times = np.array(history.get('hist_time', []))
+                        cm_b = np.array(history.get('hist_cm_b', []))
+                        cp_b = np.array(history.get('hist_cp_b', []))
+                        
+                        if len(times) > 0 and len(cm_b) > 0 and len(cp_b) > 0:
+                            # Static margin = distance from CM to CP along rocket axis (index 0)
+                            if cm_b.ndim == 2 and cp_b.ndim == 2:
+                                margin = cp_b[:, 0] - cm_b[:, 0]
+                            else:
+                                margin = np.array(history.get('hist_cm2cp_b', []))
+                                if margin.ndim == 2:
+                                    margin = margin[:, 0]
+                            
+                            fig13, ax = plt.subplots(figsize=(8, 6), dpi=100)
+                            fig13.suptitle("Static Margin [m] vs Time [s]", fontsize=12, fontweight='bold')
+                            ax.plot(times, margin, color='teal', linewidth=2, label='Static Margin')
+                            ax.axhline(y=0, color='red', linestyle='--', linewidth=1, alpha=0.7, label='Neutral stability')
+                            ax.set_xlabel('Time [s]')
+                            ax.set_ylabel('Static Margin [m]')
+                            ax.legend(loc='best')
+                            ax.grid(True, alpha=0.3)
+                            plt.tight_layout()
+                        else:
+                            fig13 = self._create_placeholder_chart("Static Margin [m] vs Time [s]")
+                    except Exception as e:
+                        logger.warning(f"Could not create stability chart: {e}")
+                        fig13 = self._create_placeholder_chart("Static Margin [m] vs Time [s]")
+                    self._add_chart_as_tab(fig13, "Stability")
             else:
                 # Fill remaining charts with placeholders if no history
-                for i in range(1, 3):
-                    for j in range(3):
-                        fig = self._create_placeholder_chart(f"Chart ({i}, {j})")
-                        self._add_chart_to_grid(fig, i, j)
+                placeholders = ["Forces", "Mass & Altitude", "Attitude",
+                                "Velocity Components", "Atmosphere", "Aero Coefficients",
+                                "Dynamic Pressure", "Thrust/Weight", "Energy", "Stability"]
+                for name in placeholders:
+                    fig = self._create_placeholder_chart(name)
+                    self._add_chart_as_tab(fig, name)
             
             logger.info("Performance charts generated successfully")
             
@@ -604,15 +873,20 @@ class DashboardWidget(QWidget):
         plt.tight_layout()
         return fig
     
-    def _add_chart_to_grid(self, fig, row, col):
-        """Add a matplotlib figure to the grid layout."""
+    def _add_chart_as_tab(self, fig, tab_name):
+        """Add a matplotlib figure as a new tab in the charts tab widget."""
         canvas = FigureCanvas(fig)
-        canvas.setMinimumHeight(500)
-        canvas.setMinimumWidth(650)
-        self.charts_grid_layout.addWidget(canvas, row, col)
+        canvas.setMinimumHeight(450)
+        
+        # Wrap in a scroll area so individual charts can be scrolled
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(canvas)
+        
+        self.charts_tab_widget.addTab(scroll, tab_name)
     
     def generate_trajectory_maps(self, sim_data, metadata):
-        """Generate 2D and 3D trajectory maps from simulation data."""
+        """Generate 2D map (as tab) and 3D trajectory (left panel) from simulation data."""
         try:
             trajectory = sim_data.get('trajectory', [])
             
@@ -625,10 +899,10 @@ class DashboardWidget(QWidget):
             altitudes = np.array([p.get('altitude', 0) for p in trajectory])
             ranges = np.array([p.get('range', 0) for p in trajectory])
             
-            # Generate 2D trajectory map
+            # Generate 2D trajectory map (added as a tab)
             self._generate_2d_map(ranges, altitudes, metadata)
             
-            # Generate 3D flight path
+            # Generate 3D flight path (left panel)
             self._generate_3d_flight_path(times, ranges, altitudes)
             
             logger.info("Trajectory maps generated successfully")
@@ -637,13 +911,9 @@ class DashboardWidget(QWidget):
             logger.error(f"Error generating maps: {e}")
     
     def _generate_2d_map(self, ranges, altitudes, metadata):
-        """Generate a 2D trajectory map showing flight path from above."""
+        """Generate a 2D trajectory map and add it as a tab."""
         try:
-            if not HAS_WEBENGINE or not self.map_2d_view:
-                return
-            
-            # Create a 2D map using folium if available
-            if HAS_FOLIUM:
+            if HAS_WEBENGINE and self.map_2d_view and HAS_FOLIUM:
                 # Get launch coordinates from metadata or use default
                 launch_lat = metadata.get('launch_latitude', 0.0)
                 launch_lon = metadata.get('launch_longitude', 0.0)
@@ -668,9 +938,8 @@ class DashboardWidget(QWidget):
                 ).add_to(m)
                 
                 # Calculate approximate landing coordinates
-                # Assuming ranges are downrange distances (simplified)
-                max_range_km = ranges.max() / 1000  # Convert m to km
-                lat_delta = max_range_km / 111.32  # 1 degree ≈ 111.32 km
+                max_range_km = ranges.max() / 1000
+                lat_delta = max_range_km / 111.32
                 
                 landing_lat = launch_lat + lat_delta
                 landing_lon = launch_lon
@@ -687,7 +956,7 @@ class DashboardWidget(QWidget):
                     weight=2
                 ).add_to(m)
                 
-                # Draw trajectory approximation (simplified as line between launch and landing)
+                # Draw trajectory approximation
                 coords = [[launch_lat, launch_lon], [landing_lat, landing_lon]]
                 folium.PolyLine(
                     coords,
@@ -710,13 +979,15 @@ class DashboardWidget(QWidget):
                     weight=2
                 ).add_to(m)
                 
-                # Save map to HTML and display
+                # Save map to HTML and display in a tab
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
                     m.save(f.name)
-                    self.map_2d_view.setUrl(f"file:///{f.name}")
-                    
+                    self.map_2d_view.setUrl(QUrl.fromLocalFile(f.name))
+                
+                # Add webengine view as a tab
+                self.charts_tab_widget.addTab(self.map_2d_view, "2D Trajectory Map")
             else:
-                # Fallback: Create a simple 2D matplotlib plot
+                # Fallback: matplotlib-based 2D map as a tab
                 self._generate_2d_matplotlib_map(ranges, altitudes)
                 
         except Exception as e:
@@ -741,30 +1012,12 @@ class DashboardWidget(QWidget):
         
         plt.tight_layout()
         
-        # Create canvas
-        canvas = FigureCanvas(fig)
-        canvas.setMinimumHeight(500)
-        
-        # Add to map container if it exists
-        if hasattr(self, 'map_2d_container') and self.map_2d_container:
-            map_layout = self.map_2d_container.layout()
-            if map_layout is None:
-                map_layout = QVBoxLayout()
-                self.map_2d_container.setLayout(map_layout)
-            
-            # Clear previous widgets
-            while map_layout.count():
-                map_layout.takeAt(0).widget().deleteLater()
-            
-            map_layout.addWidget(canvas)
+        # Add as a tab
+        self._add_chart_as_tab(fig, "2D Trajectory Map")
     
     def _generate_3d_flight_path(self, times, ranges, altitudes):
-        """Generate a 3D flight path visualization."""
+        """Generate a 3D flight path visualization as a tab."""
         try:
-            # Clear previous canvas
-            if self.map_3d_canvas:
-                self.map_3d_canvas.deleteLater()
-            
             # Create 3D plot
             fig = plt.figure(figsize=(8, 7), dpi=100)
             ax = fig.add_subplot(111, projection='3d')
@@ -777,12 +1030,12 @@ class DashboardWidget(QWidget):
             ax.plot(ranges_km, np.zeros_like(ranges_km), altitudes_km, 'b-', linewidth=2, label='Flight Path')
             
             # Mark key points
-            ax.scatter([0], [0], [0], color='red', s=100, marker='*', label='Launch', zorder=5)
-            ax.scatter([ranges_km[-1]], [0], [0], color='green', s=100, marker='X', label='Landing', zorder=5)
+            ax.scatter(0, 0, 0, color='red', s=100, marker='*', label='Launch', zorder=5)
+            ax.scatter(ranges_km[-1], 0, 0, color='green', s=100, marker='X', label='Landing', zorder=5)
             
             # Find and mark apogee
             apogee_idx = np.argmax(altitudes_km)
-            ax.scatter([ranges_km[apogee_idx]], [0], [altitudes_km[apogee_idx]], 
+            ax.scatter(ranges_km[apogee_idx], 0, altitudes_km[apogee_idx], 
                       color='orange', s=100, marker='o', label='Apogee', zorder=5)
             
             # Ground plane
@@ -797,21 +1050,8 @@ class DashboardWidget(QWidget):
             
             plt.tight_layout()
             
-            # Add to container
-            self.map_3d_canvas = FigureCanvas(fig)
-            self.map_3d_canvas.setMinimumHeight(500)
-            
-            # Clear and add to layout
-            map_3d_layout = self.map_3d_container.layout()
-            if map_3d_layout is None:
-                map_3d_layout = QVBoxLayout()
-                self.map_3d_container.setLayout(map_3d_layout)
-            
-            # Clear previous widgets
-            while map_3d_layout.count():
-                map_3d_layout.takeAt(0).widget().deleteLater()
-            
-            map_3d_layout.addWidget(self.map_3d_canvas)
+            # Add as a tab
+            self._add_chart_as_tab(fig, "3D Flight Path")
             
         except Exception as e:
             logger.error(f"Error generating 3D flight path: {e}")

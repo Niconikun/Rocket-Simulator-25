@@ -8,7 +8,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from models.app_state import ApplicationState
 from src.utils.location_manager import LocationManager
-from typing import Tuple, Union, Optional
+from typing import Tuple, Union, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
 import json
 import os
 import logging
@@ -23,8 +26,6 @@ try:
     HAS_WEBENGINE = True
 except ImportError:
     HAS_WEBENGINE = False
-    # Fallback: use a simple label or file dialog
-    QWebEngineView = None
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class LocationSettingsWidget(QWidget):
     """
     
     @staticmethod
-    def validate_location_data(data: dict, name: str = None) -> Tuple[bool, str]:
+    def validate_location_data(data: dict, name: Optional[str] = None) -> Tuple[bool, str]:
         """Validate location data structure and values.
         
         Args:
@@ -90,7 +91,7 @@ class LocationSettingsWidget(QWidget):
         self.state = ApplicationState.get_instance()
         self.locations = {}
         self.location_manager = LocationManager()
-        self.html_browser: Optional[Union[QWebEngineView, QLabel]] = None
+        self.html_browser: Optional[Union["QWebEngineView", QLabel]] = None
         self.init_ui()
         self.load_locations()
         self.refresh_map()

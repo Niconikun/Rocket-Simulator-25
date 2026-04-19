@@ -884,8 +884,8 @@ class RocketSettingsWidget(QWidget):
             # Calculate statistics
             self.thrust_curve_data = {'time': times, 'thrust': thrusts, 'file': os.path.basename(filepath)}
             
-            mean_thrust = np.mean(thrusts)
-            max_thrust = np.max(thrusts)
+            mean_thrust = np.mean(np.asarray(thrusts))
+            max_thrust = np.max(np.asarray(thrusts))
             burn_time = times[-1] - times[0]
             
             # Update info text
@@ -907,8 +907,8 @@ class RocketSettingsWidget(QWidget):
             if HAS_MATPLOTLIB:
                 self.figure.clear()
                 ax = self.figure.add_subplot(111)
-                ax.plot(times, thrusts, 'b-', linewidth=2, label='Thrust')
-                ax.axhline(y=mean_thrust, color='r', linestyle='--', label=f'Mean: {mean_thrust:.0f} N')
+                ax.plot(np.asarray(times), np.asarray(thrusts), 'b-', linewidth=2, label='Thrust')
+                ax.axhline(y=float(mean_thrust), color='r', linestyle='--', label=f'Mean: {mean_thrust:.0f} N')
                 ax.set_xlabel('Time (s)')
                 ax.set_ylabel('Thrust (N)')
                 ax.set_title(f'Thrust Curve: {self.thrust_curve_data["file"]}')
@@ -1088,7 +1088,6 @@ class RocketSettingsWidget(QWidget):
                 plotter.add_mesh(cylinder, color='blue', label='Fuselage')
             
             # Add legend and display
-            plotter.add_legend()
             plotter.show()
             
         except Exception as e:

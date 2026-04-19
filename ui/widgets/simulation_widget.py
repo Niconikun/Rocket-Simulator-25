@@ -28,6 +28,8 @@ class SimulationWidget(QWidget):
     - View results
     """
     
+    simulation_saved = pyqtSignal(str)  # Emits sim_id when a simulation is saved
+    
     def __init__(self):
         super().__init__()
         self.state = ApplicationState.get_instance()
@@ -247,8 +249,9 @@ class SimulationWidget(QWidget):
         self.state.set('simulation_running', False)
         self.run_button.setEnabled(True)
         self.pause_button.setEnabled(False)
-        self.simulation_thread.quit()
-        self.simulation_thread.wait()
+        if self.simulation_thread is not None:
+            self.simulation_thread.quit()
+            self.simulation_thread.wait()
         
         # Save simulation results automatically
         try:
@@ -282,6 +285,10 @@ class SimulationWidget(QWidget):
             # Save to persistent storage
             sim_id = self.simulation_manager.save_simulation(results, metadata)
             
+            # Notify other widgets that a new simulation was saved
+            if sim_id:
+                self.simulation_saved.emit(sim_id)
+            
             QMessageBox.information(
                 self, "Success",
                 f"Simulation completed successfully!\n\n"
@@ -302,8 +309,9 @@ class SimulationWidget(QWidget):
         self.state.set('simulation_running', False)
         self.run_button.setEnabled(True)
         self.pause_button.setEnabled(False)
-        self.simulation_thread.quit()
-        self.simulation_thread.wait()
+        if self.simulation_thread is not None:
+            self.simulation_thread.quit()
+            self.simulation_thread.wait()
         QMessageBox.critical(self, "Simulation Error", f"Error: {error_msg}")
         logger.error(f"Simulation error: {error_msg}")
     

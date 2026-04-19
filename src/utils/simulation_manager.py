@@ -62,7 +62,11 @@ class SimulationManager:
         except Exception as e:
             logger.error(f"Error saving metadata: {e}")
     
-    def save_simulation(self, simulation_data: Dict[str, Any], metadata: Dict[str, Any]) -> str:
+    def reload_metadata(self):
+        """Reload metadata from disk, picking up changes from other instances."""
+        self._load_metadata()
+    
+    def save_simulation(self, simulation_data: Dict[str, Any], metadata: Dict[str, Any]) -> Optional[str]:
         """
         Save simulation data with automatic ID generation.
         
@@ -71,7 +75,7 @@ class SimulationManager:
             metadata: Dictionary with simulation info (rocket, location, etc.)
         
         Returns:
-            Simulation ID (timestamp_uuid format)
+            Simulation ID (timestamp_uuid format) or None if failed
         """
         # Generate unique ID
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -93,6 +97,8 @@ class SimulationManager:
                 "max_altitude": metadata.get("max_altitude", 0.0),
                 "max_velocity": metadata.get("max_velocity", 0.0),
                 "max_range": metadata.get("max_range", 0.0),
+                "max_mach": metadata.get("max_mach", 0.0),
+                "max_accel_g": metadata.get("max_accel_g", 0.0),
                 "flight_duration": metadata.get("flight_duration", 0.0),
                 "temperature": metadata.get("temperature", 20.0),
                 "pressure": metadata.get("pressure", 101325.0),

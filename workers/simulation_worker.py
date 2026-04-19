@@ -304,7 +304,7 @@ class SimulationWorker(QThread):
                         
                         # Apply parachute drag if deployed
                         if parachute.deployed:
-                            velocity_magnitude = np.linalg.norm(rocket.v_enu)
+                            velocity_magnitude = float(np.linalg.norm(rocket.v_enu))
                             drag_force = parachute.calculate_drag_force(velocity_magnitude, rocket.density)
                             
                             # Apply drag force in direction opposite to velocity
@@ -324,6 +324,10 @@ class SimulationWorker(QThread):
                     metrics['max_velocity'] = max(metrics['max_velocity'], current_velocity)
                     metrics['max_mach'] = max(metrics['max_mach'], rocket.mach)
                     metrics['max_range'] = max(metrics['max_range'], current_range)
+                    
+                    # Track max acceleration in g's
+                    accel_magnitude = float(np.linalg.norm(rocket.accel_b))
+                    metrics['max_accel_g'] = max(metrics['max_accel_g'], accel_magnitude / 9.80665)
                     
                     # Detect apogee
                     if current_altitude < prev_altitude and not apogee_reached:
@@ -482,7 +486,7 @@ class SimulationWorker(QThread):
             logger.error(f"Simulation error: {str(e)}", exc_info=True)
             self.error.emit(f"Simulation failed: {str(e)}")
     
-    def _load_rocket_config(self, rocket_name: str) -> dict:
+    def _load_rocket_config(self, rocket_name: str) -> dict | None:
         """Load rocket configuration from JSON file with validation."""
         try:
             config_path = f"data/rockets/configs/{rocket_name}.json"
