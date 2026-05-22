@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QProgressBar, QDateEdit, QTimeEdit, QComboBox, QGroupBox,
     QFormLayout, QMessageBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, QDate, QTime
+from PyQt6.QtCore import Qt, pyqtSignal, QDate, QTime
 from datetime import datetime
 from models.app_state import ApplicationState
 from workers.simulation_worker import SimulationWorker
@@ -29,13 +29,14 @@ class SimulationWidget(QWidget):
     """
     
     simulation_saved = pyqtSignal(str)  # Emits sim_id when a simulation is saved
+    status_message = pyqtSignal(str)    # Emits short UI status updates
     
     def __init__(self):
         super().__init__()
         self.state = ApplicationState.get_instance()
         self.simulation_manager = SimulationManager()
         self.simulation_worker = None
-        self.simulation_thread = None
+        self.simulation_paused = False
         self.init_ui()
     
     def init_ui(self):
@@ -206,7 +207,13 @@ class SimulationWidget(QWidget):
         
         self.pause_button = QPushButton("⏸️ Pause")
         self.pause_button.setEnabled(False)
+        self.pause_button.clicked.connect(self.toggle_pause)
         button_layout.addWidget(self.pause_button)
+
+        self.stop_button = QPushButton("⏹️ Stop")
+        self.stop_button.setEnabled(False)
+        self.stop_button.clicked.connect(self.stop_simulation)
+        button_layout.addWidget(self.stop_button)
         
         self.reset_button = QPushButton("🔄 Reset")
         self.reset_button.clicked.connect(self.reset_simulation)
@@ -222,22 +229,26 @@ class SimulationWidget(QWidget):
     def run_simulation(self):
         """Start the simulation in a background thread."""
         logger.info("Starting simulation...")
+        if self.simulation_worker is not None and self.simulation_worker.isRunning():
+            QMessageBox.information(self, "Simulation Running", "A simulation is already running.")
+            return
+
         self.state.set('simulation_running', True)
+        self.status_message.emit("Simulation started")
         self.run_button.setEnabled(False)
         self.pause_button.setEnabled(True)
+        self.stop_button.setEnabled(True)
+        self.pause_button.setText("⏸️ Pause")
+        self.simulation_paused = False
         
-        # Create worker thread
-        self.simulation_thread = QThread()
+        # SimulationWorker already inherits QThread; run it directly.
         self.simulation_worker = SimulationWorker(self.state)
-        self.simulation_worker.moveToThread(self.simulation_thread)
         
         # Connect signals
         self.simulation_worker.progress.connect(self.on_simulation_progress)
         self.simulation_worker.finished.connect(self.on_simulation_finished)
         self.simulation_worker.error.connect(self.on_simulation_error)
-        self.simulation_thread.started.connect(self.simulation_worker.run)
-        
-        self.simulation_thread.start()
+        self.simulation_worker.start()
     
     def on_simulation_progress(self, progress: float):
         """Update progress bar."""
@@ -247,11 +258,7 @@ class SimulationWidget(QWidget):
         """Handle simulation completion and save results."""
         self.state.set('simulation_results', results)
         self.state.set('simulation_running', False)
-        self.run_button.setEnabled(True)
-        self.pause_button.setEnabled(False)
-        if self.simulation_thread is not None:
-            self.simulation_thread.quit()
-            self.simulation_thread.wait()
+        self._reset_simulation_controls()
         
         # Save simulation results automatically
         try:
@@ -281,6 +288,11 @@ class SimulationWidget(QWidget):
             metadata['flight_duration'] = metrics.get('flight_duration', 0)
             metadata['max_mach'] = metrics.get('max_mach', 0)
             metadata['max_accel_g'] = metrics.get('max_accel_g', 0)
+
+            # Save launch coordinates and azimuth for map rendering
+            metadata['launch_latitude'] = self.state.get('launch_latitude', 0.0)
+            metadata['launch_longitude'] = self.state.get('launch_longitude', 0.0)
+            metadata['launch_azimuth'] = self.state.get('launch_azimuth', 0.0)
             
             # Save to persistent storage
             sim_id = self.simulation_manager.save_simulation(results, metadata)
@@ -307,16 +319,56 @@ class SimulationWidget(QWidget):
         """Handle simulation errors."""
         self.state.set('simulation_error', error_msg)
         self.state.set('simulation_running', False)
-        self.run_button.setEnabled(True)
-        self.pause_button.setEnabled(False)
-        if self.simulation_thread is not None:
-            self.simulation_thread.quit()
-            self.simulation_thread.wait()
+        self._reset_simulation_controls()
         QMessageBox.critical(self, "Simulation Error", f"Error: {error_msg}")
         logger.error(f"Simulation error: {error_msg}")
+
+    def toggle_pause(self):
+        """Pause or resume the active simulation."""
+        if self.simulation_worker is None or not self.simulation_worker.isRunning():
+            return
+
+        if self.simulation_paused:
+            self.simulation_worker.resume()
+            self.simulation_paused = False
+            self.pause_button.setText("⏸️ Pause")
+            self.status_message.emit("Simulation resumed")
+            logger.info("Simulation resumed from GUI")
+        else:
+            self.simulation_worker.pause()
+            self.simulation_paused = True
+            self.pause_button.setText("▶️ Resume")
+            self.status_message.emit("Simulation paused")
+            logger.info("Simulation paused from GUI")
+
+    def stop_simulation(self):
+        """Request graceful stop for the active simulation."""
+        if self.simulation_worker is None or not self.simulation_worker.isRunning():
+            return
+
+        self.simulation_worker.stop()
+        self.status_message.emit("Stopping simulation")
+        self.pause_button.setEnabled(False)
+        self.stop_button.setEnabled(False)
+        self.pause_button.setText("⏸️ Pause")
+
+    def _reset_simulation_controls(self):
+        """Restore control states after simulation ends or errors."""
+        self.run_button.setEnabled(True)
+        self.pause_button.setEnabled(False)
+        self.stop_button.setEnabled(False)
+        self.pause_button.setText("⏸️ Pause")
+        self.simulation_paused = False
+        self.status_message.emit("Simulation finished")
+
+        if self.simulation_worker is not None:
+            self.simulation_worker.wait()
+            self.simulation_worker = None
     
     def reset_simulation(self):
         """Reset simulation parameters to defaults."""
+        self.stop_simulation()
+
         # Reset UI elements
         self.progress_bar.setValue(0)
         self.runtime_spinbox.setValue(600)

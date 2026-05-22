@@ -78,10 +78,11 @@ class MainWindow(QMainWindow):
         
         # Connect widget signals for wind updates
         self.wind_widget.wind_changed.connect(self.on_wind_settings_changed)
+        self.simulation_widget.status_message.connect(self.statusBar().showMessage)
         
         # Auto-refresh dashboard when a new simulation is saved
         self.simulation_widget.simulation_saved.connect(
-            self.dashboard_widget.load_simulation_history
+            lambda _sim_id: self.dashboard_widget.load_simulation_history()
         )
         
         # Connect tab change signal

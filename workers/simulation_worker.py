@@ -47,6 +47,7 @@ class SimulationWorker(QThread):
         super().__init__()
         self.state = state
         self.is_running = True
+        self.is_paused = False
     
     def run(self):
         """Execute the simulation with real physics engine in background thread."""
@@ -222,6 +223,10 @@ class SimulationWorker(QThread):
                     termination_step = i
                     logger.info(f"[TERMINATION] {termination_reason} at t={t:.2f}s (step {i}/{num_steps})")
                     break
+
+                # Cooperative pause without blocking the GUI thread.
+                while self.is_paused and self.is_running:
+                    self.msleep(50)
                 
                 try:
                     # Update environmental models
@@ -837,5 +842,17 @@ class SimulationWorker(QThread):
     def stop(self):
         """Stop the simulation worker."""
         self.is_running = False
-        self.wait()
+        self.is_paused = False
         logger.info("Simulation worker stopped")
+
+    def pause(self):
+        """Pause simulation loop execution cooperatively."""
+        if self.is_running:
+            self.is_paused = True
+            logger.info("Simulation worker paused")
+
+    def resume(self):
+        """Resume simulation loop execution after a pause."""
+        if self.is_running:
+            self.is_paused = False
+            logger.info("Simulation worker resumed")

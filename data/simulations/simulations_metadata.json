@@ -82,5 +82,27 @@
     "drogue_deployment_time": null,
     "drogue_deployment_altitude": null,
     "notes": ""
+  },
+  "sim_20260522_165829_3e938152": {
+    "timestamp": "2026-05-22T16:58:33.005139",
+    "rocket": "Campanil 1-A",
+    "location": "El Alamo",
+    "max_altitude": 0.45003921532890234,
+    "max_velocity": 98.16939273247735,
+    "max_range": 0.19655314526961232,
+    "max_mach": 0.2920566882960595,
+    "max_accel_g": 8.773550739576358,
+    "flight_duration": 20.432000000001988,
+    "temperature": 8.0,
+    "pressure": 101325.0,
+    "parachute_enabled": false,
+    "parachute_deployed": false,
+    "parachute_deployment_time": null,
+    "parachute_deployment_altitude": null,
+    "parachute_deployment_velocity": null,
+    "drogue_deployed": false,
+    "drogue_deployment_time": null,
+    "drogue_deployment_altitude": null,
+    "notes": ""
   }
 }

@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QMessageBox, QFileDialog, QScrollArea, QTabWidget,
     QHeaderView
 )
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from models.app_state import ApplicationState
 from src.utils.simulation_manager import SimulationManager
@@ -27,23 +27,17 @@ from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
-# Try to import folium for maps
-try:
-    import folium
-    from folium.plugins import AntPath
-    HAS_FOLIUM = True
-except ImportError:
-    HAS_FOLIUM = False
-
-# Try to import QWebEngineView for map display
-try:
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    HAS_WEBENGINE = True
-except ImportError:
-    HAS_WEBENGINE = False
-
-import tempfile
 from pathlib import Path
+
+from typing import Any
+
+# Try to import cartopy for geographic map
+try:
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    HAS_CARTOPY = True
+except ImportError:
+    HAS_CARTOPY = False
 
 logger = logging.getLogger(__name__)
 
@@ -215,15 +209,6 @@ class DashboardWidget(QWidget):
         viz_group.setLayout(viz_layout)
         main_layout.addWidget(viz_group, 1)  # Stretch factor to expand
         
-        # --- 2D Trajectory Map (kept as a tab or webengine fallback) ---
-        if HAS_WEBENGINE:
-            self.map_2d_view = QWebEngineView()
-            self.map_2d_view.setMinimumHeight(400)
-        else:
-            self.map_2d_view = None
-            self.map_2d_container = QWidget()
-            self.map_2d_container.setLayout(QVBoxLayout())
-        
         # ===== EXPORT BUTTONS =====
         export_layout = QHBoxLayout()
         
@@ -247,7 +232,7 @@ class DashboardWidget(QWidget):
         outer_layout.addWidget(scroll_area)
         self.setLayout(outer_layout)
     
-    def load_simulation_history(self):
+    def load_simulation_history(self, *args):
         """Load list of simulations from manager."""
         self.sim_combo.blockSignals(True)
         self.sim_combo.clear()
@@ -903,95 +888,129 @@ class DashboardWidget(QWidget):
             self._generate_2d_map(ranges, altitudes, metadata)
             
             # Generate 3D flight path (left panel)
-            self._generate_3d_flight_path(times, ranges, altitudes)
+            self._generate_3d_flight_path(times, ranges, altitudes, metadata)
             
             logger.info("Trajectory maps generated successfully")
             
         except Exception as e:
             logger.error(f"Error generating maps: {e}")
     
+    def _resolve_launch_coords(self, metadata: dict) -> tuple:
+        """Return (lat, lon, azimuth) from metadata, falling back to launch_sites.json."""
+        lat = metadata.get('launch_latitude')
+        lon = metadata.get('launch_longitude')
+        az  = metadata.get('launch_azimuth')
+
+        # Missing or exactly zero may mean old simulation without coords saved
+        if not lat and not lon:
+            location_name = metadata.get('location', '')
+            if location_name:
+                try:
+                    sites_path = Path(__file__).resolve().parents[2] / 'data' / 'locations' / 'launch_sites.json'
+                    with open(sites_path, encoding='utf-8') as f:
+                        sites = json.load(f)
+                    site = sites.get(location_name, {})
+                    lat = site.get('latitude', 0.0)
+                    lon = site.get('longitude', 0.0)
+                    if az is None:
+                        az = site.get('azimuth', 0.0)
+                except Exception as e:
+                    logger.warning(f"Could not resolve launch coords from sites JSON: {e}")
+
+        return float(lat or 0.0), float(lon or 0.0), float(az or 0.0)
+
     def _generate_2d_map(self, ranges, altitudes, metadata):
-        """Generate a 2D trajectory map and add it as a tab."""
+        """Generate a geographic 2D trajectory map using cartopy and add it as a tab."""
+        if not HAS_CARTOPY:
+            self._generate_2d_matplotlib_map(ranges, altitudes)
+            return
+
         try:
-            if HAS_WEBENGINE and self.map_2d_view and HAS_FOLIUM:
-                # Get launch coordinates from metadata or use default
-                launch_lat = metadata.get('launch_latitude', 0.0)
-                launch_lon = metadata.get('launch_longitude', 0.0)
-                
-                # Create base map
-                m = folium.Map(
-                    location=[launch_lat, launch_lon],
-                    zoom_start=14,
-                    tiles='OpenStreetMap'
-                )
-                
-                # Add launch site marker
-                folium.CircleMarker(
-                    location=[launch_lat, launch_lon],
-                    radius=8,
-                    popup='Launch Site',
-                    color='red',
-                    fill=True,
-                    fillColor='red',
-                    fillOpacity=0.7,
-                    weight=2
-                ).add_to(m)
-                
-                # Calculate approximate landing coordinates
-                max_range_km = ranges.max() / 1000
-                lat_delta = max_range_km / 111.32
-                
-                landing_lat = launch_lat + lat_delta
-                landing_lon = launch_lon
-                
-                # Add landing site marker
-                folium.CircleMarker(
-                    location=[landing_lat, landing_lon],
-                    radius=8,
-                    popup='Landing Site',
-                    color='green',
-                    fill=True,
-                    fillColor='green',
-                    fillOpacity=0.7,
-                    weight=2
-                ).add_to(m)
-                
-                # Draw trajectory approximation
-                coords = [[launch_lat, launch_lon], [landing_lat, landing_lon]]
-                folium.PolyLine(
-                    coords,
-                    color='blue',
-                    weight=3,
-                    opacity=0.8,
-                    popup='Flight Path'
-                ).add_to(m)
-                
-                # Add max altitude circle
-                max_alt_km = altitudes.max() / 1000
-                folium.CircleMarker(
-                    location=[launch_lat + lat_delta/2, launch_lon],
-                    radius=6,
-                    popup=f'Apogee: {max_alt_km:.2f} km',
-                    color='orange',
-                    fill=True,
-                    fillColor='orange',
-                    fillOpacity=0.5,
-                    weight=2
-                ).add_to(m)
-                
-                # Save map to HTML and display in a tab
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
-                    m.save(f.name)
-                    self.map_2d_view.setUrl(QUrl.fromLocalFile(f.name))
-                
-                # Add webengine view as a tab
-                self.charts_tab_widget.addTab(self.map_2d_view, "2D Trajectory Map")
-            else:
-                # Fallback: matplotlib-based 2D map as a tab
-                self._generate_2d_matplotlib_map(ranges, altitudes)
-                
+            import math
+
+            launch_lat, launch_lon, _ = self._resolve_launch_coords(metadata)
+            max_range_m = float(ranges.max()) if len(ranges) > 0 else 0.0
+            max_alt_km = float(altitudes.max()) / 1000.0 if len(altitudes) > 0 else 0.0
+            max_range_km = max_range_m / 1000.0
+
+            # Use launch azimuth from metadata (default 0° = North)
+            _, _, azimuth_deg = self._resolve_launch_coords(metadata)
+            azimuth_rad = math.radians(azimuth_deg)
+
+            # Compute approximate landing coords from range + azimuth
+            cos_lat = math.cos(math.radians(launch_lat)) or 1e-6
+            delta_lat = (max_range_km / 111.32) * math.cos(azimuth_rad)
+            delta_lon = (max_range_km / (111.32 * cos_lat)) * math.sin(azimuth_rad)
+            landing_lat = launch_lat + delta_lat
+            landing_lon = launch_lon + delta_lon
+            apogee_lat = launch_lat + delta_lat / 2
+            apogee_lon = launch_lon + delta_lon / 2
+
+            # Map extent: pad around launch + landing
+            pad_km = max(max_range_km * 1.5, 10.0)
+            pad_lat = pad_km / 111.32
+            pad_lon = pad_km / (111.32 * cos_lat)
+            extent = [
+                min(launch_lon, landing_lon) - pad_lon,
+                max(launch_lon, landing_lon) + pad_lon,
+                min(launch_lat, landing_lat) - pad_lat,
+                max(launch_lat, landing_lat) + pad_lat,
+            ]
+
+            # Choose natural-earth resolution based on extent size
+            res = '10m' if pad_km < 200 else '50m' if pad_km < 1000 else '110m'
+
+            fig = Figure(figsize=(8, 6))
+            ax: Any = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+            ax.set_extent(extent, crs=ccrs.PlateCarree())
+
+            ax.add_feature(cfeature.NaturalEarthFeature(
+                'physical', 'land', res, facecolor='#e6dfa8', edgecolor='none'))
+            ax.add_feature(cfeature.NaturalEarthFeature(
+                'physical', 'ocean', res, facecolor='#a8d0e8', edgecolor='none'))
+            ax.add_feature(cfeature.NaturalEarthFeature(
+                'cultural', 'admin_0_countries', res,
+                facecolor='none', edgecolor='#555555', linewidth=0.5))
+            ax.add_feature(cfeature.NaturalEarthFeature(
+                'physical', 'coastline', res,
+                facecolor='none', edgecolor='#333333', linewidth=0.7))
+
+            # Trajectory line (launch → apogee midpoint → landing)
+            ax.plot(
+                [launch_lon, apogee_lon, landing_lon],
+                [launch_lat, apogee_lat, landing_lat],
+                'b-', linewidth=2, transform=ccrs.Geodetic(),
+                label='Trajectory', zorder=5
+            )
+
+            # Key markers
+            ax.scatter([launch_lon], [launch_lat], color='red', s=120, marker='*',
+                       transform=ccrs.PlateCarree(), zorder=6, label='Launch')
+            ax.scatter([landing_lon], [landing_lat], color='green', s=100, marker='X',
+                       transform=ccrs.PlateCarree(), zorder=6, label='Landing')
+            ax.scatter([apogee_lon], [apogee_lat], color='orange', s=80, marker='o',
+                       transform=ccrs.PlateCarree(), zorder=6,
+                       label=f'Apogee {max_alt_km:.1f} km')
+
+            gl = ax.gridlines(draw_labels=True, linewidth=0.5,
+                              color='gray', alpha=0.5, linestyle='--')
+            gl.top_labels = False
+            gl.right_labels = False
+
+            ax.set_title(
+                f'2D Trajectory Map\n'
+                f'Launch: ({launch_lat:.4f}°, {launch_lon:.4f}°)  '
+                f'Range: {max_range_km:.2f} km',
+                fontsize=10
+            )
+            ax.legend(loc='upper right', fontsize=8)
+            fig.tight_layout()
+
+            self._add_chart_as_tab(fig, "2D Trajectory Map")
+
         except Exception as e:
             logger.error(f"Error generating 2D map: {e}")
+            self._generate_2d_matplotlib_map(ranges, altitudes)
     
     def _generate_2d_matplotlib_map(self, ranges, altitudes):
         """Generate a simple 2D map using matplotlib (fallback)."""
@@ -1015,44 +1034,146 @@ class DashboardWidget(QWidget):
         # Add as a tab
         self._add_chart_as_tab(fig, "2D Trajectory Map")
     
-    def _generate_3d_flight_path(self, times, ranges, altitudes):
-        """Generate a 3D flight path visualization as a tab."""
+    def _generate_3d_flight_path(self, times, ranges, altitudes, metadata):
+        """Generate a 3D flight path with cartopy map texture on the ground plane."""
         try:
-            # Create 3D plot
-            fig = plt.figure(figsize=(8, 7), dpi=100)
-            ax = fig.add_subplot(111, projection='3d')
-            
-            # Convert to km for better scale
-            ranges_km = ranges / 1000
-            altitudes_km = altitudes / 1000
-            
-            # Create 3D trajectory
-            ax.plot(ranges_km, np.zeros_like(ranges_km), altitudes_km, 'b-', linewidth=2, label='Flight Path')
-            
-            # Mark key points
-            ax.scatter(0, 0, 0, color='red', s=100, marker='*', label='Launch', zorder=5)
-            ax.scatter(ranges_km[-1], 0, 0, color='green', s=100, marker='X', label='Landing', zorder=5)
-            
-            # Find and mark apogee
-            apogee_idx = np.argmax(altitudes_km)
-            ax.scatter(ranges_km[apogee_idx], 0, altitudes_km[apogee_idx], 
-                      color='orange', s=100, marker='o', label='Apogee', zorder=5)
-            
-            # Ground plane
-            ax.plot([0, ranges_km.max()], [0, 0], [0, 0], 'k--', alpha=0.3)
-            
-            ax.set_xlabel('Range [km]')
-            ax.set_ylabel('Lateral [km]')
-            ax.set_zlabel('Altitude [km]')
-            ax.set_title('3D Flight Path')
-            ax.legend()
-            ax.grid(True, alpha=0.3)
-            
-            plt.tight_layout()
-            
-            # Add as a tab
+            import math
+            import io
+            import matplotlib.image as mpimg
+            from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+            launch_lat, launch_lon, azimuth_deg = self._resolve_launch_coords(metadata)
+            azimuth_rad = math.radians(azimuth_deg)
+            cos_lat = math.cos(math.radians(launch_lat)) or 1e-6
+
+            ranges_km = ranges / 1000.0
+            altitudes_km = altitudes / 1000.0
+            max_range_km = float(ranges_km.max()) if len(ranges_km) > 0 else 1.0
+
+            # Convert range -> East/North km offsets from launch
+            # azimuth: degrees from North, clockwise
+            x_km = ranges_km * math.sin(azimuth_rad)   # East (+)
+            y_km = ranges_km * math.cos(azimuth_rad)   # North (+)
+
+            # Geographic extent for ground map
+            pad_km = max(max_range_km * 1.5, 10.0)
+            pad_lat = pad_km / 111.32
+            pad_lon = pad_km / (111.32 * cos_lat)
+            extent = [
+                launch_lon - pad_lon, launch_lon + pad_lon,
+                launch_lat - pad_lat, launch_lat + pad_lat,
+            ]
+
+            # km offsets of extent edges from launch origin
+            x_lo = -pad_lon * 111.32 * cos_lat
+            x_hi =  pad_lon * 111.32 * cos_lat
+            y_lo = -pad_lat * 111.32
+            y_hi =  pad_lat * 111.32
+
+            # ── Render cartopy map to RGBA numpy image ───────────────────
+            ground_img = None
+            if HAS_CARTOPY:
+                try:
+                    res = '10m' if pad_km < 200 else '50m' if pad_km < 1000 else '110m'
+                    IMGPX = 120
+                    map_fig = Figure(figsize=(IMGPX / 72, IMGPX / 72), dpi=72)
+                    FigureCanvasAgg(map_fig)  # attach agg backend
+                    map_ax: Any = map_fig.add_subplot(
+                        1, 1, 1, projection=ccrs.PlateCarree())
+                    map_ax.set_extent(extent, crs=ccrs.PlateCarree())
+                    map_ax.add_feature(cfeature.NaturalEarthFeature(
+                        'physical', 'land', res,
+                        facecolor='#c8b97a', edgecolor='none'))
+                    map_ax.add_feature(cfeature.NaturalEarthFeature(
+                        'physical', 'ocean', res,
+                        facecolor='#5b9ec9', edgecolor='none'))
+                    map_ax.add_feature(cfeature.NaturalEarthFeature(
+                        'cultural', 'admin_0_countries', res,
+                        facecolor='none', edgecolor='#666666', linewidth=0.5))
+                    map_ax.add_feature(cfeature.NaturalEarthFeature(
+                        'physical', 'coastline', res,
+                        facecolor='none', edgecolor='#333333', linewidth=0.7))
+                    map_fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+                    buf = io.BytesIO()
+                    map_fig.savefig(buf, format='png', dpi=72, pad_inches=0)
+                    buf.seek(0)
+                    ground_img = mpimg.imread(buf)   # (H, W, 4) RGBA float 0-1
+                except Exception as img_err:
+                    logger.warning(f"Cartopy ground texture failed: {img_err}")
+                    ground_img = None
+
+            # ── Build 3D figure ──────────────────────────────────────────
+            fig = Figure(figsize=(9, 7))
+            ax3d = fig.add_subplot(111, projection='3d')
+
+            if ground_img is not None:
+                H_img, W_img = ground_img.shape[:2]
+                xg = np.linspace(x_lo, x_hi, W_img)
+                # Row 0 of image = North (y_hi); last row = South (y_lo)
+                yg = np.linspace(y_hi, y_lo, H_img)
+                XG, YG = np.meshgrid(xg, yg)
+                ZG = np.zeros_like(XG)
+                ax3d.plot_surface(
+                    XG, YG, ZG,
+                    facecolors=ground_img,
+                    rstride=1, cstride=1,
+                    shade=False, zorder=1, alpha=1.0,
+                )
+            else:
+                # Plain coloured ground fallback
+                gx = np.array([[x_lo, x_hi], [x_lo, x_hi]])
+                gy = np.array([[y_lo, y_lo], [y_hi, y_hi]])
+                gz = np.zeros_like(gx)
+                ax3d.plot_surface(gx, gy, gz, color='#c8b97a', alpha=0.6)
+
+            # 3D trajectory
+            ax3d.plot(x_km, y_km, altitudes_km,
+                      color='royalblue', linewidth=2.5,
+                      label='Flight Path', zorder=5)
+
+            # Shadow projection on ground
+            ax3d.plot(x_km, y_km, np.zeros_like(altitudes_km),
+                      color='royalblue', linestyle='--',
+                      linewidth=1.0, alpha=0.35, zorder=2)
+
+            # Markers
+            ax3d.scatter([x_km[0]], [y_km[0]], [0], # type: ignore
+                         color='red', s=120, marker='*',
+                         label='Launch', zorder=6, depthshade=False)
+            ax3d.scatter([x_km[-1]], [y_km[-1]], [0], # type: ignore
+                         color='limegreen', s=100, marker='X',
+                         label='Landing', zorder=6, depthshade=False)
+
+            apogee_idx = int(np.argmax(altitudes_km))
+            ax3d.scatter(
+                [x_km[apogee_idx]], [y_km[apogee_idx]], [altitudes_km[apogee_idx]], # type: ignore
+                color='orange', s=100, marker='o',
+                label=f'Apogee {altitudes_km[apogee_idx]:.1f} km',
+                zorder=6, depthshade=False,
+            )
+
+            # Vertical dashed line at apogee
+            ax3d.plot(
+                [x_km[apogee_idx], x_km[apogee_idx]],
+                [y_km[apogee_idx], y_km[apogee_idx]],
+                [0, altitudes_km[apogee_idx]],
+                color='orange', linestyle=':', linewidth=1.2,
+                alpha=0.6, zorder=3,
+            )
+
+            ax3d.set_xlabel('East [km]', labelpad=6)
+            ax3d.set_ylabel('North [km]', labelpad=6)
+            ax3d.set_zlabel('Altitude [km]', labelpad=6)
+            ax3d.set_title(
+                f'3D Flight Path  |  Az: {azimuth_deg:.1f}°  |  '
+                f'Range: {max_range_km:.2f} km',
+                fontsize=10,
+            )
+            ax3d.legend(loc='upper left', fontsize=8)
+            fig.tight_layout()
+
             self._add_chart_as_tab(fig, "3D Flight Path")
-            
+
         except Exception as e:
             logger.error(f"Error generating 3D flight path: {e}")
     

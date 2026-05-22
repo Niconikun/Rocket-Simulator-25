@@ -11,8 +11,13 @@ To run as executable (after PyInstaller):
 """
 
 import sys
+import os
 import logging
 from pathlib import Path
+
+# Disable Qt WebEngine sandbox before any Qt imports (required on Windows)
+os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
+os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--no-sandbox")
 
 # Configure logging
 logging.basicConfig(

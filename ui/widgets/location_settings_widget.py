@@ -8,24 +8,23 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from models.app_state import ApplicationState
 from src.utils.location_manager import LocationManager
-from typing import Tuple, Union, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
+from typing import Tuple, Optional
 import json
 import os
 import logging
-import plotly.graph_objects as go
-import tempfile
+import math
 from pathlib import Path
-import webbrowser
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
 
-# Try to import QWebEngineView; if it fails, use fallback
+# Try to import cartopy for embedded map rendering
 try:
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    HAS_WEBENGINE = True
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    HAS_CARTOPY = True
 except ImportError:
-    HAS_WEBENGINE = False
+    HAS_CARTOPY = False
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +90,6 @@ class LocationSettingsWidget(QWidget):
         self.state = ApplicationState.get_instance()
         self.locations = {}
         self.location_manager = LocationManager()
-        self.html_browser: Optional[Union["QWebEngineView", QLabel]] = None
         self.init_ui()
         self.load_locations()
         self.refresh_map()
@@ -199,25 +197,21 @@ class LocationSettingsWidget(QWidget):
         # ===== RIGHT PANEL: MAP =====
         map_widget = QWidget()
         map_layout = QVBoxLayout()
+        map_layout.setContentsMargins(0, 0, 0, 0)
+        map_layout.setSpacing(0)
         
-        map_label = QLabel("Interactive World Map")
-        map_label.setStyleSheet("font-weight: bold; font-size: 12px;")
-        map_layout.addWidget(map_label)
-        
-        # Create map display widget (use QWebEngineView if available, otherwise fallback)
-        if HAS_WEBENGINE:
-            self.html_browser = QWebEngineView() # type: ignore
-        else:
-            # Fallback: create a widget with instructions to open map in browser
-            self.html_browser = QLabel(
-                "WebEngine not available. Map will open in your default web browser.\n\n"
-                "Click 'Refresh Map' to generate and open the interactive map."
-            )
-            self.html_browser.setStyleSheet("color: #666; padding: 20px;")
-            self.html_browser.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.map_file = None  # Will store path to temporary HTML file
-        
-        map_layout.addWidget(self.html_browser)
+        # Embedded map using matplotlib + cartopy
+        self._map_fig = Figure()
+        self._map_fig.set_facecolor('none')
+        self._map_canvas = FigureCanvas(self._map_fig)
+        self._map_canvas.setSizePolicy(
+            self._map_canvas.sizePolicy().horizontalPolicy(),
+            self._map_canvas.sizePolicy().verticalPolicy()
+        )
+        self._map_canvas.setStyleSheet("background: transparent;")
+        self._map_toolbar = NavigationToolbar(self._map_canvas, map_widget)
+        map_layout.addWidget(self._map_toolbar)
+        map_layout.addWidget(self._map_canvas, stretch=1)
         
         map_widget.setLayout(map_layout)
         splitter.addWidget(map_widget)
@@ -230,124 +224,149 @@ class LocationSettingsWidget(QWidget):
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
     
-    def refresh_map(self):
-        """Refresh and redraw the interactive world map with all locations.
-        
-        Generates a Plotly scattergeo visualization showing all saved locations
-        as star markers. Displays map in QWebEngineView if available, otherwise
-        opens in default browser. Shows empty state message if no locations saved.
-        
-        Raises:
-            Exception: Logs and displays error dialog if map generation fails.
-        """
+    def refresh_map(self, focus_lat: Optional[float] = None,
+                    focus_lon: Optional[float] = None,
+                    radius_km: float = 50.0):
+        """Redraw the world map.  When focus_lat/focus_lon are given the view
+        zooms to a radius_km window around that point; otherwise shows the
+        full globe."""
         try:
-            # Get all locations
-            locations_list = []
-            lats = []
-            lons = []
-            names = []
-            elevations = []
-            
+            self._map_fig.clear()
+            focused = focus_lat is not None and focus_lon is not None
+
+            if HAS_CARTOPY:
+                ax = self._map_fig.add_subplot(
+                    1, 1, 1, projection=ccrs.PlateCarree()
+                )
+                ax.set_facecolor('none')
+
+                if focused:
+                    # Higher-resolution features for close-up view
+                    scale = '10m'
+                    ax.add_feature( # type: ignore
+                        cfeature.NaturalEarthFeature(
+                            'physical', 'land', scale,
+                            facecolor='#E8E8E8', edgecolor='none'
+                        )
+                    )
+                    ax.add_feature( # type: ignore
+                        cfeature.NaturalEarthFeature(
+                            'physical', 'ocean', scale,
+                            facecolor='#D4E6F1', edgecolor='none'
+                        )
+                    )
+                    ax.add_feature( # type: ignore
+                        cfeature.NaturalEarthFeature(
+                            'cultural', 'admin_0_countries', scale,
+                            facecolor='none', edgecolor='#999999',
+                            linewidth=0.5
+                        )
+                    )
+                    ax.add_feature( # type: ignore
+                        cfeature.NaturalEarthFeature(
+                            'physical', 'coastline', scale,
+                            facecolor='none', edgecolor='#555555',
+                            linewidth=0.7
+                        )
+                    )
+                    ax.add_feature( # type: ignore
+                        cfeature.NaturalEarthFeature(
+                            'physical', 'rivers_lake_centerlines', '10m',
+                            facecolor='none', edgecolor='#8ec6e6',
+                            linewidth=0.5
+                        )
+                    )
+                    # Compute extent in degrees
+                    delta_lat = radius_km / 111.32
+                    delta_lon = radius_km / (
+                        111.32 * math.cos(math.radians(focus_lat)) # type: ignore
+                    )
+                    ax.set_extent( # type: ignore
+                        [focus_lon - delta_lon, focus_lon + delta_lon, # type: ignore
+                         focus_lat - delta_lat, focus_lat + delta_lat], # type: ignore
+                        crs=ccrs.PlateCarree()
+                    )
+                    ax.gridlines( # type: ignore
+                        draw_labels=True, linewidth=0.4,
+                        color='gray', alpha=0.5, linestyle='--'
+                    )
+                else:
+                    ax.add_feature(cfeature.LAND, facecolor='#E8E8E8') # type: ignore
+                    ax.add_feature(cfeature.OCEAN, facecolor='#D4E6F1') # type: ignore
+                    ax.add_feature( # type: ignore
+                        cfeature.BORDERS, linewidth=0.4, edgecolor='#999999'
+                    )
+                    ax.add_feature(cfeature.COASTLINE, linewidth=0.6) # type: ignore
+                    ax.set_global() # type: ignore
+
+                data_transform = ccrs.PlateCarree()
+            else:
+                ax = self._map_fig.add_subplot(1, 1, 1)
+                if focused:
+                    delta = radius_km / 111.32
+                    ax.set_xlim(focus_lon - delta, focus_lon + delta) # type: ignore
+                    ax.set_ylim(focus_lat - delta, focus_lat + delta) # type: ignore
+                else:
+                    ax.set_xlim(-180, 180)
+                    ax.set_ylim(-90, 90)
+                ax.set_xlabel('Longitude')
+                ax.set_ylabel('Latitude')
+                ax.set_facecolor('#D4E6F1')
+                ax.grid(True, alpha=0.3)
+                data_transform = None
+
             if self.locations:
                 for name, data in self.locations.items():
                     lat = data.get('latitude', 0)
                     lon = data.get('longitude', 0)
-                    elev = data.get('elevation', 0)
-                    
-                    lats.append(lat)
-                    lons.append(lon)
-                    names.append(name)
-                    elevations.append(elev)
-                    
-                    locations_list.append({
-                        'name': name,
-                        'lat': lat,
-                        'lon': lon,
-                        'elev': elev
-                    })
-            
-            # Create Plotly figure with scattergeo
-            fig = go.Figure()
-            
-            # Add location markers
-            if lats:
-                fig.add_trace(go.Scattergeo(
-                    lon=lons,
-                    lat=lats,
-                    mode='markers+text',
-                    marker=dict(
-                        size=12,
-                        color='#FF6B6B',
-                        line=dict(width=2, color='#C92A2A'),
-                        symbol='star'
-                    ),
-                    text=names,
-                    textposition='top center',
-                    textfont=dict(size=10, color='#333'),
-                    hovertemplate=(
-                        '<b>%{text}</b><br>' +
-                        'Latitude: %{lat:.6f}°<br>' +
-                        'Longitude: %{lon:.6f}°<br>' +
-                        '<extra></extra>'
-                    ),
-                    name='Launch Sites'
-                ))
+                    is_focused = (
+                        focused
+                        and abs(lat - focus_lat) < 1e-6
+                        and abs(lon - focus_lon) < 1e-6
+                    )
+                    plot_kwargs = dict(
+                        marker='*',
+                        color='#FF2222' if is_focused else '#FF6B6B',
+                        markersize=20 if is_focused else 12,
+                        markeredgecolor='#8B0000' if is_focused else '#C92A2A',
+                        markeredgewidth=2 if is_focused else 1.5,
+                        linestyle='', zorder=6 if is_focused else 5
+                    )
+                    text_kwargs = dict(
+                        fontsize=9 if is_focused else 8,
+                        fontweight='bold' if is_focused else 'normal',
+                        ha='center', color='#111111' if is_focused else '#333333',
+                        zorder=7 if is_focused else 6
+                    )
+                    text_offset = delta_lat * 0.15 if (focused and is_focused) else 2
+                    if data_transform:
+                        ax.plot(lon, lat, transform=data_transform, **plot_kwargs) # type: ignore
+                        ax.text(
+                            lon, lat + text_offset, name,
+                            transform=data_transform, **text_kwargs # type: ignore
+                        )
+                    else:
+                        ax.plot(lon, lat, **plot_kwargs) # type: ignore
+                        ax.text(lon, lat + text_offset, name, **text_kwargs) # type: ignore
             else:
-                # Show empty map message
-                fig.add_annotation(
-                    text="No locations saved. Click 'Save Location' to add launch sites.",
-                    xref="paper",
-                    yref="paper",
-                    x=0.5,
-                    y=0.5,
-                    showarrow=False,
-                    font=dict(size=14, color='gray')
+                ax.text( # type: ignore
+                    0.5, 0.5,
+                    'Sin ubicaciones guardadas.\nHaz clic en "Save Location" para agregar.',
+                    ha='center', va='center', fontsize=11, color='gray',
+                    transform=ax.transAxes
                 )
-            
-            # Update layout
-            fig.update_layout(
-                title='World Map - Launch Sites',
-                geo=dict(
-                    scope='world',
-                    showcountries=True,
-                    countrywidth=0.5,
-                    coastlinewidth=1,
-                    projection_type='equirectangular',
-                    showland=True,
-                    landcolor='#E8E8E8',
-                    oceancolor='#D4E6F1',
-                    bgcolor='#F8F9FA'
-                ),
-                height=500,
-                margin=dict(l=0, r=0, t=40, b=0),
-                hovermode='closest',
-                template='plotly_white'
+
+            title = (
+                f'Sitio: {self.location_combo.currentText()} '
+                f'(±{radius_km:.0f} km)'
+                if focused
+                else 'Mapa Mundial - Sitios de Lanzamiento'
             )
-            
-            # Convert to HTML and display
-            html_str = fig.to_html(include_plotlyjs='cdn', div_id='map')
-            
-            if HAS_WEBENGINE:
-                # Display directly in QWebEngineView
-                self.html_browser.setHtml(html_str)  # type: ignore
-            else:
-                # Save to temporary file and open in default browser
-                temp_dir = Path(tempfile.gettempdir())
-                map_file = temp_dir / 'rocket_map.html'
-                
-                with open(map_file, 'w', encoding='utf-8') as f:
-                    f.write(html_str)
-                
-                self.map_file = str(map_file)
-                self.html_browser.setText(  # type: ignore
-                    f"Map saved to: {map_file}\n\n"
-                    f"Opening in your default web browser..."
-                )
-                
-                # Open in default browser
-                webbrowser.open(f'file://{map_file}')
-            
-            logger.info(f"Map refreshed with {len(locations_list)} locations")
+            ax.set_title(title, fontsize=11, fontweight='bold')
+            self._map_fig.tight_layout()
+            self._map_canvas.draw()
+
+            logger.info(f"Map refreshed — focused={focused}, locations={len(self.locations)}")
         except Exception as e:
             logger.error(f"Error refreshing map: {e}")
             QMessageBox.critical(self, "Map Error", f"Failed to refresh map: {str(e)}")
@@ -376,20 +395,16 @@ class LocationSettingsWidget(QWidget):
             logger.error(f"Error loading locations: {e}")
     
     def on_location_selected(self, location_name: str):
-        """Handle location selection change from combo box.
-        
-        Args:
-            location_name (str): Name of selected location from combo box.
-        
-        Updates UI fields (name, latitude, longitude, elevation) with values
-        from self.locations dict. No-op if location_name not in locations.
-        """
+        """Handle location selection change from combo box."""
         if location_name in self.locations:
             location_data = self.locations[location_name]
             self.name_edit.setText(location_name)
-            self.latitude_spinbox.setValue(location_data.get('latitude', 0.0))
-            self.longitude_spinbox.setValue(location_data.get('longitude', 0.0))
+            lat = location_data.get('latitude', 0.0)
+            lon = location_data.get('longitude', 0.0)
+            self.latitude_spinbox.setValue(lat)
+            self.longitude_spinbox.setValue(lon)
             self.elevation_spinbox.setValue(location_data.get('elevation', 0.0))
+            self.refresh_map(focus_lat=lat, focus_lon=lon, radius_km=50.0)
     
     def save_location(self):
         """Save location to file with validation.
