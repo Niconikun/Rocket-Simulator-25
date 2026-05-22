@@ -142,11 +142,21 @@ class EnhancedEngine:
 
         # Load and process thrust curve data
         self._load_thrust_curve()
-        
-        # Initialize performance
+
+        # Initialize nozzle performance (thermodynamic constants)
         self._calculate_nozzle_performance()
+
+        # B09 – Precompute analytical shape integral (numeric, not hardcoded)
+        self._shape_integral_cached: float = self._compute_analytical_shape_integral()
+
+        # B07 – Build cumulative impulse look-up table (O(log N) per step)
+        self._cumul_time_arr: np.ndarray = np.array([0.0, self.burn_time])
+        self._cumul_impulse_arr: np.ndarray = np.array([0.0, 0.0])
+        self._precompute_cumulative_impulse()
+
+        # B06 – Initial unified performance calculation
         self._calculate_performance()
-        
+
         # Validate thrust curve instead of general performance
         self._thrust_curve_validated = False
 
@@ -232,26 +242,142 @@ class EnhancedEngine:
             curve_data.n_points, curve_data.duration, curve_data.max_thrust,
         )
 
-    def _calculate_experimental_thrust(self, time=None):
-        """Calculate thrust using experimental data"""
-        if self.thrust_interpolator is None:
+    # ------------------------------------------------------------------
+    # B09 – Thrust shape helpers
+    # ------------------------------------------------------------------
+
+    def _shape_function(self, t_norm: float) -> float:
+        """
+        Normalised shape factor for the analytical thrust profile.
+
+        Parameters
+        ----------
+        t_norm : float
+            Normalised time in (0, 1].  Returns 0 outside that range.
+
+        Returns
+        -------
+        float
+            Dimensionless shape factor ≥ 0.
+        """
+        if t_norm <= 0.0 or t_norm >= 1.0:
             return 0.0
-        
+
+        if t_norm < 0.02:           # ignition ramp-up
+            ramp_up = t_norm / 0.02
+            return 0.1 * ramp_up
+        elif t_norm < 0.08:         # fast ramp-up (smoothstep)
+            rp = (t_norm - 0.02) / 0.06
+            return 0.1 + 0.4 * (3 * rp ** 2 - 2 * rp ** 3)
+        elif t_norm < 0.15:         # approach to peak
+            rp = (t_norm - 0.08) / 0.07
+            return 0.5 + 0.5 * rp
+        elif t_norm < 0.85:         # sustained phase
+            oscillation = 0.05 * np.sin(2 * np.pi * t_norm * 4)
+            decay = (0.85 - t_norm) / 0.70
+            return 0.95 + 0.05 * decay + oscillation
+        elif t_norm < 0.92:         # initial ramp-down
+            return 0.7 * (1.0 - (t_norm - 0.85) / 0.07)
+        elif t_norm < 0.97:         # fast ramp-down
+            return 0.3 * (1.0 - (t_norm - 0.92) / 0.05)
+        else:                       # tail-off
+            tail_off = 1.0 - (t_norm - 0.97) / 0.03
+            return 0.05 * np.exp(-4.0 * (1.0 - tail_off))
+
+    def _compute_analytical_shape_integral(self) -> float:
+        """
+        Numerically integrate *_shape_function* over [0, 1] using the
+        midpoint rule (N = 500 intervals).  Result replaces the old
+        hardcoded value of 0.685 so that the normalisation is exact.
+
+        Returns
+        -------
+        float
+            Mean value of the shape function over [0, 1].
+        """
+        N = 500
+        total = sum(self._shape_function((i + 0.5) / N) for i in range(N))
+        integral = total / N
+        logging.debug("Analytical shape integral = %.4f (N=%d)", integral, N)
+        return integral
+
+    def _thrust_at_time(self, t: float) -> float:
+        """
+        Pure function: instantaneous thrust at time *t* [N].
+
+        Works for both experimental and analytical modes.  Does NOT
+        mutate any instance state.
+
+        Parameters
+        ----------
+        t : float
+            Simulation time [s].
+
+        Returns
+        -------
+        float
+            Thrust in Newtons (≥ 0).
+        """
+        if t <= 0.0 or t > self.burn_time:
+            return 0.0
+
+        if self.use_experimental_thrust:
+            if self.thrust_interpolator is None:
+                return 0.0
+            return max(0.0, float(self.thrust_interpolator(t)))
+
+        # Analytical mode
+        t_norm = t / self.burn_time
         try:
-            # Use provided time or current time
-            current_time = time if time is not None else self.time
-            
-            # Get thrust from interpolator
-            thrust = float(self.thrust_interpolator(current_time))
-            
-            # Ensure thrust is non-negative
-            thrust = max(0.0, thrust)
-            
-            return thrust
-            
-        except Exception as e:
-            logging.error(f"Error in experimental thrust calculation: {e}")
-            return 0.0
+            shape = self._shape_function(t_norm)
+            if self._shape_integral_cached > 0.0:
+                # Scale so that the area under the curve ≈ mean_thrust * burn_time
+                correction = self.mean_thrust / (self.max_thrust * self._shape_integral_cached)
+                thrust = shape * correction * self.max_thrust
+            else:
+                thrust = shape * self.mean_thrust
+            return float(max(0.0, min(thrust, self.max_thrust)))
+        except Exception as exc:
+            logging.error("_thrust_at_time analytical fallback: %s", exc)
+            return self._fallback_thrust_value(t_norm)
+
+    def _precompute_cumulative_impulse(self) -> None:
+        """
+        Build a cumulative impulse look-up table over [0, burn_time].
+
+        Sampling 501 points is done once at engine creation so that
+        ``_calculate_performance`` can look up total impulse delivered
+        in O(log N) via ``np.interp`` instead of re-integrating every
+        simulation step.
+        """
+        N = 500
+        t_arr = np.linspace(0.0, self.burn_time, N + 1)
+        T_arr = np.array([self._thrust_at_time(ti) for ti in t_arr])
+
+        cumul = np.zeros(N + 1)
+        for i in range(1, N + 1):
+            cumul[i] = cumul[i - 1] + 0.5 * (T_arr[i - 1] + T_arr[i]) * (t_arr[i] - t_arr[i - 1])
+
+        self._cumul_time_arr = t_arr
+        self._cumul_impulse_arr = cumul
+
+        measured  = float(cumul[-1])
+        expected  = self.propellant_mass * self.specific_impulse * 9.80665
+        error_pct = abs(measured - expected) / expected * 100.0 if expected > 0.0 else 0.0
+        logging.info(
+            "Cumulative impulse table ready: measured=%.1f N\u00b7s, "
+            "expected=%.1f N\u00b7s (%.1f%% diff).",
+            measured, expected, error_pct,
+        )
+
+    # ------------------------------------------------------------------
+    # Retained for backward compatibility – delegates to _thrust_at_time
+    # ------------------------------------------------------------------
+
+    def _calculate_experimental_thrust(self, time=None):
+        """Retained for backward compatibility – delegates to _thrust_at_time."""
+        t = time if time is not None else self.time
+        return self._thrust_at_time(t)
 
     def _calculate_nozzle_performance(self):
         """Calculate nozzle performance using isentropic flow relations"""
@@ -281,195 +407,152 @@ class EnhancedEngine:
             self.characteristic_velocity = 1500.0
             self.ideal_thrust_coefficient = 1.5
 
-    def _calculate_performance(self):
-        """Calculate current engine performance with experimental thrust support"""
-        try:
-            # Reset values
-            self._mass_flux = 0.0
-            self._thrust = 0.0
-            self.gas_speed = 0.0
-            self.exit_pressure = 0.0
-            self.actual_isp = 0.0
+    def _calculate_performance(self) -> None:
+        """
+        Unified performance calculation (B06, B07, B08).
 
-            if 0 <= self.time <= self.burn_time:
-                # Use experimental thrust curve if available
-                if self.use_experimental_thrust:
-                    self._thrust = self._calculate_experimental_thrust()
-                    
-                    # Calculate mass flux based on experimental thrust and specific impulse
-                    if self._thrust > 0:
-                        g0 = 9.80665
-                        self._mass_flux = self._thrust / (self.specific_impulse * g0)
-                        
-                        # Calculate exit velocity for consistency
-                        self.gas_speed = self.specific_impulse * g0
-                        self.exit_pressure = self.ambient_pressure  # Simplified
-                        
-                        # Calculate actual specific impulse
-                        self.actual_isp = self.specific_impulse
-                    else:
-                        self._mass_flux = 0.0
-                        self.gas_speed = 0.0
-                        self.exit_pressure = 0.0
-                        self.actual_isp = 0.0
-                        
-                else:
-                    # Use analytical model
-                    self._thrust = self._calculate_thrust_curve()
-                    
-                    # Calculate mass flow rate from chamber conditions
-                    if self.characteristic_velocity > 0:
-                        self._mass_flux = (self.mean_chamber_pressure * self.throat_area / 
-                                        self.characteristic_velocity)
-                    
-                    # Calculate exit conditions using isentropic relations
-                    if self._mass_flux > 0:
-                        # Exit Mach number estimation
-                        pressure_ratio = self.mean_chamber_pressure / self.ambient_pressure
-                        exit_mach = sqrt(2 / (self.gamma - 1) * 
-                                    (pressure_ratio ** ((self.gamma - 1) / self.gamma) - 1))
-                        exit_mach = min(exit_mach, 5.0)  # Limit Mach number
-                        
-                        # Exit velocity
-                        self.gas_speed = exit_mach * sqrt(self.gamma * self.gas_constant * 
-                                                        self.chamber_temperature)
-                        
-                        # Exit pressure
-                        self.exit_pressure = self.mean_chamber_pressure / (
-                            (1 + (self.gamma - 1) / 2 * exit_mach ** 2) ** (self.gamma / (self.gamma - 1))
-                        )
-                        
-                        # Calculate actual specific impulse
-                        g0 = 9.80665
-                        self.actual_isp = self._thrust / (self._mass_flux * g0) if self._mass_flux > 0 else 0
-                        
-            else:
-                # Engine off
-                self._mass_flux = 0.0
-                self._thrust = 0.0
-                self.gas_speed = 0.0
-                self.exit_pressure = 0.0
-                self.actual_isp = 0.0
-                    
-        except Exception as e:
-            logging.error(f"Performance calculation error: {e}")
-            # Fallback to simple model
+        Single computation flow for both experimental and analytical modes:
+
+        1. Look up cumulative impulse at current time → propellant state.
+        2. Check burnout condition (burn time exceeded OR propellant gone).
+        3. Get instantaneous thrust via ``_thrust_at_time``.
+        4. Derive ``mass_flux = thrust / (Isp · g0)`` — *same formula in
+           both modes* so thrust and mass consumption are always consistent.
+        """
+        try:
+            g0 = 9.80665
+
+            # ── 1. Propellant accounting (B07) ──────────────────────────────
+            t_query = float(np.clip(self.time, 0.0, self.burn_time))
+            cumul_impulse = float(
+                np.interp(t_query, self._cumul_time_arr, self._cumul_impulse_arr)
+            )
+            propellant_consumed = min(
+                cumul_impulse / (self.specific_impulse * g0),
+                self.propellant_mass,
+            )
+            remaining = max(0.0, self.propellant_mass - propellant_consumed)
+
+            # ── 2. Burnout condition (B08) ───────────────────────────────────
+            burned_out = (self.time > self.burn_time) or (remaining <= 0.0)
+
+            # Update B01 contract attributes
+            self.propellant_consumed     = propellant_consumed
+            self.remaining_propellant    = remaining
+            self.total_impulse_delivered = cumul_impulse
+            self.burnout_reached         = burned_out
+
+            if burned_out:
+                self._thrust     = 0.0
+                self._mass_flux  = 0.0
+                self.gas_speed   = 0.0
+                self.exit_pressure = self.ambient_pressure
+                self.actual_isp  = 0.0
+                return
+
+            # ── 3. Instantaneous thrust (B06) ────────────────────────────────
+            raw_thrust = self._thrust_at_time(self.time)
+
+            if raw_thrust <= 0.0:
+                self._thrust     = 0.0
+                self._mass_flux  = 0.0
+                self.gas_speed   = 0.0
+                self.exit_pressure = self.ambient_pressure
+                self.actual_isp  = 0.0
+                return
+
+            # ── 4. Consistent mass_flux (B06) ────────────────────────────────
+            self._thrust     = raw_thrust
+            self._mass_flux  = raw_thrust / (self.specific_impulse * g0)
+            self.gas_speed   = self.specific_impulse * g0
+            self.exit_pressure = self.ambient_pressure   # simplified nozzle model
+            self.actual_isp  = self.specific_impulse
+
+        except Exception as exc:
+            logging.error("Performance calculation error: %s", exc)
             self._fallback_performance()
 
-    def _fallback_performance(self):
-        """Fallback performance calculation"""
-        self._mass_flux = self.propellant_mass / self.burn_time if self.time <= self.burn_time else 0.0
-        self._thrust = self.mean_thrust if self.time <= self.burn_time else 0.0
-        self.actual_isp = self.specific_impulse
+    def _fallback_performance(self) -> None:
+        """
+        Fallback performance calculation used when the primary path raises.
 
-    def _calculate_thrust_curve(self):
-        """Calculate realistic thrust curve for analytical mode"""
-        if self.time > self.burn_time or self.time == 0.0:
-            return 0.0
-        
-        t_norm = self.time / self.burn_time
-        
-        try:
-            # Define a base thrust profile with realistic shape
-            if t_norm < 0.02:  # 2% ignition phase
-                ramp_up = t_norm / 0.02
-                shape_factor = 0.1 * ramp_up
-                
-            elif t_norm < 0.08:  # 2-8% fast ramp up
-                ramp_pos = (t_norm - 0.02) / 0.06
-                shape_factor = 0.1 + 0.4 * (3 * ramp_pos**2 - 2 * ramp_pos**3)
-                
-            elif t_norm < 0.15:  # 8-15% approach to max thrust
-                ramp_pos = (t_norm - 0.08) / 0.07
-                shape_factor = 0.5 + 0.5 * ramp_pos
-                
-            elif t_norm < 0.85:  # 15-85% sustained phase
-                oscillation = 0.05 * np.sin(2 * np.pi * t_norm * 4)
-                decay = (0.85 - t_norm) / 0.70
-                shape_factor = 0.95 + 0.05 * decay + oscillation
-                
-            elif t_norm < 0.92:  # 85-92% initial ramp down
-                ramp_down = 1.0 - (t_norm - 0.85) / 0.07
-                shape_factor = 0.7 * ramp_down
-                
-            elif t_norm < 0.97:  # 92-97% fast ramp down
-                ramp_down = 1.0 - (t_norm - 0.92) / 0.05
-                shape_factor = 0.3 * ramp_down
-                
-            else:  # 97-100% tail-off
-                tail_off = 1.0 - (t_norm - 0.97) / 0.03
-                shape_factor = 0.05 * np.exp(-4 * (1 - tail_off))
-            
-            # Scale to ensure exact mean thrust match
-            shape_integral = 0.685
-            required_mean_ratio = self.mean_thrust / self.max_thrust
-            current_mean_ratio = shape_integral
-            
-            if current_mean_ratio > 0:
-                correction_factor = required_mean_ratio / current_mean_ratio
-                shape_factor *= correction_factor
-            
-            # Apply the scaling and ensure bounds
-            thrust = shape_factor * self.max_thrust
-            thrust = min(thrust, self.max_thrust)
-            thrust = max(thrust, 0)
-            
-            return thrust
-            
-        except Exception as e:
-            logging.error(f"Thrust curve calculation error: {e}")
-            # Fallback: simple interpolation
-            return self._fallback_thrust_curve(t_norm)
+        Approximates a constant-thrust burn and updates B01 contract
+        attributes with linear interpolation so callers always see
+        consistent state.
+        """
+        g0 = 9.80665
+        active = 0.0 < self.time <= self.burn_time
+        self._thrust    = self.mean_thrust if active else 0.0
+        self._mass_flux = self.mean_thrust / (self.specific_impulse * g0) if active else 0.0
+        self.gas_speed  = self.specific_impulse * g0 if active else 0.0
+        self.exit_pressure = self.ambient_pressure
+        self.actual_isp = self.specific_impulse if active else 0.0
+        # Approximate B01 contract attributes linearly
+        frac = float(np.clip(self.time / self.burn_time, 0.0, 1.0)) if self.burn_time > 0 else 0.0
+        self.propellant_consumed     = self.propellant_mass * frac
+        self.remaining_propellant    = max(0.0, self.propellant_mass - self.propellant_consumed)
+        self.total_impulse_delivered = self.propellant_consumed * self.specific_impulse * g0
+        self.burnout_reached         = self.time > self.burn_time
 
-    def _fallback_thrust_curve(self, t_norm):
-        """Fallback thrust curve"""
-        if 0 <= t_norm < 0.05:
+    def _calculate_thrust_curve(self) -> float:
+        """Analytical thrust at current time.  Thin wrapper over _thrust_at_time."""
+        return self._thrust_at_time(self.time)
+
+    def _fallback_thrust_value(self, t_norm: float) -> float:
+        """
+        Simple piecewise-linear fallback used when *_shape_function* raises.
+
+        Parameters
+        ----------
+        t_norm : float
+            Normalised time in [0, 1].
+        """
+        if 0.0 < t_norm < 0.05:
             return self.max_thrust * (t_norm / 0.05) * 0.3
         elif 0.05 <= t_norm < 0.15:
-            ramp_pos = (t_norm - 0.05) / 0.10
-            return self.max_thrust * (0.3 + 0.5 * ramp_pos)
+            return self.max_thrust * (0.3 + 0.5 * (t_norm - 0.05) / 0.10)
         elif 0.15 <= t_norm < 0.25:
-            ramp_pos = (t_norm - 0.15) / 0.10
-            return self.max_thrust * (0.8 + 0.2 * ramp_pos)
+            return self.max_thrust * (0.8 + 0.2 * (t_norm - 0.15) / 0.10)
         elif 0.25 <= t_norm < 0.75:
             return self.max_thrust * 0.95
         elif 0.75 <= t_norm < 0.85:
-            return self.max_thrust * (0.95 - 0.3 * ((t_norm - 0.75) / 0.10))
+            return self.max_thrust * (0.95 - 0.3 * (t_norm - 0.75) / 0.10)
         elif 0.85 <= t_norm < 0.95:
-            return self.max_thrust * (0.65 - 0.4 * ((t_norm - 0.85) / 0.10))
-        else:
-            return self.max_thrust * (0.25 - 0.25 * ((t_norm - 0.95) / 0.05))
+            return self.max_thrust * (0.65 - 0.4 * (t_norm - 0.85) / 0.10)
+        elif t_norm <= 1.0:
+            return self.max_thrust * (0.25 - 0.25 * (t_norm - 0.95) / 0.05)
+        return 0.0
 
-    def validate_thrust_curve(self):
-        """Validate that thrust curve produces correct mean thrust"""
-        test_points = 200
-        total_thrust = 0
-        thrust_values = []
-        
-        for i in range(test_points):
-            test_time = (i / test_points) * self.burn_time
-            original_time = self.time
-            self.time = test_time
-            thrust = self._calculate_thrust_curve()
-            total_thrust += thrust
-            thrust_values.append(thrust)
-            self.time = original_time
-        
-        calculated_mean = total_thrust / test_points
+    def validate_thrust_curve(self) -> dict:
+        """
+        Validate that the thrust curve produces the expected mean thrust.
+
+        Uses ``_thrust_at_time`` so there is no ``self.time`` mutation.
+        The tolerance is ±5 % of ``mean_thrust``.
+
+        Returns
+        -------
+        dict
+            Keys: valid, calculated_mean, expected_mean, error_percent,
+            max_thrust_used.
+        """
+        N = 200
+        t_samples   = [(i + 0.5) / N * self.burn_time for i in range(N)]
+        thrust_vals = [self._thrust_at_time(t) for t in t_samples]
+
+        calculated_mean = float(np.mean(thrust_vals))
         error = abs(calculated_mean - self.mean_thrust) / self.mean_thrust
-        
-        validation_result = {
+
+        result = {
             'valid': error < 0.05,
-            'calculated_mean': calculated_mean,
+            'calculated_mean': round(calculated_mean, 3),
             'expected_mean': self.mean_thrust,
-            'error_percent': error * 100,
-            'max_thrust_used': max(thrust_values) if thrust_values else 0
+            'error_percent': round(error * 100, 2),
+            'max_thrust_used': round(max(thrust_vals), 3) if thrust_vals else 0.0,
         }
-        
-        if not validation_result['valid']:
-            logging.warning(f"Thrust curve validation: {validation_result}")
-        
-        return validation_result
+        if not result['valid']:
+            logging.warning("Thrust curve validation: %s", result)
+        return result
 
     def get_performance_metrics(self):
         """

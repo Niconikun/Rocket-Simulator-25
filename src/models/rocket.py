@@ -188,6 +188,17 @@ class Rocket(object):
         self.propellant_mass_remaining = 0.0
         self.mass_flux = 0.0
         self.thrust = 0.0
+        self.engine_thrust_source = 'analytical'
+        self.engine_propellant_consumed = 0.0
+        self.engine_remaining_propellant = 0.0
+        self.engine_total_impulse = 0.0
+        self.engine_burnout_reached = False
+
+        # Sprint 3 – persistent engine instance/config cache
+        self._engine_model = None
+        self._engine_config = None
+        self._engine_rocket_name = None
+        self._thrust_curve_validated = False
         
         # Environment state
         self.density = 1.225  # kg/m³
@@ -295,48 +306,43 @@ class Rocket(object):
     def update_mass_related(self, burn_time, cm_before_x, cm_before_y, cm_before_z, 
                        I_before_x, I_before_y, I_before_z, 
                        cm_after_x, cm_after_y, cm_after_z, 
-                       I_after_x, I_after_y, I_after_z):
+                       I_after_x, I_after_y, I_after_z,
+                       propellant_remaining):
         """
         Enhanced mass update with realistic propellant consumption and continuous interpolation.
         """
         self.burn_time = burn_time
         
         try:
-            # Calculate propellant mass remaining with realistic consumption
-            if self.time <= self.burn_time:
-                # More realistic burn profile (slightly faster initial burn)
-                burn_fraction = (self.time / self.burn_time) ** 0.9
-                self.propellant_mass_remaining = self.propellant_mass_initial * (1 - burn_fraction)
-                
-                # Continuous interpolation of mass properties
-                mass_fraction = 1 - burn_fraction
-                
-                # Smooth interpolation using cubic easing for more realistic transitions
-                ease_factor = 3 * mass_fraction ** 2 - 2 * mass_fraction ** 3
-                
-                # Interpolate center of mass
-                self.cm_b = np.array([
-                    cm_before_x * ease_factor + cm_after_x * (1 - ease_factor),
-                    cm_before_y * ease_factor + cm_after_y * (1 - ease_factor),
-                    cm_before_z * ease_factor + cm_after_z * (1 - ease_factor)
-                ])
-                
-                # Interpolate moments of inertia
-                self.inertia_b = np.array([
-                    I_before_x * ease_factor + I_after_x * (1 - ease_factor),
-                    I_before_y * ease_factor + I_after_y * (1 - ease_factor),
-                    I_before_z * ease_factor + I_after_z * (1 - ease_factor)
-                ])
-                
-                # Update current mass based on propellant consumption
-                self.mass = self.initial_mass - (self.propellant_mass_initial - self.propellant_mass_remaining)
-                
-            else:
-                # Post-burnout state
-                self.propellant_mass_remaining = 0.0
-                self.cm_b = np.array([cm_after_x, cm_after_y, cm_after_z])
-                self.inertia_b = np.array([I_after_x, I_after_y, I_after_z])
-                self.mass = self.initial_mass - self.propellant_mass_initial
+            if propellant_remaining is None:
+                raise ValueError("propellant_remaining is required for mass updates")
+
+            # Clamp telemetry to the physically valid range before deriving geometry.
+            self.propellant_mass_remaining = float(np.clip(propellant_remaining, 0.0, self.propellant_mass_initial))
+            burn_fraction = 1.0 - (self.propellant_mass_remaining / self.propellant_mass_initial if self.propellant_mass_initial > 0 else 1.0)
+
+            # Continuous interpolation of mass properties
+            mass_fraction = 1 - burn_fraction
+            
+            # Smooth interpolation using cubic easing for more realistic transitions
+            ease_factor = 3 * mass_fraction ** 2 - 2 * mass_fraction ** 3
+            
+            # Interpolate center of mass
+            self.cm_b = np.array([
+                cm_before_x * ease_factor + cm_after_x * (1 - ease_factor),
+                cm_before_y * ease_factor + cm_after_y * (1 - ease_factor),
+                cm_before_z * ease_factor + cm_after_z * (1 - ease_factor)
+            ])
+            
+            # Interpolate moments of inertia
+            self.inertia_b = np.array([
+                I_before_x * ease_factor + I_after_x * (1 - ease_factor),
+                I_before_y * ease_factor + I_after_y * (1 - ease_factor),
+                I_before_z * ease_factor + I_after_z * (1 - ease_factor)
+            ])
+            
+            # Update current mass based on propellant consumption
+            self.mass = self.initial_mass - (self.propellant_mass_initial - self.propellant_mass_remaining)
                 
         except Exception as e:
             logging.error(f"Mass properties update error: {str(e)}")
@@ -601,83 +607,127 @@ class Rocket(object):
             self.lift_coeff = 0.0
             self.cp_b = np.array([0.5, 0, 0])
 
-    def update_engine(self, rocket_name):
-        """Enhanced engine update with thrust curve validation"""
-        try:
-            with open('data/rockets/configs/' + rocket_name + '.json', 'r') as file:
-                rocket_settings = json.load(file)
+    def _resolve_engine_config(self, rocket_name=None, engine_data=None):
+        """Resolve and cache engine configuration for persistent engine usage."""
+        if engine_data is not None:
+            if rocket_name is not None:
+                self._engine_rocket_name = rocket_name
+            self._engine_config = dict(engine_data)
+            return self._engine_config
 
-            engine_data = rocket_settings['engine']
+        if self._engine_config is not None:
+            return self._engine_config
 
-            # ------------------------------------------------------------------
-            # Resolve thrust curve parameters
-            # ------------------------------------------------------------------
-            thrust_curve_file = None
-            thrust_curve_unit = 'N'  # default for analytical mode (unused)
+        if not rocket_name:
+            raise ValueError("rocket_name is required when no engine config is cached")
 
-            if engine_data.get('thrust_curve_mode') == 'experimental':
-                thrust_curve_file = engine_data.get('thrust_curve_file')
-                thrust_curve_unit = engine_data.get('thrust_curve_unit')
+        with open('data/rockets/configs/' + rocket_name + '.json', 'r') as file:
+            rocket_settings = json.load(file)
 
-                if not thrust_curve_unit:
-                    raise ValueError(
-                        f"'thrust_curve_unit' is required when thrust_curve_mode is "
-                        f"'experimental' (rocket: '{rocket_name}'). "
-                        "Set it to 'N' or 'kgf' in the engine configuration."
-                    )
+        self._engine_rocket_name = rocket_name
+        self._engine_config = dict(rocket_settings['engine'])
+        return self._engine_config
 
-                logging.info(
-                    "Using experimental thrust curve: %s (unit=%s)",
-                    thrust_curve_file, thrust_curve_unit,
+    def _create_engine_model(self, rocket_name, engine_data):
+        """Instantiate and validate the persistent engine model."""
+        thrust_curve_file = None
+        thrust_curve_unit = 'N'
+
+        if engine_data.get('thrust_curve_mode') == 'experimental':
+            thrust_curve_file = engine_data.get('thrust_curve_file')
+            thrust_curve_unit = engine_data.get('thrust_curve_unit')
+
+            if not thrust_curve_unit:
+                raise ValueError(
+                    f"'thrust_curve_unit' is required when thrust_curve_mode is "
+                    f"'experimental' (rocket: '{rocket_name}'). "
+                    "Set it to 'N' or 'kgf' in the engine configuration."
                 )
 
-            # Create enhanced engine with validation
-            Eng = EnhancedEngine(
-                time=self.time,
-                burn_time=engine_data["burn_time"],
-                ambient_pressure=self.press_amb,
-                nozzle_exit_diameter=engine_data["nozzle_exit_diameter"],
-                propellant_mass=engine_data["propellant_mass"],
-                specific_impulse=engine_data["specific_impulse"],
-                mean_thrust=engine_data["mean_thrust"],
-                max_thrust=engine_data["max_thrust"],
-                mean_chamber_pressure=engine_data["mean_chamber_pressure"],
-                max_chamber_pressure=engine_data["max_chamber_pressure"],
-                thrust_to_weight_ratio=engine_data["thrust_to_weight_ratio"],
-                thrust_curve_file=thrust_curve_file,
-                thrust_curve_unit=thrust_curve_unit,
+            logging.info(
+                "Using experimental thrust curve: %s (unit=%s)",
+                thrust_curve_file, thrust_curve_unit,
             )
-            
-            # Validate thrust curve on first call
-            if not hasattr(self, '_thrust_curve_validated'):
-                if thrust_curve_file:
-                    curve_info = Eng.get_thrust_curve_info()
-                    if curve_info['available']:
-                        logging.info(f"Experimental thrust curve: {curve_info['data_points']} points, max thrust: {curve_info['max_thrust']:.1f}N")
-                    else:
-                        logging.warning("Experimental thrust curve not available, falling back to analytical")
+
+        engine_model = EnhancedEngine(
+            time=self.time,
+            burn_time=engine_data["burn_time"],
+            ambient_pressure=self.press_amb,
+            nozzle_exit_diameter=engine_data["nozzle_exit_diameter"],
+            propellant_mass=engine_data["propellant_mass"],
+            specific_impulse=engine_data["specific_impulse"],
+            mean_thrust=engine_data["mean_thrust"],
+            max_thrust=engine_data["max_thrust"],
+            mean_chamber_pressure=engine_data["mean_chamber_pressure"],
+            max_chamber_pressure=engine_data["max_chamber_pressure"],
+            thrust_to_weight_ratio=engine_data["thrust_to_weight_ratio"],
+            thrust_curve_file=thrust_curve_file,
+            thrust_curve_unit=thrust_curve_unit,
+        )
+
+        if not self._thrust_curve_validated:
+            if thrust_curve_file:
+                curve_info = engine_model.get_thrust_curve_info()
+                if curve_info['available']:
+                    logging.info(
+                        "Experimental thrust curve: %s points, max thrust: %.1fN",
+                        curve_info['data_points'], curve_info['max_thrust']
+                    )
                 else:
-                    validation = Eng.validate_thrust_curve()
-                    if not validation['valid']:
-                        logging.warning(f"Thrust curve validation issues: {validation}")
-                self._thrust_curve_validated = True
-            
+                    logging.warning("Experimental thrust curve not available, falling back to analytical")
+            else:
+                validation = engine_model.validate_thrust_curve()
+                if not validation['valid']:
+                    logging.warning(f"Thrust curve validation issues: {validation}")
+            self._thrust_curve_validated = True
+
+        return engine_model
+
+    def update_engine(self, rocket_name=None, engine_data=None):
+        """Enhanced engine update using a persistent engine instance."""
+        try:
+            if rocket_name and self._engine_rocket_name and rocket_name != self._engine_rocket_name:
+                self._engine_model = None
+                self._engine_config = None
+                self._thrust_curve_validated = False
+
+            if engine_data is not None and self._engine_config is not None and dict(engine_data) != self._engine_config:
+                self._engine_model = None
+                self._thrust_curve_validated = False
+
+            engine_data = self._resolve_engine_config(rocket_name=rocket_name, engine_data=engine_data)
+            engine_name = rocket_name or self._engine_rocket_name or 'unknown'
+
+            if self._engine_model is None:
+                self._engine_model = self._create_engine_model(engine_name, engine_data)
+
+            self._engine_model.update(time=self.time, ambient_pressure=self.press_amb)
+
             # Update performance metrics
-            metrics = Eng.get_performance_metrics()
-            
+            metrics = self._engine_model.get_performance_metrics()
+
             self.mass_flux = metrics['mass_flow']
-            self.thrust = metrics['thrust']
-            
+            self.thrust    = metrics['thrust']
+
             # Store enhanced performance metrics
-            self.engine_isp = metrics['specific_impulse']
-            self.chamber_pressure = metrics['chamber_pressure']
-            self.exit_velocity = metrics['exit_velocity']
+            self.engine_isp              = metrics['specific_impulse']
+            self.chamber_pressure        = metrics['chamber_pressure']
+            self.exit_velocity           = metrics['exit_velocity']
             self.characteristic_velocity = metrics['characteristic_velocity']
-            self.thrust_coefficient = metrics['thrust_coefficient']
-            self.exit_pressure = metrics['exit_pressure']
+            self.thrust_coefficient      = metrics['thrust_coefficient']
+            self.exit_pressure           = metrics['exit_pressure']
+
+            # B10 – propagate B01 contract fields to rocket state
+            self.engine_thrust_source        = metrics.get('thrust_source', 'analytical')
+            self.engine_propellant_consumed  = metrics.get('propellant_consumed', 0.0)
+            self.engine_remaining_propellant = metrics.get('remaining_propellant',
+                                                           getattr(self, 'propellant_mass_initial', 0.0))
+            self.engine_total_impulse        = metrics.get('total_impulse_delivered', 0.0)
+            self.engine_burnout_reached      = metrics.get('burnout_reached', False)
+            self.propellant_mass_remaining   = self.engine_remaining_propellant
             
             # Performance logging at key points
-            if self.time <= Eng.burn_time and int(self.time * 10) % 2 == 0:  # Log every 0.2s during burn
+            if self.time <= self._engine_model.burn_time and int(self.time * 10) % 2 == 0:  # Log every 0.2s during burn
                 logging.info(
                     f"Engine: t={self.time:.2f}s, "
                     f"Thrust={self.thrust:.0f}N, "
@@ -701,6 +751,10 @@ class Rocket(object):
         self.characteristic_velocity = 0.0
         self.thrust_coefficient = 0.0
         self.exit_pressure = 0.0
+        self.engine_propellant_consumed = 0.0
+        self.engine_remaining_propellant = 0.0
+        self.engine_total_impulse = 0.0
+        self.engine_burnout_reached = False
 
 
     def update_forces_aero(self, reference_area):

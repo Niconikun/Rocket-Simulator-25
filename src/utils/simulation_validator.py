@@ -65,6 +65,7 @@ class SimulationValidator:
             self._check_altitude_realism(metrics)
             self._check_motion_continuity(trajectory)
             self._check_energy_conservation(trajectory, metrics)
+            self._check_propulsion_consistency(history, metrics)
             
             # Determine overall validity
             self.report['valid'] = len(self.report['errors']) == 0
@@ -309,6 +310,78 @@ class SimulationValidator:
         
         self.report['checks']['energy_conservation'] = True
         logger.info(f"✓ Energy conservation: PASS")
+
+    def _check_propulsion_consistency(self, history: Dict, metrics: Dict):
+        """Check 7: Propulsion telemetry consistency using engine history and metrics."""
+        time_hist = np.asarray(history.get('hist_time', []), dtype=float)
+        thrust_hist = np.asarray(history.get('hist_thrust', []), dtype=float)
+        mass_flux_hist = np.asarray(history.get('hist_mass_flux', []), dtype=float)
+        isp_hist = np.asarray(history.get('hist_engine_isp', []), dtype=float)
+        prop_mass_hist = np.asarray(history.get('hist_propellant_mass', []), dtype=float)
+        propulsion_metrics = metrics.get('propulsion', {})
+
+        if min(len(time_hist), len(thrust_hist), len(mass_flux_hist), len(isp_hist)) == 0:
+            self.report['warnings'].append(
+                "Missing propulsion history arrays - skipping propulsion consistency checks"
+            )
+            return
+
+        n = min(len(time_hist), len(thrust_hist), len(mass_flux_hist), len(isp_hist))
+        time_hist = time_hist[:n]
+        thrust_hist = thrust_hist[:n]
+        mass_flux_hist = mass_flux_hist[:n]
+        isp_hist = isp_hist[:n]
+
+        g0 = 9.80665
+        active = (thrust_hist > 1e-6) & (isp_hist > 1e-6)
+        consistency_ok = True
+        max_rel_error_pct = 0.0
+        if np.any(active):
+            expected_flux = thrust_hist[active] / (isp_hist[active] * g0)
+            rel_error = np.abs(mass_flux_hist[active] - expected_flux) / np.maximum(expected_flux, 1e-9)
+            max_rel_error_pct = float(np.max(rel_error) * 100.0)
+            if max_rel_error_pct > 5.0:
+                self.report['errors'].append(
+                    f"Propulsion inconsistency: max |mass_flux - thrust/(Isp*g0)| error = {max_rel_error_pct:.2f}%"
+                )
+                consistency_ok = False
+
+        if len(prop_mass_hist) > 1:
+            prop_mass_hist = prop_mass_hist[:len(prop_mass_hist)]
+            prop_increases = int(np.sum(np.diff(prop_mass_hist) > 1e-6))
+            if prop_increases > 0:
+                self.report['errors'].append(
+                    f"Remaining propellant increased {prop_increases} times during simulation"
+                )
+                consistency_ok = False
+
+        total_impulse_est = 0.0
+        if len(time_hist) > 1:
+            total_impulse_est = float(np.trapz(thrust_hist, time_hist))
+            reported_impulse = propulsion_metrics.get('total_impulse_delivered', 0.0)
+            if reported_impulse > 0.0:
+                impulse_error_pct = abs(total_impulse_est - reported_impulse) / reported_impulse * 100.0
+                if impulse_error_pct > 10.0:
+                    self.report['warnings'].append(
+                        f"Integrated thrust impulse differs from reported propulsion impulse by {impulse_error_pct:.1f}%"
+                    )
+
+        if propulsion_metrics.get('burnout_reached') and len(thrust_hist) > 0 and thrust_hist[-1] > 1.0:
+            self.report['errors'].append(
+                f"Final thrust remains {thrust_hist[-1]:.2f}N even though burnout_reached=True"
+            )
+            consistency_ok = False
+
+        self.report['checks']['propulsion_consistency'] = consistency_ok
+        self.report['diagnostics']['propulsion_consistency'] = {
+            'max_mass_flux_relative_error_percent': round(max_rel_error_pct, 3),
+            'estimated_total_impulse_Ns': round(total_impulse_est, 3),
+            'reported_total_impulse_Ns': propulsion_metrics.get('total_impulse_delivered', 0.0),
+            'burnout_reached': propulsion_metrics.get('burnout_reached', False),
+            'thrust_source': propulsion_metrics.get('thrust_source', 'unknown'),
+        }
+        if consistency_ok:
+            logger.info("✓ Propulsion consistency: PASS")
     
     def is_valid(self) -> bool:
         """Return overall validation status"""

@@ -7,6 +7,7 @@ from src.models.planet import Planet
 from src.models.atmosphere import Atmosphere
 from src.models.clock import Clock
 from src.models.parachute import Parachute
+from src.models.engine import EnhancedEngine
 from src.utils.mattools import MatTools as Mat
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
 from src.utils.simulation_validator import SimulationValidator
@@ -169,6 +170,7 @@ class SimulationWorker(QThread):
             earth = Planet(gmst_0)
             atmosphere = Atmosphere(temperature)
             rocket = Rocket(r_enu_0, v_enu_0, q_enu2b_0, w_enu_0, initial_mass)
+            rocket.update_engine(rocket_name=rocket_name, engine_data=rocket_config['engine'])
             
             # ===== WIND MODEL INITIALIZATION (Phase 2) =====
             wind = create_wind_model_from_state(self.state._state)
@@ -226,23 +228,6 @@ class SimulationWorker(QThread):
                     earth.update(timestep)
                     rocket.update_gmst(earth.gmst)
                     
-                    # Update rocket mass and inertia
-                    rocket.update_mass_related(
-                        rocket_config['engine']['burn_time'],
-                        rocket_config['CoM_before_burn']['x'],
-                        rocket_config['CoM_before_burn']['y'],
-                        rocket_config['CoM_before_burn']['z'],
-                        rocket_config['I_before_burn']['x'],
-                        rocket_config['I_before_burn']['y'],
-                        rocket_config['I_before_burn']['z'],
-                        rocket_config['CoM_after_burn']['x'],
-                        rocket_config['CoM_after_burn']['y'],
-                        rocket_config['CoM_after_burn']['z'],
-                        rocket_config['I_after_burn']['x'],
-                        rocket_config['I_after_burn']['y'],
-                        rocket_config['I_after_burn']['z'],
-                    )
-                    
                     # Update position in Earth reference frame
                     rocket.update_pos_vel(coordinates)
                     
@@ -271,7 +256,26 @@ class SimulationWorker(QThread):
                     rocket.update_forces_aero(reference_area=reference_area)
                     
                     # Update propulsion
-                    rocket.update_engine(rocket_name)
+                    rocket.update_engine()
+
+                    # Update rocket mass and inertia from the current engine state
+                    rocket.update_mass_related(
+                        rocket_config['engine']['burn_time'],
+                        rocket_config['CoM_before_burn']['x'],
+                        rocket_config['CoM_before_burn']['y'],
+                        rocket_config['CoM_before_burn']['z'],
+                        rocket_config['I_before_burn']['x'],
+                        rocket_config['I_before_burn']['y'],
+                        rocket_config['I_before_burn']['z'],
+                        rocket_config['CoM_after_burn']['x'],
+                        rocket_config['CoM_after_burn']['y'],
+                        rocket_config['CoM_after_burn']['z'],
+                        rocket_config['I_after_burn']['x'],
+                        rocket_config['I_after_burn']['y'],
+                        rocket_config['I_after_burn']['z'],
+                        propellant_remaining=rocket.engine_remaining_propellant,
+                    )
+
                     rocket.update_forces_engine()
                     rocket.update_forces_torques()
                     
@@ -388,6 +392,15 @@ class SimulationWorker(QThread):
             
             # Final metrics
             metrics['flight_duration'] = t
+            metrics['propulsion'] = {
+                'thrust_source': rocket.engine_thrust_source,
+                'propellant_consumed': rocket.engine_propellant_consumed,
+                'remaining_propellant': rocket.engine_remaining_propellant,
+                'total_impulse_delivered': rocket.engine_total_impulse,
+                'burnout_reached': rocket.engine_burnout_reached,
+                'configured_propellant_mass': rocket_config['engine'].get('propellant_mass', 0.0),
+                'configured_burn_time': rocket_config['engine'].get('burn_time', 0.0),
+            }
             
             # ===== PHASE 1: RUNTIME DIAGNOSTICS =====
             runtime_diagnostics = {
@@ -660,6 +673,9 @@ class SimulationWorker(QThread):
                 'thrust_to_weight_ratio': f"{thrust_to_weight:.1f}",
                 'assessment': 'Good' if 5 <= thrust_to_weight <= 50 else 'Unusual'
             }
+
+            # ===== Check 5: Propulsion configuration integrity =====
+            self._validate_propulsion_config(report, config, rocket_name)
             
             # Log comprehensive report
             logger.info(f"\n{'='*70}")
@@ -693,6 +709,110 @@ class SimulationWorker(QThread):
             report['errors'].append(f"Validation error: {str(e)}")
             report['valid'] = False
             return report
+
+    def _validate_propulsion_config(self, report: dict, config: dict, rocket_name: str) -> None:
+        """Validate propulsion inputs before entering the simulation loop."""
+        g0 = 9.80665
+        engine_data = config.get('engine', {})
+        required_keys = [
+            'burn_time', 'nozzle_exit_diameter', 'propellant_mass', 'specific_impulse',
+            'mean_thrust', 'max_thrust', 'mean_chamber_pressure',
+            'max_chamber_pressure', 'thrust_to_weight_ratio'
+        ]
+
+        missing_keys = [key for key in required_keys if key not in engine_data]
+        if missing_keys:
+            report['errors'].append(
+                f"Engine configuration missing required keys: {', '.join(sorted(missing_keys))}"
+            )
+            report['valid'] = False
+            return
+
+        thrust_curve_file = None
+        thrust_curve_unit = engine_data.get('thrust_curve_unit', 'N')
+        thrust_mode = engine_data.get('thrust_curve_mode', 'analytical')
+
+        if thrust_mode == 'experimental':
+            thrust_curve_file = engine_data.get('thrust_curve_file')
+            if not thrust_curve_file:
+                report['errors'].append(
+                    "Experimental thrust mode requires 'thrust_curve_file' in engine configuration"
+                )
+                report['valid'] = False
+                return
+
+            if thrust_curve_unit not in {'N', 'kgf'}:
+                report['errors'].append(
+                    f"Invalid thrust_curve_unit '{thrust_curve_unit}'. Use 'N' or 'kgf'."
+                )
+                report['valid'] = False
+                return
+
+            candidate_paths = [thrust_curve_file, os.path.join('data', 'thrust_curves', thrust_curve_file)]
+            if not any(os.path.isfile(path) for path in candidate_paths):
+                report['errors'].append(
+                    f"Thrust curve file not found: '{thrust_curve_file}'. "
+                    "Check the 'thrust_curve_file' path in the engine configuration."
+                )
+                report['valid'] = False
+                return
+
+        try:
+            engine_probe = EnhancedEngine(
+                time=0.0,
+                burn_time=engine_data['burn_time'],
+                ambient_pressure=101325.0,
+                nozzle_exit_diameter=engine_data['nozzle_exit_diameter'],
+                propellant_mass=engine_data['propellant_mass'],
+                specific_impulse=engine_data['specific_impulse'],
+                mean_thrust=engine_data['mean_thrust'],
+                max_thrust=engine_data['max_thrust'],
+                mean_chamber_pressure=engine_data['mean_chamber_pressure'],
+                max_chamber_pressure=engine_data['max_chamber_pressure'],
+                thrust_to_weight_ratio=engine_data['thrust_to_weight_ratio'],
+                thrust_curve_file=thrust_curve_file,
+                thrust_curve_unit=thrust_curve_unit,
+            )
+        except Exception as exc:
+            report['errors'].append(f"Propulsion validation failed: {exc}")
+            report['valid'] = False
+            return
+
+        propulsion_diag = {
+            'thrust_source': engine_probe.thrust_source,
+            'burn_time_s': engine_data['burn_time'],
+            'propellant_mass_kg': engine_data['propellant_mass'],
+            'specific_impulse_s': engine_data['specific_impulse'],
+            'mean_thrust_N': engine_data['mean_thrust'],
+        }
+
+        if engine_probe.use_experimental_thrust:
+            curve_info = engine_probe.get_thrust_curve_info()
+            expected_impulse = engine_data['propellant_mass'] * engine_data['specific_impulse'] * g0
+            measured_impulse = curve_info.get('total_impulse', 0.0)
+            impulse_error_pct = (
+                abs(measured_impulse - expected_impulse) / expected_impulse * 100.0
+                if expected_impulse > 0.0 else 0.0
+            )
+            propulsion_diag.update({
+                'curve_points': curve_info.get('data_points', 0),
+                'curve_total_impulse_Ns': measured_impulse,
+                'expected_impulse_Ns': expected_impulse,
+                'impulse_error_percent': round(impulse_error_pct, 2),
+            })
+            if impulse_error_pct > 20.0:
+                report['warnings'].append(
+                    f"Experimental thrust curve impulse differs from propellant/Isp estimate by {impulse_error_pct:.1f}%"
+                )
+        else:
+            thrust_validation = engine_probe.validate_thrust_curve()
+            propulsion_diag['analytical_curve_validation'] = thrust_validation
+            if not thrust_validation.get('valid', False):
+                report['warnings'].append(
+                    f"Analytical thrust curve mean-thrust mismatch: {thrust_validation['error_percent']:.1f}%"
+                )
+
+        report['diagnostics']['propulsion'] = propulsion_diag
     
     def _get_history_length(self, history_dict: dict) -> int:
         """
