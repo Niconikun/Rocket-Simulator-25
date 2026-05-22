@@ -42,6 +42,7 @@
         "exit_pressure": 900000.0,
         "thrust_curve_mode": "experimental",
         "thrust_curve_file": "J570_thrust_curve.csv",
+        "thrust_curve_unit": "N",
         "chamber_temperature": 3300.0,
         "notes": "High-performance solid motor with experimental thrust curve validation"
     },

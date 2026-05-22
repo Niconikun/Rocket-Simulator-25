@@ -22,12 +22,14 @@ References:
     - Hill, P., & Peterson, C. (1992). Mechanics and Thermodynamics of Propulsion.
 """
 
-import numpy as np
 import logging
-from math import sqrt, exp, sin, pi
-import pandas as pd
-from scipy.interpolate import interp1d
 import os
+from math import sqrt, exp, sin, pi
+
+import numpy as np
+from scipy.interpolate import interp1d
+
+from src.utils.thrust_processor import ThrustCurveData, ThrustCurveError, ThrustCurveProcessor
 
 class EnhancedEngine:
     """
@@ -51,10 +53,11 @@ class EnhancedEngine:
                  propellant_mass, specific_impulse, mean_thrust, max_thrust,
                  mean_chamber_pressure, max_chamber_pressure, thrust_to_weight_ratio,
                  thrust_curve_file=None, thrust_curve_data=None,
+                 thrust_curve_unit='N',
                  chamber_temperature=3000.0, gas_constant=287.0, gamma=1.2):
         """
         Enhanced rocket engine model with experimental thrust curve support.
-        
+
         Args:
             time (float): Current time [s]
             burn_time (float): Total burn time [s]
@@ -67,11 +70,13 @@ class EnhancedEngine:
             mean_chamber_pressure (float): Mean chamber pressure [Pa]
             max_chamber_pressure (float): Maximum chamber pressure [Pa]
             thrust_to_weight_ratio (float): Thrust-to-weight ratio [-]
+            thrust_curve_file (str): Path to CSV file with thrust curve data
+            thrust_curve_data (dict): Pre-loaded thrust curve data {'time': [], 'thrust': []}
+            thrust_curve_unit (str): Unit of thrust column in CSV. Must be 'N' or 'kgf'.
+                Required when thrust_curve_file or thrust_curve_data is provided.
             chamber_temperature (float): Chamber temperature [K], default 3000
             gas_constant (float): Gas constant [J/(kg·K)], default 287
             gamma (float): Specific heat ratio, default 1.2
-            thrust_curve_file (str): Path to CSV file with thrust curve data
-            thrust_curve_data (dict): Pre-loaded thrust curve data {'time': [], 'thrust': []}
         """
         # Input validation
         self._validate_inputs(time, burn_time, ambient_pressure, nozzle_exit_diameter,
@@ -109,12 +114,32 @@ class EnhancedEngine:
         self.thrust_coefficient = 0.0
         self.actual_isp = 0.0
         
-        # Enhanced thrust curve handling
+        # Thrust curve configuration
         self.thrust_curve_file = thrust_curve_file
         self.thrust_curve_data = thrust_curve_data
+        self.thrust_curve_unit = thrust_curve_unit
+
+        # Interpolator and processed curve (set by _load_thrust_curve)
         self.thrust_interpolator = None
         self.use_experimental_thrust = False
-        
+        self._curve_data: ThrustCurveData | None = None
+
+        # ---------------------------------------------------------------
+        # B01 – Engine contract attributes
+        # These expose a consistent public interface regardless of thrust
+        # source (experimental or analytical).
+        # ---------------------------------------------------------------
+        #: Which source drives thrust: 'experimental' or 'analytical'
+        self.thrust_source: str = 'analytical'
+        #: Propellant consumed so far [kg]  (updated in Sprint 2)
+        self.propellant_consumed: float = 0.0
+        #: Remaining propellant [kg]  (updated in Sprint 2)
+        self.remaining_propellant: float = propellant_mass
+        #: Cumulative delivered impulse [N·s]  (updated in Sprint 2)
+        self.total_impulse_delivered: float = 0.0
+        #: True once the engine has burned out
+        self.burnout_reached: bool = False
+
         # Load and process thrust curve data
         self._load_thrust_curve()
         
@@ -152,70 +177,60 @@ class EnhancedEngine:
             logging.warning("Max thrust is less than mean thrust - this may indicate data issues")
         
     def _load_thrust_curve(self):
-        """Load and process experimental thrust curve data"""
-        try:
-            thrust_data = None
-            
-            # Load from file if provided
-            if self.thrust_curve_file and os.path.exists(self.thrust_curve_file):
-                thrust_data = pd.read_csv(self.thrust_curve_file)
-                logging.info(f"Loaded thrust curve from {self.thrust_curve_file}")
-            
-            # Use provided data if available
-            elif self.thrust_curve_data:
-                thrust_data = pd.DataFrame(self.thrust_curve_data)
-                logging.info("Using provided thrust curve data")
-            
-            if thrust_data is not None:
-                # Detect column names (handle different formats)
-                time_col = None
-                thrust_col = None
-                
-                for col in thrust_data.columns:
-                    col_lower = col.lower()
-                    if 'time' in col_lower or 'tiempo' in col_lower:
-                        time_col = col
-                    elif 'thrust' in col_lower or 'force' in col_lower or 'fuerza' in col_lower:
-                        thrust_col = col
-                
-                if time_col and thrust_col:
-                    # Convert thrust from kg-f to Newtons if needed
-                    thrust_values = thrust_data[thrust_col].values
-                    
-                    # Detect if thrust is in kg-f (typical values around 0-200)
-                    if np.max(np.abs(thrust_values)) < 1000:  # Likely kg-f
-                        thrust_values = thrust_values * 9.80665  # Convert kg-f to N
-                        logging.info("Converted thrust from kg-f to Newtons")
-                    
-                    # Create time array
-                    time_values = thrust_data[time_col].values
-                    
-                    # Ensure time starts at 0
-                    time_values = time_values - time_values[0]
-                    
-                    # Create interpolator
-                    self.thrust_interpolator = interp1d(
-                        time_values, thrust_values, 
-                        kind='linear', 
-                        bounds_error=False, 
-                        fill_value=(thrust_values[0], 0.0)
-                    )
-                    
-                    # Update burn time based on thrust curve
-                    actual_burn_time = time_values[-1]
-                    if abs(actual_burn_time - self.burn_time) > 0.1:
-                        logging.info(f"Updating burn time from {self.burn_time}s to {actual_burn_time}s based on thrust curve")
-                        self.burn_time = actual_burn_time
-                    
-                    self.use_experimental_thrust = True
-                    logging.info(f"Experimental thrust curve loaded: {len(time_values)} points, {actual_burn_time:.2f}s duration")
-                    
-                else:
-                    logging.warning("Could not identify time and thrust columns in thrust curve data")
-            
-        except Exception as e:
-            logging.error(f"Error loading thrust curve: {e}")
-            self.use_experimental_thrust = False
+        """
+        Load and validate experimental thrust curve data via ThrustCurveProcessor.
+
+        Raises
+        ------
+        ThrustCurveError
+            Propagated from ThrustCurveProcessor on any structural or physical
+            violation so that callers fail early before the simulation loop.
+        """
+        has_file = bool(self.thrust_curve_file)
+        has_dict = bool(self.thrust_curve_data)
+
+        if not has_file and not has_dict:
+            # No experimental curve – stay in analytical mode
+            self.thrust_source = 'analytical'
+            return
+
+        # Delegate all parsing, validation and unit conversion to the processor.
+        # ThrustCurveError is intentionally NOT caught here so the caller
+        # (update_engine / simulation startup) sees the problem immediately.
+        if has_file:
+            curve_data = ThrustCurveProcessor.from_csv(
+                self.thrust_curve_file, unit=self.thrust_curve_unit
+            )
+        else:
+            curve_data = ThrustCurveProcessor.from_dict(
+                self.thrust_curve_data, unit=self.thrust_curve_unit
+            )
+
+        # Build interpolator from validated SI data
+        time_arr   = np.array(curve_data.time_s)
+        thrust_arr = np.array(curve_data.thrust_N)
+        self.thrust_interpolator = interp1d(
+            time_arr, thrust_arr,
+            kind='linear',
+            bounds_error=False,
+            fill_value=(thrust_arr[0], 0.0),
+        )
+
+        # Align burn_time with the curve if they diverge significantly
+        if abs(curve_data.duration - self.burn_time) > 0.1:
+            logging.info(
+                "Updating burn_time from %.3fs to %.3fs based on thrust curve.",
+                self.burn_time, curve_data.duration,
+            )
+            self.burn_time = curve_data.duration
+
+        self._curve_data = curve_data
+        self.use_experimental_thrust = True
+        self.thrust_source = 'experimental'
+        logging.info(
+            "Experimental thrust curve ready: %d points, %.2fs, max=%.1fN.",
+            curve_data.n_points, curve_data.duration, curve_data.max_thrust,
+        )
 
     def _calculate_experimental_thrust(self, time=None):
         """Calculate thrust using experimental data"""
@@ -458,45 +473,53 @@ class EnhancedEngine:
 
     def get_performance_metrics(self):
         """
-        Get comprehensive performance metrics.
-        
-        Returns:
-            dict: Complete performance metrics
+        Return comprehensive performance metrics.
+
+        Includes the B01 contract attributes so callers can track propulsion
+        state without inspecting internal engine fields directly.
+
+        Returns
+        -------
+        dict
+            Complete performance metrics in SI units.
         """
         return {
+            # Core outputs
             'thrust': self._thrust,
             'mass_flow': self._mass_flux,
             'specific_impulse': self.actual_isp,
+            # Nozzle / thermodynamic
             'characteristic_velocity': self.characteristic_velocity,
             'thrust_coefficient': self.ideal_thrust_coefficient,
             'exit_pressure': self.exit_pressure,
             'exit_velocity': self.gas_speed,
             'chamber_pressure': self.mean_chamber_pressure,
             'throat_area': self.throat_area,
-            'exit_area': self.exit_area
+            'exit_area': self.exit_area,
+            # B01 contract attributes
+            'thrust_source': self.thrust_source,
+            'propellant_consumed': self.propellant_consumed,
+            'remaining_propellant': self.remaining_propellant,
+            'total_impulse_delivered': self.total_impulse_delivered,
+            'burnout_reached': self.burnout_reached,
         }
 
     def get_thrust_curve_info(self):
-        """Get information about the loaded thrust curve"""
-        if not self.use_experimental_thrust:
+        """Return information about the loaded thrust curve."""
+        if not self.use_experimental_thrust or self._curve_data is None:
             return {"available": False}
-        
-        try:
-            # Sample the thrust curve to get statistics
-            sample_times = np.linspace(0, self.burn_time, 100)
-            thrust_samples = [self._calculate_experimental_thrust(t) for t in sample_times]
-            
-            return {
-                "available": True,
-                "data_points": len(self.thrust_interpolator.x) if hasattr(self.thrust_interpolator, 'x') else 0,
-                "burn_time": self.burn_time,
-                "max_thrust": max(thrust_samples),
-                "total_impulse": np.trapezoid(thrust_samples, sample_times),
-                "source": self.thrust_curve_file or "provided_data"
-            }
-        except Exception as e:
-            logging.error(f"Error getting thrust curve info: {e}")
-            return {"available": False}
+
+        cd = self._curve_data
+        return {
+            "available": True,
+            "data_points": cd.n_points,
+            "burn_time": cd.duration,
+            "max_thrust": cd.max_thrust,
+            "mean_thrust": cd.mean_thrust,
+            "total_impulse": cd.total_impulse,
+            "unit_declared": cd.unit_declared,
+            "source": cd.source,
+        }
 
     def update(self, time=None, ambient_pressure=None):
         """

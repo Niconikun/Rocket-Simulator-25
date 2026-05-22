@@ -608,13 +608,29 @@ class Rocket(object):
                 rocket_settings = json.load(file)
 
             engine_data = rocket_settings['engine']
-            
-            # Check if we are using experimental thrust curve
+
+            # ------------------------------------------------------------------
+            # Resolve thrust curve parameters
+            # ------------------------------------------------------------------
             thrust_curve_file = None
+            thrust_curve_unit = 'N'  # default for analytical mode (unused)
+
             if engine_data.get('thrust_curve_mode') == 'experimental':
                 thrust_curve_file = engine_data.get('thrust_curve_file')
-                logging.info(f"Using experimental thrust curve: {thrust_curve_file}")
-            
+                thrust_curve_unit = engine_data.get('thrust_curve_unit')
+
+                if not thrust_curve_unit:
+                    raise ValueError(
+                        f"'thrust_curve_unit' is required when thrust_curve_mode is "
+                        f"'experimental' (rocket: '{rocket_name}'). "
+                        "Set it to 'N' or 'kgf' in the engine configuration."
+                    )
+
+                logging.info(
+                    "Using experimental thrust curve: %s (unit=%s)",
+                    thrust_curve_file, thrust_curve_unit,
+                )
+
             # Create enhanced engine with validation
             Eng = EnhancedEngine(
                 time=self.time,
@@ -628,7 +644,8 @@ class Rocket(object):
                 mean_chamber_pressure=engine_data["mean_chamber_pressure"],
                 max_chamber_pressure=engine_data["max_chamber_pressure"],
                 thrust_to_weight_ratio=engine_data["thrust_to_weight_ratio"],
-                thrust_curve_file=thrust_curve_file  # Pass the thrust curve file if experimental
+                thrust_curve_file=thrust_curve_file,
+                thrust_curve_unit=thrust_curve_unit,
             )
             
             # Validate thrust curve on first call

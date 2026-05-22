@@ -33,7 +33,8 @@
         "max_chamber_pressure": 9010000.0,
         "thrust_to_weight_ratio": 11.2,
         "thrust_curve_mode": "experimental",
-        "thrust_curve_file": "data/thrust_curves/load_cell_1.csv"
+        "thrust_curve_file": "data/thrust_curves/load_cell_1.csv",
+        "thrust_curve_unit": "kgf"
     },
     "geometry": {
         "length nosecone fins": 1039.452,
