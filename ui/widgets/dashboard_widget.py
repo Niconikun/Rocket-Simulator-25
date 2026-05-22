@@ -23,6 +23,7 @@ from reportlab.lib import colors
 # Import matplotlib for plotting
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
@@ -859,16 +860,21 @@ class DashboardWidget(QWidget):
         return fig
     
     def _add_chart_as_tab(self, fig, tab_name):
-        """Add a matplotlib figure as a new tab in the charts tab widget."""
+        """Add a matplotlib figure as a new tab with zoom/pan toolbar."""
+        container = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
         canvas = FigureCanvas(fig)
         canvas.setMinimumHeight(450)
-        
-        # Wrap in a scroll area so individual charts can be scrolled
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(canvas)
-        
-        self.charts_tab_widget.addTab(scroll, tab_name)
+
+        toolbar = NavigationToolbar(canvas, container)
+        layout.addWidget(toolbar)
+        layout.addWidget(canvas, stretch=1)
+        container.setLayout(layout)
+
+        self.charts_tab_widget.addTab(container, tab_name)
     
     def generate_trajectory_maps(self, sim_data, metadata):
         """Generate 2D map (as tab) and 3D trajectory (left panel) from simulation data."""

@@ -15,7 +15,7 @@ Example: `v1.2.3`
 ### 1. **Update Version** (in code/files)
 
 Update version in these files if applicable:
-- `__version__` in main module
+- `__version__` in main module 
 - `setup.py` or `pyproject.toml` (if you create one)
 - `README.md` (release notes section)
 
