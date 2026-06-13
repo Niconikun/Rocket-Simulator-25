@@ -361,7 +361,55 @@ class SimulationWorker(QThread):
                     
                 # Update gravitational acceleration
                 rocket.update_g_accel(coordinates)
-                    
+
+                # ===== PARACHUTE HANDLING =====
+                # Must run AFTER update_forces_torques() (so forces_enu is populated)
+                # and BEFORE RK4_update() so the force is actually integrated.
+                if parachute is not None:
+                    vertical_velocity = abs(rocket.v_enu[2])
+
+                    # Bug fix 3: apogee-triggered drogue — fire on first descending step
+                    is_descending = current_altitude < prev_altitude
+                    if (is_descending and parachute.drogue_enabled
+                            and not parachute.drogue_deployed):
+                        parachute.drogue_deployed = True
+                        parachute.drogue_deployment_time = t
+                        parachute.drogue_deployment_altitude_actual = current_altitude
+                        logger.info(
+                            "Drogue deployed at apogee: altitude=%.1fm, t=%.2fs",
+                            current_altitude, t,
+                        )
+
+                    # Altitude-based deployment checks
+                    if parachute.check_deployment(current_altitude, vertical_velocity, t):
+                        logger.info(
+                            "Main parachute deployed: altitude=%.1fm, velocity=%.1fm/s",
+                            current_altitude, vertical_velocity,
+                        )
+                    if parachute.check_drogue_deployment(current_altitude, t):
+                        logger.info(
+                            "Drogue deployed (altitude trigger): %.1fm", current_altitude
+                        )
+
+                    # Advance main chute inflation counter
+                    parachute.update_inflation(timestep)
+
+                    # Bug fix 1+2+4: apply parachute drag in ENU frame via
+                    # wind-relative velocity BEFORE RK4 so it is integrated.
+                    if parachute.deployed:
+                        # Bug fix 4: use wind-relative speed, not ground speed
+                        v_rel = rocket.v_rel_enu
+                        speed_rel = float(np.linalg.norm(v_rel))
+                        if speed_rel > 0:
+                            drag_force = parachute.calculate_drag_force(
+                                speed_rel, rocket.density
+                            )
+                            # Bug fix 2: ENU direction vector opposite to relative velocity
+                            rocket.forces_enu += -(v_rel / speed_rel) * drag_force
+                            parachute.max_descent_rate = max(
+                                parachute.max_descent_rate, vertical_velocity
+                            )
+
                 # Integrate dynamics using RK4
                 rocket.RK4_update(timestep)
                     
@@ -369,38 +417,6 @@ class SimulationWorker(QThread):
                 current_altitude = rocket.r_enu[2]
                 current_velocity = np.linalg.norm(rocket.v_enu)
                 current_range = np.linalg.norm(rocket.r_enu[:2])
-                    
-                # ===== PARACHUTE HANDLING =====
-                if parachute is not None:
-                    # Calculate vertical velocity (positive downward)
-                    vertical_velocity = abs(rocket.v_enu[2]) if rocket.v_enu[2] < 0 else rocket.v_enu[2]
-                        
-                    # Check for parachute deployment
-                    if parachute.check_deployment(current_altitude, vertical_velocity, t):
-                        logger.info(f"Parachute deployed at altitude {current_altitude:.1f}m, velocity {vertical_velocity:.1f}m/s")
-                        
-                    # Check for drogue deployment
-                    if parachute.check_drogue_deployment(current_altitude, t):
-                        logger.info(f"Drogue deployed at altitude {current_altitude:.1f}m")
-                        
-                    # Update inflation progress
-                    parachute.update_inflation(timestep)
-                        
-                    # Apply parachute drag if deployed
-                    if parachute.deployed:
-                        velocity_magnitude = float(np.linalg.norm(rocket.v_enu))
-                        drag_force = parachute.calculate_drag_force(velocity_magnitude, rocket.density)
-                            
-                        # Apply drag force in direction opposite to velocity
-                        if velocity_magnitude > 0:
-                            drag_direction = -rocket.v_enu / velocity_magnitude
-                            parachute_force = drag_direction * drag_force
-                            # Add to rocket's aerodynamic forces (simplified: apply along vertical)
-                            rocket.forces_aero_b[2] += drag_force
-                                
-                            # Track max descent rate
-                            descent_rate = parachute.calculate_descent_rate(rocket.mass, rocket.density)
-                            parachute.max_descent_rate = max(parachute.max_descent_rate, vertical_velocity)
                     
                 rocket.save_data()
                     
