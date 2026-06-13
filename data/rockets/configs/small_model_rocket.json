@@ -29,7 +29,7 @@
     "engine": {
         "type": "F_Series",
         "burn_time": 3.5,
-        "nozzle_exit_diameter": 11.0,
+        "nozzle_exit_diameter": 0.011,
         "propellant_mass": 0.35,
         "specific_impulse": 260,
         "mean_thrust": 100,
@@ -45,6 +45,8 @@
         "notes": "Typical F12-6 impulse motor characteristics"
     },
     "geometry": {
+        "length nosecone fins": 0.35,
+        "total length": 0.45,
         "total_length": 0.45,
         "length_nosecone_fins": 0.35,
         "description": "Standard 3-inch diameter model rocket"
@@ -53,7 +55,7 @@
         "type": "Conical",
         "length": 0.12,
         "diameter": 0.076,
-        "shape": "Conical",
+        "shape": "conical",
         "material": "Balsa wood"
     },
     "fuselage": {

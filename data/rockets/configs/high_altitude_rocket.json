@@ -29,7 +29,7 @@
     "engine": {
         "type": "J_Series",
         "burn_time": 12.5,
-        "nozzle_exit_diameter": 42.0,
+        "nozzle_exit_diameter": 0.042,
         "propellant_mass": 8.5,
         "specific_impulse": 510,
         "mean_thrust": 6900,
@@ -41,12 +41,14 @@
         "gas_speed": 5000.0,
         "exit_pressure": 900000.0,
         "thrust_curve_mode": "experimental",
-        "thrust_curve_file": "J570_thrust_curve.csv",
+        "thrust_curve_file": "data/thrust_curves/J570_thrust_curve.csv",
         "thrust_curve_unit": "N",
         "chamber_temperature": 3300.0,
         "notes": "High-performance solid motor with experimental thrust curve validation"
     },
     "geometry": {
+        "length nosecone fins": 2.20,
+        "total length": 2.65,
         "total_length": 2.65,
         "length_nosecone_fins": 2.20,
         "description": "5-inch diameter high-altitude rocket"
@@ -55,7 +57,7 @@
         "type": "Von_Karman",
         "length": 0.45,
         "diameter": 0.127,
-        "shape": "Von_Karman",
+        "shape": "von_karman",
         "material": "Fiberglass composite",
         "aerodynamic_coefficient": 0.25
     },

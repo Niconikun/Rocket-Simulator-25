@@ -37,6 +37,27 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
+# Try to import OrkImporter for OpenRocket .ork files
+try:
+    from src.utils.ork_importer import OrkImporter
+    HAS_ORK = True
+except ImportError:
+    HAS_ORK = False
+
+# Try to import StlImporter (requires trimesh)
+try:
+    from src.utils.stl_importer import StlImporter, is_available as stl_available
+    HAS_STL = stl_available()
+except ImportError:
+    HAS_STL = False
+
+# Stability calculator (no extra dependencies)
+try:
+    from src.utils.stability_calculator import compute_stability
+    HAS_STABILITY = True
+except ImportError:
+    HAS_STABILITY = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -105,6 +126,18 @@ class RocketSettingsWidget(QWidget):
         load_button = QPushButton("📁 Load File")
         load_button.clicked.connect(self.load_rocket_config_file)
         selection_layout.addWidget(load_button)
+
+        ork_button = QPushButton("🚀 Import OpenRocket (.ork)")
+        ork_button.setToolTip("Import rocket geometry from an OpenRocket .ork file")
+        ork_button.clicked.connect(self.import_ork_file)
+        selection_layout.addWidget(ork_button)
+
+        stl_button = QPushButton("📐 Import STL")
+        stl_button.setToolTip(
+            "Import reference area and inertia from an STL mesh (requires trimesh)"
+        )
+        stl_button.clicked.connect(self.import_stl_file)
+        selection_layout.addWidget(stl_button)
         
         selection_group.setLayout(selection_layout)
         main_layout.addWidget(selection_group)
@@ -148,6 +181,13 @@ class RocketSettingsWidget(QWidget):
         validate_button = QPushButton("✓ Validate Configuration")
         validate_button.clicked.connect(self.validate_and_show_results)
         button_layout.addWidget(validate_button)
+
+        stability_button = QPushButton("⚖️ Check Stability")
+        stability_button.setToolTip(
+            "Compute centre of pressure (Barrowman) and static stability margin"
+        )
+        stability_button.clicked.connect(self.check_stability_margin)
+        button_layout.addWidget(stability_button)
         
         save_button = QPushButton("💾 Save Configuration")
         save_button.clicked.connect(self.save_rocket_config)
@@ -191,9 +231,9 @@ class RocketSettingsWidget(QWidget):
         
         # Reference Area
         self.reference_area_spinbox = QDoubleSpinBox()
-        self.reference_area_spinbox.setRange(0.01, 100000000)
-        self.reference_area_spinbox.setSuffix(" mm²")
-        self.reference_area_spinbox.setDecimals(1)
+        self.reference_area_spinbox.setRange(0.000001, 1000.0)
+        self.reference_area_spinbox.setSuffix(" m²")
+        self.reference_area_spinbox.setDecimals(6)
         layout.addRow("Reference Area:", self.reference_area_spinbox)
         
         widget.setLayout(layout)
@@ -348,10 +388,30 @@ class RocketSettingsWidget(QWidget):
         
         # Nozzle Exit Diameter
         self.nozzle_diameter = QDoubleSpinBox()
-        self.nozzle_diameter.setRange(0.1, 100000)
-        self.nozzle_diameter.setSuffix(" mm")
+        self.nozzle_diameter.setRange(0.001, 10.0)
+        self.nozzle_diameter.setSuffix(" m")
+        self.nozzle_diameter.setDecimals(4)
         form_layout.addRow("Nozzle Exit Diameter:", self.nozzle_diameter)
-        
+
+        # Mass flux, gas speed, exit pressure
+        self.mass_flux = QDoubleSpinBox()
+        self.mass_flux.setRange(0.0, 10000.0)
+        self.mass_flux.setSuffix(" kg/s")
+        self.mass_flux.setDecimals(4)
+        form_layout.addRow("Mass Flux (ṁ):", self.mass_flux)
+
+        self.gas_speed = QDoubleSpinBox()
+        self.gas_speed.setRange(0.0, 6000.0)
+        self.gas_speed.setSuffix(" m/s")
+        self.gas_speed.setDecimals(1)
+        form_layout.addRow("Gas Exit Speed (Ve):", self.gas_speed)
+
+        self.exit_pressure = QDoubleSpinBox()
+        self.exit_pressure.setRange(0.0, 1e8)
+        self.exit_pressure.setSuffix(" Pa")
+        self.exit_pressure.setDecimals(0)
+        form_layout.addRow("Nozzle Exit Pressure:", self.exit_pressure)
+
         # Chamber Pressure
         self.mean_chamber_pressure = QDoubleSpinBox()
         self.mean_chamber_pressure.setRange(0, 1e8)
@@ -365,7 +425,7 @@ class RocketSettingsWidget(QWidget):
         
         # Thrust to Weight Ratio
         self.thrust_to_weight = QDoubleSpinBox()
-        self.thrust_to_weight.setRange(0, 100)
+        self.thrust_to_weight.setRange(0, 10000)
         self.thrust_to_weight.setDecimals(2)
         form_layout.addRow("Thrust to Weight Ratio:", self.thrust_to_weight)
         
@@ -700,6 +760,9 @@ class RocketSettingsWidget(QWidget):
         self.mean_thrust.setValue(engine.get('mean_thrust', 0.0))
         self.max_thrust.setValue(engine.get('max_thrust', 0.0))
         self.nozzle_diameter.setValue(engine.get('nozzle_exit_diameter', 0.0))
+        self.mass_flux.setValue(engine.get('mass_flux', 0.0))
+        self.gas_speed.setValue(engine.get('gas_speed', 0.0))
+        self.exit_pressure.setValue(engine.get('exit_pressure', 0.0))
         self.mean_chamber_pressure.setValue(engine.get('mean_chamber_pressure', 0.0))
         self.max_chamber_pressure.setValue(engine.get('max_chamber_pressure', 0.0))
         self.thrust_to_weight.setValue(engine.get('thrust_to_weight_ratio', 0.0))
@@ -771,11 +834,12 @@ class RocketSettingsWidget(QWidget):
         if self.specific_impulse.value() <= 0 and self.mean_thrust.value() > 0:
             warnings.append("⚠️  Isp should be > 0 if motor is burning")
         
-        # CoM validation
-        if self.com_before_z.value() > self.total_length.value() / 1000:
+        # CoM validation (axial axis is x, geometry total length is in mm)
+        total_len_m = self.total_length.value() / 1000
+        if total_len_m > 0 and self.com_before_x.value() > total_len_m:
             warnings.append("⚠️  CoM before burn is beyond rocket length")
-        
-        if self.com_after_z.value() > self.total_length.value() / 1000:
+
+        if total_len_m > 0 and self.com_after_x.value() > total_len_m:
             warnings.append("⚠️  CoM after burn is beyond rocket length")
         
         # Thrust-to-weight validation
@@ -835,7 +899,83 @@ class RocketSettingsWidget(QWidget):
             QMessageBox.warning(self, "Validation Failed", message)
         
         logger.info(f"Validation: Valid={is_valid}, Errors={len(errors)}, Warnings={len(warnings)}")
-    
+
+    def check_stability_margin(self):
+        """Compute Barrowman CP and static stability margin, then display results."""
+        if not HAS_STABILITY:
+            QMessageBox.warning(
+                self, "Stability Calculator Unavailable",
+                "Could not import src/utils/stability_calculator.py.\n"
+                "Check that the file exists and has no syntax errors."
+            )
+            return
+
+        # ----------------------------------------------------------------
+        # Collect widget values (geometry in mm → convert to m)
+        # ----------------------------------------------------------------
+        nose_len_m     = self.nosecone_length.value() / 1000.0
+        nose_shape     = self.nosecone_type.currentText().lower()
+        body_diam_m    = self.fuselage_diameter.value() / 1000.0
+        fin_n          = self.n_fins.value()
+        fin_span_m     = self.fin_span.value() / 1000.0
+        fin_cr_m       = self.fin_chord_root.value() / 1000.0
+        fin_ct_m       = self.fin_chord_tip.value() / 1000.0
+        fin_mc_m       = self.fin_mid_chord.value() / 1000.0
+        fin_pos_m      = self.length_nosecone_fins.value() / 1000.0
+        com_before_m   = self.com_before_x.value()
+        com_after_m    = self.com_after_x.value()
+
+        # Guard: need at least a nosecone and body diameter
+        if nose_len_m <= 0 or body_diam_m <= 0:
+            QMessageBox.warning(
+                self, "Insufficient Data",
+                "Please set Nosecone Length and Fuselage Diameter before\n"
+                "computing the stability margin (Geometry & Nosecone tabs)."
+            )
+            return
+
+        try:
+            result = compute_stability(
+                nose_length_m=nose_len_m,
+                nose_shape=nose_shape,
+                body_diameter_m=body_diam_m,
+                fin_n=fin_n,
+                fin_span_m=fin_span_m,
+                fin_chord_root_m=fin_cr_m,
+                fin_chord_tip_m=fin_ct_m,
+                fin_mid_chord_m=fin_mc_m,
+                fin_position_from_nose_m=fin_pos_m,
+                com_before_m=com_before_m,
+                com_after_m=com_after_m,
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Stability Calculation Error", str(exc))
+            logger.error(f"Stability calculation failed: {exc}")
+            return
+
+        # ----------------------------------------------------------------
+        # Build and display the result dialog
+        # ----------------------------------------------------------------
+        lines = result.summary_lines()
+        message = "\n".join(lines)
+
+        # Colour-coded title
+        title = f"Stability Analysis — {result.category}"
+
+        if result.category == "UNSTABLE":
+            QMessageBox.critical(self, title, message)
+        elif result.category == "MARGINAL":
+            QMessageBox.warning(self, title, message)
+        else:
+            QMessageBox.information(self, title, message)
+
+        logger.info(
+            "Stability check: CP=%.4f m, margin_before=%.2f cal, "
+            "margin_after=%.2f cal, category=%s",
+            result.xcp, result.margin_calibers_before,
+            result.margin_calibers_after, result.category,
+        )
+
     def load_thrust_curve(self):
         """Load thrust curve from CSV file."""
         if not HAS_PANDAS:
@@ -964,6 +1104,8 @@ class RocketSettingsWidget(QWidget):
         rocket_data = {
             'name': self.name_edit.text(),
             'initial_mass': self.initial_mass_spinbox.value(),
+            'propellant_mass': self.propellant_mass.value(),
+            'dry_mass_kg': round(self.initial_mass_spinbox.value() - self.propellant_mass.value(), 6),
             'reference_area': self.reference_area_spinbox.value(),
             'I_before_burn': {
                 'x': self.i_before_x.value(),
@@ -992,13 +1134,18 @@ class RocketSettingsWidget(QWidget):
                 'mean_thrust': self.mean_thrust.value(),
                 'max_thrust': self.max_thrust.value(),
                 'nozzle_exit_diameter': self.nozzle_diameter.value(),
+                'mass_flux': self.mass_flux.value(),
+                'gas_speed': self.gas_speed.value(),
+                'exit_pressure': self.exit_pressure.value(),
                 'mean_chamber_pressure': self.mean_chamber_pressure.value(),
                 'max_chamber_pressure': self.max_chamber_pressure.value(),
                 'thrust_to_weight_ratio': self.thrust_to_weight.value()
             },
             'geometry': {
                 'total length': self.total_length.value(),
-                'length nosecone fins': self.length_nosecone_fins.value()
+                'length nosecone fins': self.length_nosecone_fins.value(),
+                'total_length': self.total_length.value(),
+                'length_nosecone_fins': self.length_nosecone_fins.value()
             },
             'fuselage': {
                 'length': self.fuselage_length.value(),
@@ -1010,6 +1157,7 @@ class RocketSettingsWidget(QWidget):
             },
             'nosecone': {
                 'type': self.nosecone_type.currentText(),
+                'shape': self.nosecone_type.currentText().lower(),
                 'length': self.nosecone_length.value(),
                 'diameter': self.nosecone_diameter.value(),
                 'ogive_radius': self.ogive_radius.value(),
@@ -1111,6 +1259,99 @@ class RocketSettingsWidget(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load: {str(e)}")
                 logger.error(f"Error loading rocket: {e}")
+
+    def import_ork_file(self):
+        """Import rocket geometry from an OpenRocket .ork file."""
+        if not HAS_ORK:
+            QMessageBox.warning(
+                self, "OrkImporter Unavailable",
+                "OrkImporter could not be loaded. Check that src/utils/ork_importer.py exists."
+            )
+            return
+
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Import OpenRocket File", "",
+            "OpenRocket Files (*.ork);;All Files (*.*)"
+        )
+        if not filepath:
+            return
+
+        try:
+            importer = OrkImporter(filepath)
+            rocket_data = importer.parse()
+            self.load_rocket_data(rocket_data)
+            QMessageBox.information(
+                self, "Import Successful",
+                f"Imported '{rocket_data.get('name', 'Rocket')}' from OpenRocket.\n\n"
+                "Engine parameters were not imported — please fill them in manually "
+                "or load a thrust curve."
+            )
+            logger.info(f"Imported OpenRocket file: {filepath}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Import Failed", f"Could not import .ork file:\n{exc}")
+            logger.error(f"OrkImporter error for '{filepath}': {exc}")
+
+    def import_stl_file(self):
+        """Import reference area and inertia from an STL mesh file."""
+        if not HAS_STL:
+            QMessageBox.information(
+                self, "trimesh Not Installed",
+                "STL import requires the 'trimesh' package.\n"
+                "Install it with:\n\n    pip install trimesh\n\n"
+                "Then restart the application."
+            )
+            return
+
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Import STL Mesh", "",
+            "STL Files (*.stl);;All Files (*.*)"
+        )
+        if not filepath:
+            return
+
+        mass_kg = self.initial_mass_spinbox.value()
+        if mass_kg <= 0:
+            QMessageBox.warning(
+                self, "Mass Required",
+                "Set the rocket's Initial Mass (Properties tab) before importing an STL.\n"
+                "The mass is used to compute the moments of inertia."
+            )
+            return
+
+        try:
+            imp = StlImporter(filepath, mass_kg=mass_kg)
+            result = imp.compute()
+
+            # Apply computed values to UI
+            self.reference_area_spinbox.setValue(result["reference_area"])
+            inertia = result["inertia"]
+            self.i_before_x.setValue(inertia["x"])
+            self.i_before_y.setValue(inertia["y"])
+            self.i_before_z.setValue(inertia["z"])
+            self.i_after_x.setValue(inertia["x"])
+            self.i_after_y.setValue(inertia["y"])
+            self.i_after_z.setValue(inertia["z"])
+            self.com_before_x.setValue(result["com_offset"])
+            self.com_after_x.setValue(result["com_offset"])
+
+            bb = result["bounding_box"]
+            details = (
+                f"Reference Area : {result['reference_area']:.6f} m²\n"
+                f"Ixx (axial)    : {inertia['x']:.6f} kg·m²\n"
+                f"Iyy (pitch)    : {inertia['y']:.6f} kg·m²\n"
+                f"Izz (yaw)      : {inertia['z']:.6f} kg·m²\n"
+                f"CoM offset     : {result['com_offset']:.5f} m\n"
+                f"Length         : {bb['length']:.5f} m\n"
+                f"Max diameter   : {bb['diameter_max']:.5f} m"
+            )
+            QMessageBox.information(
+                self, "STL Import Successful",
+                f"Properties applied from STL mesh:\n\n{details}"
+            )
+            logger.info(f"Imported STL: {filepath}")
+        except Exception as exc:
+            QMessageBox.critical(self, "STL Import Failed", f"Could not import STL:\n{exc}")
+            logger.error(f"StlImporter error for '{filepath}': {exc}")
     
     def delete_rocket_config(self):
         """Delete selected rocket configuration."""

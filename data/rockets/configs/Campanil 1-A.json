@@ -1,6 +1,7 @@
 {
     "name": "Campanil 1-A",
     "initial_mass": 7.8,
+    "propellant_mass": 1.5,
     "reference_area": 0.033,
     "I_before_burn": {
         "x": 0.008879229,
@@ -31,7 +32,10 @@
         "max_thrust": 2104.115,
         "mean_chamber_pressure": 3191000.0,
         "max_chamber_pressure": 9010000.0,
-        "thrust_to_weight_ratio": 11.2
+        "thrust_to_weight_ratio": 11.2,
+        "mass_flux": 0.538,
+        "gas_speed": 1042.3,
+        "exit_pressure": 80000.0
     },
     "geometry": {
         "length nosecone fins": 1055.0,

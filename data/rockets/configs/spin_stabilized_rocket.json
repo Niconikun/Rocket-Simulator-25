@@ -29,7 +29,7 @@
     "engine": {
         "type": "H_Series",
         "burn_time": 8.0,
-        "nozzle_exit_diameter": 30.0,
+        "nozzle_exit_diameter": 0.030,
         "propellant_mass": 3.5,
         "specific_impulse": 420,
         "mean_thrust": 1800,
@@ -45,6 +45,8 @@
         "notes": "Standard H-class motor for spin-stabilized flight"
     },
     "geometry": {
+        "length nosecone fins": 1.20,
+        "total length": 1.50,
         "total_length": 1.50,
         "length_nosecone_fins": 1.20,
         "description": "3.25-inch diameter spin-stabilized test rocket"
@@ -53,7 +55,7 @@
         "type": "Conical",
         "length": 0.20,
         "diameter": 0.0825,
-        "shape": "Conical",
+        "shape": "conical",
         "material": "Balsa wood"
     },
     "fuselage": {

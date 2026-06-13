@@ -29,7 +29,7 @@
     "engine": {
         "type": "I_Series",
         "burn_time": 10.5,
-        "nozzle_exit_diameter": 35.0,
+        "nozzle_exit_diameter": 0.035,
         "propellant_mass": 6.0,
         "specific_impulse": 455,
         "mean_thrust": 5600,
@@ -45,6 +45,8 @@
         "notes": "Solid rocket motor, mid-power characteristics"
     },
     "geometry": {
+        "length nosecone fins": 1.80,
+        "total length": 2.15,
         "total_length": 2.15,
         "length_nosecone_fins": 1.80,
         "description": "Standard 4-inch diameter high-power rocket"
@@ -53,7 +55,7 @@
         "type": "Ogival",
         "length": 0.35,
         "diameter": 0.1,
-        "shape": "Ogival",
+        "shape": "ogive",
         "material": "Fiberglass"
     },
     "fuselage": {

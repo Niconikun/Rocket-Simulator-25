@@ -63,7 +63,7 @@ def validate_rocket(filename, filepath):
                     warnings.append(f"mass_flux inconsistency: expected {expected_flux:.3f}, got {mass_flux:.3f} ({flux_error:.1f}% error)")
             else:
                 mass_flux_calc = expected_flux
-                if NOT mass_flux:
+                if not mass_flux:
                     warnings.append(f"mass_flux missing, calculated: {mass_flux_calc:.3f} kg/s")
         
         thrust_to_weight = engine.get('thrust_to_weight_ratio', 0)
