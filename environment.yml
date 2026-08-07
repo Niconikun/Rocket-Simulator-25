@@ -3,26 +3,59 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  # Python runtime
   - python=3.12
+
+  # GUI Framework
   - pyqt6=6.10.0
-  - pyqt6-sip
-  - numpy
-  - scipy
-  - pandas
-  - matplotlib
-  - ephem
-  - folium>=0.14.0
-  - plotly
-  - pyvista
-  - pyopengl
+  - pyqt6-sip>=13.6.0
+  - pyqt6-qt6=6.10.2
+  - pyqt6-webengine=6.10.0
+
+  # Core Scientific Computing
+  - numpy>=1.26.0
+  - scipy>=1.11.0
+  - pandas>=2.1.0
+
+  # Visualization & Plotting
+  - matplotlib>=3.8.0
+  - cartopy>=0.22.0
+
+  # Rocket Simulation Specific
+  - navpy>=0.1.0
+  - fluids>=1.0.0
+  - ephem>=4.1.5
+
+  # Data Processing & Validation
+  - jsonschema>=4.18.0
+
+  # Document Generation
   - reportlab>=4.0.0
-  - jsonschema
-  - pyinstaller>=6.0.0
-  - fluids
+
+  # Build & Distribution
+  - pyinstaller>=6.3.0
+
+  # Optional Visualization (comment out if not needed)
+  - pyvista>=0.43.0
+  - plotly>=5.18.0
+  - folium>=0.15.0
+  - pyopengl
+
+  # Development tools (for testing and code quality)
+  - pytest>=7.4.0
+  - pytest-qt>=4.2.0
+  - pytest-cov>=4.1.0
+  - black>=24.0.0
+  - flake8>=6.1.0
+  - mypy>=1.8.0
+
+  # pip (for packages not available in conda-forge)
   - pip
-pip:
-      - navpy
-      - pyqt6-webengine==6.10.0
-      # Si algún paquete no está en conda-forge, se instalará por pip
-      # - fluids
-      # - ephem
+
+  # Packages to install via pip (if not available in conda-forge)
+  - pip:
+      # STL Import Support (optional)
+      # - trimesh>=4.0.0
+      # Type stubs (optional)
+      # - pandas-stubs>=2.0.0
+      # - numpy-stubs>=1.24.0

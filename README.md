@@ -1,6 +1,6 @@
 # Rocket Simulator Pro
 
-![Versión](https://img.shields.io/badge/versión-0.5.5-blue.svg)
+![Versión](https://img.shields.io/badge/versión-2.0.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12-blue.svg)
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.10-green.svg)
 ![Licencia](https://img.shields.io/badge/licencia-MIT-lightgrey.svg)
@@ -51,16 +51,47 @@ Proyecto iniciado por Jorge Orozco (Universidad de Concepción, 2022) para la pr
 
 ## Instalación
 
+### Requisitos
+- Python 3.12+
+- pip (para instalación via PyPI)
+- conda/mamba (opcional, para instalación via Conda)
+
+### Instalación con pip (recomendado para desarrollo)
+
 ```bash
 git clone https://github.com/Niconikun/Rocket-Simulator-25.git
 cd Rocket-Simulator-25
+
+# Instalar solo dependencias de producción
 pip install -r requirements.txt
+
+# O instalar con dependencias de desarrollo (tests, formatting, etc.)
+pip install -r requirements-dev.txt
 ```
 
-> Para importación STL (opcional):
-> ```bash
-> pip install trimesh
-> ```
+### Instalación con Conda
+
+```bash
+# Crear entorno conda con todas las dependencias
+conda env create -n rocket-sim -f environment.yml
+conda activate rocket-sim
+
+# O actualizar entorno existente
+conda env update -n rocket-sim -f environment.yml
+```
+
+### Extras opcionales
+
+```bash
+# Soporte para importación STL (requiere trimesh)
+pip install trimesh
+
+# Visualización 3D avanzada
+pip install pyvista plotly folium
+
+# Type hints para desarrollo
+pip install pandas-stubs numpy-stubs
+```
 
 ## Uso
 
