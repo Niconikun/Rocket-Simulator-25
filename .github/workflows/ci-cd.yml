@@ -1,0 +1,297 @@
+name: CI/CD Pipeline
+
+# Unified CI/CD pipeline for Rocket Simulator Pro
+# 
+# This workflow handles:
+# - Continuous Integration: Run tests and linters on push/PR
+# - Continuous Delivery: Build and release executable on tags
+#
+# Triggers:
+# - push to master/pyqt-gui: Run CI tests
+# - pull_request: Run CI tests
+# - push tags v*: Build and release executable
+# - workflow_dispatch: Manual build
+
+on:
+  push:
+    branches: ["master", "pyqt-gui"]
+    tags:
+      - "v*"
+  pull_request:
+    branches: ["master", "pyqt-gui"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number for manual release (e.g., 2.0.0)"
+        required: false
+        default: ""
+      run_tests:
+        description: "Run tests before building"
+        required: false
+        default: "true"
+
+# Cancel previous runs of the same workflow
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =============================================================================
+  # CI: Test and Lint
+  # =============================================================================
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Get full history for version info
+      
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      - name: Run linter (flake8)
+        run: |
+          echo "Running flake8 linter..."
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      
+      - name: Run type checker (mypy)
+        run: |
+          echo "Running mypy type checker..."
+          mypy . --ignore-missing-imports --exclude "(build|dist|__pycache__|.venv)" || echo "mypy found issues"
+        continue-on-error: true
+      
+      - name: Run tests with pytest
+        run: |
+          echo "Running pytest..."
+          pytest tests/ -v --tb=short --color=yes
+        env:
+          PYTHONPATH: .
+      
+      - name: Run code formatting check (black)
+        run: |
+          echo "Checking code formatting with black..."
+          black --check . --exclude "(build|dist|__pycache__|.venv|.git)" || echo "black found formatting issues"
+        continue-on-error: true
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: |
+            test-results/
+            .pytest_cache/
+          retention-days: 7
+
+  # =============================================================================
+  # Build: Create executable
+  # =============================================================================
+  build:
+    name: Build Executable
+    needs: test
+    runs-on: windows-latest
+    
+    # Only run on tags or manual dispatch
+    if: |
+      startsWith(github.ref, 'refs/tags/v') || 
+      github.event_name == 'workflow_dispatch'
+    
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller>=6.3.0
+      
+      - name: Get version
+        id: get_version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}" -like "refs/tags/v*") {
+            $version = "${{ github.ref }}".Replace("refs/tags/v", "")
+          } elseif ("${{ github.event.inputs.version }}" -ne "") {
+            $version = "${{ github.event.inputs.version }}"
+          } else {
+            $version = "2.0.0-dev"
+          }
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Building version: $version"
+      
+      - name: Update version in build script
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.version }}"
+          # Update version in build_exe.py if it exists
+          if (Test-Path "build_exe.py") {
+            (Get-Content build_exe.py) -replace 'VERSION = .*', "VERSION = '$version'" | Set-Content build_exe.py
+          }
+      
+      - name: Build executable
+        run: |
+          echo "Building Rocket Simulator v${{ steps.get_version.outputs.version }}..."
+          python build_exe.py
+      
+      - name: Verify executable exists
+        run: |
+          if (!(Test-Path "dist\RocketSimulator\RocketSimulator.exe")) {
+            Write-Host "ERROR: Executable not found!"
+            Get-ChildItem -Path "dist" -Recurse
+            exit 1
+          }
+          $size = (Get-Item "dist\RocketSimulator\RocketSimulator.exe").Length / 1MB
+          Write-Host "SUCCESS: Executable created - $($size.ToString('F2')) MB"
+      
+      - name: Create distribution archive
+        run: |
+          $version = "${{ steps.get_version.outputs.version }}"
+          $archiveName = "RocketSimulator-$version-windows.zip"
+          Compress-Archive -Path "dist\RocketSimulator" -DestinationPath $archiveName
+          Write-Host "Archive created: $archiveName"
+          echo "archive_name=$archiveName" >> $env:GITHUB_OUTPUT
+        id: create_archive
+      
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: RocketSimulator-exe
+          path: dist/RocketSimulator/
+          retention-days: 7
+      
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: RocketSimulator-zip
+          path: ${{ steps.create_archive.outputs.archive_name }}
+          retention-days: 7
+      
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          name: Rocket Simulator Pro v${{ steps.get_version.outputs.version }}
+          body: |
+            ## Rocket Simulator Pro v${{ steps.get_version.outputs.version }}
+            
+            ### What's New
+            - Windows standalone executable
+            - All dependencies bundled
+            - 6-DOF physics simulation
+            - Monte Carlo analysis
+            - PyQt6 GUI
+            
+            ### Installation
+            1. Download `RocketSimulator-${{ steps.get_version.outputs.version }}-windows.zip`
+            2. Extract the archive
+            3. Run `RocketSimulator.exe`
+            
+            ### Requirements
+            - Windows 7 or later
+            - No Python installation required
+            
+            ### Contents
+            - `RocketSimulator.exe` - Main application
+            - All required libraries and data files
+            - Configuration files
+          draft: false
+          prerelease: false
+          files: |
+            dist/RocketSimulator/RocketSimulator.exe
+            ${{ steps.create_archive.outputs.archive_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload to Release (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Rocket Simulator Pro v${{ steps.get_version.outputs.version }} (Manual)
+          body: |
+            ## Manual Build: Rocket Simulator Pro v${{ steps.get_version.outputs.version }}
+            
+            ### Notes
+            - Built from ${{ github.ref }}
+            - Triggered manually via workflow_dispatch
+            
+            ### Installation
+            1. Download the ZIP archive
+            2. Extract and run `RocketSimulator.exe`
+          draft: true
+          prerelease: true
+          files: |
+            dist/RocketSimulator/RocketSimulator.exe
+            ${{ steps.create_archive.outputs.archive_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          Remove-Item -Path "dist", "build" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "Cleanup completed"
+
+  # =============================================================================
+  # Notify: Summary
+  # =============================================================================
+  notify:
+    name: Summary
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Job Summary
+        run: |
+          echo "### CI/CD Pipeline Summary"
+          echo ""
+          
+          if [ "${{ needs.test.result }}" = "success" ]; then
+            echo "✅ **Tests**: All tests passed"
+          else
+            echo "❌ **Tests**: Failed or cancelled"
+          fi
+          echo ""
+          
+          if [ "${{ needs.build.result }}" = "success" ]; then
+            echo "✅ **Build**: Executable created successfully"
+            echo "   Version: ${{ needs.build.outputs.version }}"
+          elif [ "${{ needs.build.result }}" = "skipped" ]; then
+            echo "⏭️ **Build**: Skipped (not a tag)"
+          else
+            echo "❌ **Build**: Failed or cancelled"
+          fi
+          echo ""
+          
+          echo "Pipeline: ${{ job.status }}"
