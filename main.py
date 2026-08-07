@@ -62,9 +62,9 @@ def apply_dark_theme(app):
     dark_palette.setColor(QPalette.ColorRole.ButtonText, QColor(220, 220, 220))
     dark_palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 255, 255))
     
-    # Disabled state
-    dark_palette.setColor(QPalette.ColorRole.Disabled, QPalette.ColorRole.Text, QColor(120, 120, 120))
-    dark_palette.setColor(QPalette.ColorRole.Disabled, QPalette.ColorRole.ButtonText, QColor(120, 120, 120))
+    # Disabled state - Note: In Qt6, disabled colors use the Disabled color group
+    # For text colors in disabled state, we use PlaceholderText as it's commonly used
+    dark_palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(120, 120, 120))
     
     # Highlight colors
     dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 120, 215))
@@ -267,12 +267,6 @@ def main():
         
         # Connect state persistence to window using aboutToQuit signal
         app.aboutToQuit.connect(lambda: save_state(app, state))
-        
-        # Also save on window close
-        def handle_close(event):
-            save_state(app, state)
-            event.accept()
-        window.closeEvent = lambda event: save_state(app, state) or event.accept()
         
         # Final step
         splash_manager.begin_step("Finalizing...", 100)

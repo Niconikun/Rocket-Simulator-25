@@ -24,8 +24,8 @@ Usage:
 """
 
 from PyQt6.QtWidgets import QSplashScreen
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QLinearGradient, QBrush, QPen, QPolygon, QPoint
+from PyQt6.QtCore import Qt, QSize, QPoint
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QLinearGradient, QBrush, QPen, QPolygon
 from PyQt6.QtCore import pyqtSignal, QObject
 import logging
 
@@ -48,9 +48,7 @@ class SplashScreen(QSplashScreen):
     
     def __init__(self, width: int = 600, height: int = 400):
         """Initialize splash screen with custom size."""
-        self._pixmap = self._create_pixmap(width, height)
-        super().__init__(self._pixmap)
-        
+        # Initialize instance variables first
         self._width = width
         self._height = height
         self._progress = 0
@@ -60,6 +58,12 @@ class SplashScreen(QSplashScreen):
         self._background_color = QColor(15, 20, 40)
         self._text_color = QColor(255, 255, 255)
         self._accent_color = QColor(100, 180, 255)
+        
+        # Create pixmap after instance variables are set
+        self._pixmap = self._create_pixmap(width, height)
+        
+        # Call parent constructor
+        super().__init__(self._pixmap)
         
         # Set window properties
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)

@@ -270,9 +270,9 @@ class MainWindow(QMainWindow):
         dark_palette.setColor(QPalette.ColorRole.ButtonText, QColor(220, 220, 220))
         dark_palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 255, 255))
         
-        # Disabled state
-        dark_palette.setColor(QPalette.ColorRole.Disabled, QPalette.ColorRole.Text, QColor(120, 120, 120))
-        dark_palette.setColor(QPalette.ColorRole.Disabled, QPalette.ColorRole.ButtonText, QColor(120, 120, 120))
+        # Disabled state - Note: In Qt6, disabled colors use the Disabled color group
+        # For text colors in disabled state, we use PlaceholderText as it's commonly used
+        dark_palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(120, 120, 120))
         
         # Highlight colors
         dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 120, 215))
