@@ -11,11 +11,14 @@ from src.models.engine import EnhancedEngine
 from src.utils.mattools import MatTools as Mat
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
 from src.utils.simulation_validator import SimulationValidator
+from workers.simulation_cache import get_cache, SimulationCache
 import logging
 import json
 import os
+import copy
 import numpy as np
 from datetime import datetime
+from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +75,15 @@ class SimulationWorker(QThread):
     finished = pyqtSignal(object)  # Emit results dictionary
     error = pyqtSignal(str)  # Emit error message
     
-    def __init__(self, state: ApplicationState):
+    def __init__(self, state: ApplicationState, use_cache: bool = True):
         super().__init__()
         self.state = state
         self.is_running = True
         self.is_paused = False
+        self.use_cache = use_cache
+        self._cache: Optional[SimulationCache] = None
+        if self.use_cache:
+            self._cache = get_cache()
     
     def run(self):
         """Execute the simulation with real physics engine in background thread."""
@@ -241,17 +248,30 @@ class SimulationWorker(QThread):
         # Initial mass
         initial_mass = rocket_config.get('initial_mass', 1000.0)
             
-        # Create physics objects
+        # Create physics objects with caching
         coordinates = np.array([latitude, longitude, altitude])
-        earth = Planet(gmst_0)
-        atmosphere = Atmosphere(temperature)
+        
+        # Use cached Planet and Atmosphere if available (Monte Carlo optimization)
+        if self._cache is not None:
+            earth = self._cache.get_planet(latitude, longitude, gmst_0)
+            atmosphere = self._cache.get_atmosphere(temperature)
+        else:
+            earth = Planet(gmst_0)
+            atmosphere = Atmosphere(temperature)
+        
         rocket = Rocket(r_enu_0, v_enu_0, q_enu2b_0, w_enu_0, initial_mass)
         rocket.update_engine(rocket_name=rocket_name, engine_data=rocket_config['engine'])
             
         # ===== WIND MODEL INITIALIZATION (Phase 2) =====
-        wind = create_wind_model_from_state(self.state._state)
+        # Use cached wind model if available (Monte Carlo optimization)
+        wind_config = self.state._state
+        if self._cache is not None:
+            wind = self._cache.get_wind_model(wind_config)
+        else:
+            wind = create_wind_model_from_state(wind_config)
+        
         if wind is not None:
-            log_wind_config(self.state._state, wind)
+            log_wind_config(wind_config, wind)
             logger.info(f"Wind simulation enabled: {wind.get_info()['model_type']}")
         else:
             logger.info("Wind simulation disabled")
@@ -592,7 +612,15 @@ class SimulationWorker(QThread):
         return results
 
     def _load_rocket_config(self, rocket_name: str) -> dict | None:
-        """Load rocket configuration from JSON file with validation."""
+        """Load rocket configuration from JSON file with validation and caching."""
+        # Try cache first
+        if self._cache is not None:
+            cached_config = self._cache.get_rocket_config(rocket_name)
+            if cached_config is not None:
+                logger.debug(f"Using cached rocket config: {rocket_name}")
+                return self._validate_and_fix_config(cached_config, rocket_name)
+        
+        # Load from disk
         try:
             config_path = f"data/rockets/configs/{rocket_name}.json"
             if not os.path.exists(config_path):
@@ -602,37 +630,51 @@ class SimulationWorker(QThread):
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             
-            # Option 2: Accept both 'initial_mass' and 'total_mass_initial' keys
-            if 'initial_mass' not in config:
-                if 'total_mass_initial' in config:
-                    config['initial_mass'] = config['total_mass_initial']
-                    logger.info(f"Using 'total_mass_initial' as 'initial_mass': {config['initial_mass']} kg")
-                else:
-                    logger.error("Configuration must have either 'initial_mass' or 'total_mass_initial'")
-                    return None
-            
-            # Validate and fix moment of inertia values (prevent singular matrices)
-            # Use physics-based minimum: 0.1 of body mass times reference length squared
-            body_mass = config.get('initial_mass', config.get('total_mass_initial', 1.0))
-            reference_length = 0.5  # Typical rocket reference dimension in meters
-            min_inertia = max(0.01, body_mass * reference_length**2 * 0.01)  # Small fraction of typical value
-            
-            for inertia_key in ['I_before_burn', 'I_after_burn']:
-                if inertia_key in config:
-                    for axis in ['x', 'y', 'z']:
-                        current_value = config[inertia_key].get(axis, 0)
-                        if current_value < min_inertia:
-                            logger.warning(
-                                f"Inertia {inertia_key}[{axis}] = {current_value:.3f} kg·m² is very small, "
-                                f"setting to {min_inertia:.3f} kg·m² to prevent numerical issues"
-                            )
-                            config[inertia_key][axis] = min_inertia
-            
             logger.info(f"Loaded rocket configuration: {rocket_name}")
-            return config
+            
+            # Cache the raw config before validation
+            if self._cache is not None:
+                # Store raw config in cache (validation happens per-run)
+                self._cache._rocket_config_cache[rocket_name] = config
+                self._cache._stats.rocket_configs += 1
+            
+            return self._validate_and_fix_config(config, rocket_name)
         except Exception as e:
             logger.error(f"Error loading rocket config: {e}")
             return None
+    
+    def _validate_and_fix_config(self, config: dict, rocket_name: str) -> dict:
+        """Validate and fix rocket configuration (shared logic for cached and new configs)."""
+        # Create a deep copy to avoid modifying cached config
+        config = copy.deepcopy(config)
+        
+        # Option 2: Accept both 'initial_mass' and 'total_mass_initial' keys
+        if 'initial_mass' not in config:
+            if 'total_mass_initial' in config:
+                config['initial_mass'] = config['total_mass_initial']
+                logger.info(f"Using 'total_mass_initial' as 'initial_mass': {config['initial_mass']} kg")
+            else:
+                logger.error("Configuration must have either 'initial_mass' or 'total_mass_initial'")
+                return None
+        
+        # Validate and fix moment of inertia values (prevent singular matrices)
+        # Use physics-based minimum: 0.1 of body mass times reference length squared
+        body_mass = config.get('initial_mass', config.get('total_mass_initial', 1.0))
+        reference_length = 0.5  # Typical rocket reference dimension in meters
+        min_inertia = max(0.01, body_mass * reference_length**2 * 0.01)  # Small fraction of typical value
+        
+        for inertia_key in ['I_before_burn', 'I_after_burn']:
+            if inertia_key in config:
+                for axis in ['x', 'y', 'z']:
+                    current_value = config[inertia_key].get(axis, 0)
+                    if current_value < min_inertia:
+                        logger.warning(
+                            f"Inertia {inertia_key}[{axis}] = {current_value:.3f} kg·m² is very small, "
+                            f"setting to {min_inertia:.3f} kg·m² to prevent numerical issues"
+                        )
+                        config[inertia_key][axis] = min_inertia
+        
+        return config
     
     def _validate_rocket_config(self, config: dict, rocket_name: str) -> dict:
         """

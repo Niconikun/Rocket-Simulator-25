@@ -49,6 +49,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from src.utils.monte_carlo_sampler import MonteCarloSampler, ParameterConfig
 from workers.simulation_worker import SimulationWorker
+from workers.simulation_cache import get_cache, clear_cache, SimulationCache
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,8 @@ class MonteCarloRunner(QObject):
         seed: Optional[int] = None,
         sampler_configs: Optional[dict] = None,
         save_trajectory: bool = False,
+        use_cache: bool = True,
+        clear_cache_before: bool = True,
     ) -> None:
         super().__init__()
         self._state = state
@@ -99,9 +102,12 @@ class MonteCarloRunner(QObject):
         self._seed = seed
         self._sampler_configs = sampler_configs
         self._save_trajectory = save_trajectory
+        self._use_cache = use_cache
+        self._clear_cache_before = clear_cache_before
 
         self._is_running = False
         self._batch_id: str = ""
+        self._cache: Optional[SimulationCache] = None
 
     # ------------------------------------------------------------------
     # Public control
@@ -125,6 +131,13 @@ class MonteCarloRunner(QObject):
         logger.info("Monte Carlo batch starting: %s (%d runs)", self._batch_id, self._n_runs)
         logger.info("=" * 60)
 
+        # Initialize cache if enabled
+        if self._use_cache:
+            if self._clear_cache_before:
+                clear_cache()
+            self._cache = get_cache()
+            logger.info("Simulation cache enabled for Monte Carlo batch")
+
         # Build sampler
         sampler = MonteCarloSampler.from_state(
             self._state,
@@ -133,8 +146,8 @@ class MonteCarloRunner(QObject):
         )
         logger.info(sampler.summary())
 
-        # Build a persistent SimulationWorker (state will be overridden per run)
-        worker = SimulationWorker(self._state)
+        # Build a persistent SimulationWorker with caching enabled (state will be overridden per run)
+        worker = SimulationWorker(self._state, use_cache=self._use_cache)
 
         # Prepare output file
         output_path = os.path.join(_OUTPUT_DIR, f"{self._batch_id}.jsonl")
@@ -202,6 +215,11 @@ class MonteCarloRunner(QObject):
             return
 
         # Build and emit summary
+        cache_stats = None
+        if self._cache is not None:
+            cache_stats = self._cache.stats.to_dict()
+            logger.info(f"Cache stats: {cache_stats}")
+        
         summary = self._build_summary(
             batch_id=self._batch_id,
             n_requested=self._n_runs,
@@ -209,6 +227,7 @@ class MonteCarloRunner(QObject):
             failed_runs=failed_runs,
             output_path=output_path,
             sampler_summary=sampler.summary(),
+            cache_stats=cache_stats,
         )
 
         # Write summary alongside the JSONL file
@@ -223,6 +242,11 @@ class MonteCarloRunner(QObject):
             "Monte Carlo batch finished: %d/%d successful, %d failed.",
             len(successful), self._n_runs, len(failed_runs),
         )
+        
+        # Clear rocket object cache to free memory (keep configs and other objects)
+        if self._cache is not None:
+            self._cache.clear_rockets()
+        
         self.finished.emit(summary)
 
     # ------------------------------------------------------------------
@@ -268,6 +292,7 @@ class MonteCarloRunner(QObject):
         failed_runs: list[int],
         output_path: str,
         sampler_summary: str,
+        cache_stats: Optional[dict] = None,
     ) -> dict:
         """Compute aggregate statistics over all successful runs."""
         n_ok = len(successful)
@@ -283,6 +308,10 @@ class MonteCarloRunner(QObject):
             "sampler_config": sampler_summary,
             "statistics":     {},
         }
+        
+        # Add cache statistics if provided
+        if cache_stats:
+            summary["cache_stats"] = cache_stats
 
         if not successful:
             return summary
