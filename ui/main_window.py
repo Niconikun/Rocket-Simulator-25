@@ -6,7 +6,7 @@ between different widget pages.
 """
 from PyQt6.QtWidgets import (
     QMainWindow, QTabWidget, QVBoxLayout, QHBoxLayout, QWidget,
-    QStatusBar, QMenuBar, QMenu, QMessageBox, QFileDialog
+    QStatusBar, QMenuBar, QMenu, QMessageBox, QFileDialog, QApplication
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QAction, QPalette, QColor
