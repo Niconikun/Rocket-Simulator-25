@@ -70,6 +70,7 @@ class DashboardWidget(QWidget):
         self.state = ApplicationState.get_instance()
         self.sim_manager = SimulationManager()
         self.current_sim_id = None
+        self._active_figures = []  # matplotlib Figures tracked for explicit plt.close()
         self.init_ui()
         self.load_simulation_history()
     
@@ -713,10 +714,14 @@ class DashboardWidget(QWidget):
                 
                 # Add vertical line at max-Q
                 if HAS_PYQTGRAPH:
-                    vr_line = InfiniteLine(pos=times[max_q_idx], angle=90, 
-                                          pen=mkPen('orange', width=1.5, style=Qt.PenStyle.DashLine))
+                    vr_line = InfiniteLine(pos=times[max_q_idx], angle=90,
+                                          pen=mkPen(color=(255, 165, 0), width=1.5,
+                                                     style=Qt.PenStyle.DashLine))
                     plot10.addItem(vr_line)
-                    plot10.addLegend()
+                    # Reuse the legend already created inside
+                    # _create_pyqtgraph_simple_plot instead of calling
+                    # addLegend() again, which would stack a second legend
+                    # item on top of the first.
             else:
                 plot10 = self._create_pyqtgraph_placeholder("Dynamic Pressure")
         except Exception as e:
@@ -742,9 +747,11 @@ class DashboardWidget(QWidget):
                 # Add horizontal line at TWR = 1.0
                 if HAS_PYQTGRAPH:
                     hr_line = InfiniteLine(pos=1.0, angle=0, 
-                                          pen=mkPen('red', width=1.5, style=Qt.PenStyle.DashLine))
+                                          pen=mkPen(color=(255, 0, 0), width=1.5,
+                                                     style=Qt.PenStyle.DashLine))
                     plot11.addItem(hr_line)
-                    plot11.addLegend()
+                    # Legend already created inside _create_pyqtgraph_simple_plot;
+                    # do not call addLegend() again here.
             else:
                 plot11 = self._create_pyqtgraph_placeholder("Thrust/Weight")
         except Exception as e:
@@ -799,10 +806,10 @@ class DashboardWidget(QWidget):
                 
                 # Add horizontal line at y=0
                 if HAS_PYQTGRAPH:
-                    hr_line = InfiniteLine(pos=0, angle=0, 
-                                          pen=mkPen('red', width=1, style=Qt.PenStyle.DashLine, alpha=128))
+                    hr_line = InfiniteLine(pos=0, angle=0,
+                                          pen=mkPen(color=(255, 0, 0, 128), width=1,
+                                                     style=Qt.PenStyle.DashLine))
                     plot13.addItem(hr_line)
-                    plot13.addLegend()
             else:
                 plot13 = self._create_pyqtgraph_placeholder("Stability")
         except Exception as e:
@@ -879,6 +886,13 @@ class DashboardWidget(QWidget):
     
     def _add_chart_as_tab(self, fig, tab_name):
         """Add a matplotlib figure as a new tab with zoom/pan toolbar."""
+        # Track this Figure so it can be explicitly closed (plt.close) the next
+        # time a simulation is loaded - see _close_active_figures(). Figures
+        # built directly via Figure() (as the 2D/3D maps do) are not managed by
+        # pyplot's state machine and are not garbage-collected just because the
+        # tab/canvas that displayed them gets replaced.
+        self._track_figure(fig)
+
         container = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
@@ -969,6 +983,11 @@ class DashboardWidget(QWidget):
             
             if use_secondary_axis and len(y_data_list) > 1:
                 # For dual axis, plot first dataset on left, second on right
+                view1 = plot_widget.getViewBox()
+
+                # Add legend BEFORE plotting so it reliably picks up curve1
+                legend = plot_widget.addLegend()
+
                 # Plot first dataset on primary (left) axis
                 curve1 = plot_widget.plot(x_data, y_data_list[0], 
                                         pen=mkPen(color=self._color_to_pg(colors_list[0]), width=2), 
@@ -989,22 +1008,39 @@ class DashboardWidget(QWidget):
                 curve2 = PlotCurveItem(x_data, y_data_list[1], 
                                       pen=mkPen(color=self._color_to_pg(colors_list[1]), width=2))
                 axis2_view.addItem(curve2)
-                axis2_view.setGeometry(plot_widget.getViewBox().sceneBoundingRect())
-                
-                # Add legend with both curves
-                legend = plot_widget.addLegend()
-                legend.addItem(curve1, labels[0])
+
+                # Keep the right-hand ViewBox geometry (and autorange) in sync with
+                # the left one on every resize/zoom/pan. Without this, curve2 only
+                # aligns correctly at creation time and drifts as soon as the user
+                # zooms, pans, or resizes the window.
+                def _update_views(view1=view1, axis2_view=axis2_view):
+                    axis2_view.setGeometry(view1.sceneBoundingRect())
+                    axis2_view.linkedViewChanged(view1, axis2_view.XAxis)
+
+                view1.sigResized.connect(_update_views)
+                _update_views()
+
+                # Keep strong references on the widget itself: axis2_view and the
+                # callback must stay alive as long as the plot does, or the resize
+                # signal silently stops updating the secondary axis.
+                plot_widget._axis2_view = axis2_view
+                plot_widget._update_views = _update_views
+
+                # Add second curve to the legend (already created above)
                 legend.addItem(curve2, labels[1])
             else:
+                # Add legend BEFORE plotting so it reliably picks up all curves
+                legend = None
+                if len(y_data_list) > 1:
+                    legend = plot_widget.addLegend()
+
                 # Plot all datasets on same axis with proper legends
                 for i, y_data in enumerate(y_data_list):
                     if len(y_data) > 0:
                         pen = mkPen(color=self._color_to_pg(colors_list[i]), width=2)
                         plot_widget.plot(x_data, y_data, pen=pen, name=labels[i])
-                
-                # Add legend for multi-line plots
-                if len(y_data_list) > 1:
-                    plot_widget.addLegend()
+
+                plot_widget._legend = legend
             
             return plot_widget
             
@@ -1029,11 +1065,18 @@ class DashboardWidget(QWidget):
             pen = mkPen(color=self._color_to_pg(color), width=2)
             # Use provided name or extract from title
             data_name = name if name else title.split(' ')[0] if title else 'Data'
-            plot_widget.plot(x_data, y_data, pen=pen, name=data_name)
-            
-            # Add legend if we have a name
+
+            # Add legend BEFORE plotting so it reliably picks up the curve
+            legend = None
             if data_name and data_name != 'Data':
-                plot_widget.addLegend()
+                legend = plot_widget.addLegend()
+
+            plot_widget.plot(x_data, y_data, pen=pen, name=data_name)
+
+            # Stash the legend (may be None) so callers can add more items to it
+            # instead of calling addLegend() again and stacking a second legend
+            # on top of it.
+            plot_widget._legend = legend
             
             return plot_widget
         except Exception as e:
@@ -1075,6 +1118,16 @@ class DashboardWidget(QWidget):
                 logger.warning("No trajectory data for maps")
                 return
             
+            # Close any matplotlib Figures created for the previous simulation
+            # before building new ones. self.charts_tab_widget.clear() (called in
+            # generate_performance_charts) destroys the Qt widgets/canvases, but
+            # standalone Figure() objects (not created via pyplot) are not
+            # garbage-collected automatically just because their canvas widget
+            # was destroyed - repeatedly loading simulations otherwise leaks
+            # memory (this is especially costly for the 3D map, which also
+            # renders an offscreen cartopy texture into its own Figure).
+            self._close_active_figures()
+            
             # Extract trajectory data
             times = np.array([p.get('time', 0) for p in trajectory])
             altitudes = np.array([p.get('altitude', 0) for p in trajectory])
@@ -1090,6 +1143,25 @@ class DashboardWidget(QWidget):
             
         except Exception as e:
             logger.error(f"Error generating maps: {e}")
+    
+    def _close_active_figures(self):
+        """Close and release matplotlib Figures tracked from previous map/chart
+        generation. Call this before creating new Figures for a newly loaded
+        simulation to prevent unbounded memory growth."""
+        figures = getattr(self, '_active_figures', [])
+        for fig in figures:
+            try:
+                plt.close(fig)
+            except Exception as e:
+                logger.warning(f"Could not close figure: {e}")
+        self._active_figures = []
+    
+    def _track_figure(self, fig):
+        """Register a matplotlib Figure so it can be closed on the next refresh."""
+        if not hasattr(self, '_active_figures'):
+            self._active_figures = []
+        self._active_figures.append(fig)
+        return fig
     
     def _resolve_launch_coords(self, metadata: dict) -> tuple:
         """Return (lat, lon, azimuth) from metadata, falling back to launch_sites.json."""
@@ -1297,6 +1369,12 @@ class DashboardWidget(QWidget):
                 except Exception as img_err:
                     logger.warning(f"Cartopy ground texture failed: {img_err}")
                     ground_img = None
+                finally:
+                    # This Figure is only an offscreen render target for the
+                    # ground texture - it is never added as a tab, so it must
+                    # be closed here explicitly or it leaks on every reload.
+                    if 'map_fig' in locals():
+                        plt.close(map_fig)
 
             # ── Build 3D figure ──────────────────────────────────────────
             fig = Figure(figsize=(9, 7))
