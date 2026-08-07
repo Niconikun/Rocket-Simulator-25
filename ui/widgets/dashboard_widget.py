@@ -32,7 +32,7 @@ import numpy as np
 # Import PyQtGraph for performance charts
 try:
     import pyqtgraph as pg
-    from pyqtgraph import PlotWidget, PlotDataItem, PlotCurveItem, ViewBox, GraphicsLayoutWidget
+    from pyqtgraph import PlotWidget, PlotDataItem, PlotCurveItem, ViewBox, GraphicsLayoutWidget, InfiniteLine, mkPen
     from pyqtgraph.Qt import QtGui
     HAS_PYQTGRAPH = True
 except ImportError:
@@ -539,14 +539,14 @@ class DashboardWidget(QWidget):
             # Chart 2: Flight Path - Altitude vs Range
             plot2 = self._create_pyqtgraph_simple_plot(
                 "Flight Path",
-                ranges, altitudes, 'Range [m]', 'Altitude [m]'
+                ranges, altitudes, 'Range [m]', 'Altitude [m]', color='blue', name='Flight Path'
             )
             self._add_pyqtgraph_as_tab(plot2, "Flight Path")
             
             # Chart 3: Mach Number vs Time
             plot3 = self._create_pyqtgraph_simple_plot(
                 "Mach Number",
-                times, machs, 'Time [s]', 'Mach'
+                times, machs, 'Time [s]', 'Mach', color='darkblue', name='Mach Number'
             )
             self._add_pyqtgraph_as_tab(plot3, "Mach Number")
             
@@ -708,14 +708,15 @@ class DashboardWidget(QWidget):
                 
                 plot10 = self._create_pyqtgraph_simple_plot(
                     f"Dynamic Pressure (Max-Q: {q_dynamic[max_q_idx]:.0f} Pa @ {times[max_q_idx]:.2f}s)",
-                    times, q_dynamic, 'Time [s]', 'Q [Pa]'
+                    times, q_dynamic, 'Time [s]', 'Q [Pa]', color='darkred', name='Dynamic Pressure'
                 )
                 
                 # Add vertical line at max-Q
                 if HAS_PYQTGRAPH:
-                    vr_line = pg.InfiniteLine(pos=times[max_q_idx], angle=90, 
-                                             pen=pg.mkPen('orange', width=1.5, style=Qt.PenStyle.DashLine))
+                    vr_line = InfiniteLine(pos=times[max_q_idx], angle=90, 
+                                          pen=mkPen('orange', width=1.5, style=Qt.PenStyle.DashLine))
                     plot10.addItem(vr_line)
+                    plot10.addLegend()
             else:
                 plot10 = self._create_pyqtgraph_placeholder("Dynamic Pressure")
         except Exception as e:
@@ -735,14 +736,15 @@ class DashboardWidget(QWidget):
                 
                 plot11 = self._create_pyqtgraph_simple_plot(
                     "Thrust-to-Weight Ratio",
-                    times, twr, 'Time [s]', 'TWR'
+                    times, twr, 'Time [s]', 'TWR', color='green', name='TWR'
                 )
                 
                 # Add horizontal line at TWR = 1.0
                 if HAS_PYQTGRAPH:
-                    hr_line = pg.InfiniteLine(pos=1.0, angle=0, 
-                                             pen=pg.mkPen('red', width=1.5, style=Qt.PenStyle.DashLine))
+                    hr_line = InfiniteLine(pos=1.0, angle=0, 
+                                          pen=mkPen('red', width=1.5, style=Qt.PenStyle.DashLine))
                     plot11.addItem(hr_line)
+                    plot11.addLegend()
             else:
                 plot11 = self._create_pyqtgraph_placeholder("Thrust/Weight")
         except Exception as e:
@@ -792,14 +794,15 @@ class DashboardWidget(QWidget):
                 
                 plot13 = self._create_pyqtgraph_simple_plot(
                     "Static Margin",
-                    times, margin, 'Time [s]', 'Margin [m]'
+                    times, margin, 'Time [s]', 'Margin [m]', color='teal', name='Static Margin'
                 )
                 
                 # Add horizontal line at y=0
                 if HAS_PYQTGRAPH:
-                    hr_line = pg.InfiniteLine(pos=0, angle=0, 
-                                             pen=pg.mkPen('red', width=1, style=Qt.PenStyle.DashLine, alpha=128))
+                    hr_line = InfiniteLine(pos=0, angle=0, 
+                                          pen=mkPen('red', width=1, style=Qt.PenStyle.DashLine, alpha=128))
                     plot13.addItem(hr_line)
+                    plot13.addLegend()
             else:
                 plot13 = self._create_pyqtgraph_placeholder("Stability")
         except Exception as e:
@@ -958,51 +961,60 @@ class DashboardWidget(QWidget):
             plot_widget = PlotWidget(title=title)
             plot_widget.setMouseEnabled(x=True, y=True)
             plot_widget.setMouseTracking(True)
+            plot_widget.showGrid(x=True, y=True, alpha=0.3)
             
             # Set labels
             plot_widget.setLabel('bottom', x_label)
+            plot_widget.setLabel('left', y_label)
             
             if use_secondary_axis and len(y_data_list) > 1:
-                # Create a viewbox for secondary axis
-                axis2 = ViewBox()
-                plot_widget.scene().addItem(axis2)
-                plot_widget.getAxis('right').linkToView(axis2)
-                plot_widget.getAxis('right').setLabel(y_label)
-                plot_widget.getAxis('right').show()
-                
-                # Plot first dataset on primary axis
+                # For dual axis, plot first dataset on left, second on right
+                # Plot first dataset on primary (left) axis
                 curve1 = plot_widget.plot(x_data, y_data_list[0], 
-                                        pen=pg.mkPen(color=self._color_to_pg(colors_list[0]), width=2), 
+                                        pen=mkPen(color=self._color_to_pg(colors_list[0]), width=2), 
                                         name=labels[0])
                 
-                # Plot second dataset on secondary axis
-                curve2 = PlotCurveItem(x_data, y_data_list[1], 
-                                      pen=pg.mkPen(color=self._color_to_pg(colors_list[1]), width=2))
-                axis2.addItem(curve2)
-                axis2.setXLink(plot_widget)
+                # Create right axis and plot second dataset
+                axis2 = plot_widget.getAxis('right')
+                axis2.show()
+                axis2.setLabel(labels[1])
                 
-                # Add legend
+                # Create ViewBox linked to right axis
+                axis2_view = ViewBox()
+                axis2.linkToView(axis2_view)
+                plot_widget.scene().addItem(axis2_view)
+                axis2_view.setXLink(plot_widget)
+                
+                # Plot second dataset on right axis
+                curve2 = PlotCurveItem(x_data, y_data_list[1], 
+                                      pen=mkPen(color=self._color_to_pg(colors_list[1]), width=2))
+                axis2_view.addItem(curve2)
+                axis2_view.setGeometry(plot_widget.getViewBox().sceneBoundingRect())
+                
+                # Add legend with both curves
                 legend = plot_widget.addLegend()
                 legend.addItem(curve1, labels[0])
                 legend.addItem(curve2, labels[1])
             else:
-                # Plot all datasets on same axis
+                # Plot all datasets on same axis with proper legends
                 for i, y_data in enumerate(y_data_list):
                     if len(y_data) > 0:
-                        pen = pg.mkPen(color=self._color_to_pg(colors_list[i]), width=2)
+                        pen = mkPen(color=self._color_to_pg(colors_list[i]), width=2)
                         plot_widget.plot(x_data, y_data, pen=pen, name=labels[i])
                 
-                plot_widget.setLabel('left', y_label)
-                plot_widget.addLegend()
-                plot_widget.showGrid(x=True, y=True, alpha=0.3)
+                # Add legend for multi-line plots
+                if len(y_data_list) > 1:
+                    plot_widget.addLegend()
             
             return plot_widget
             
         except Exception as e:
             logger.error(f"Error creating PyQtGraph plot: {e}")
+            import traceback
+            traceback.print_exc()
             return self._create_multiline_chart(title, x_data, y_data_list, labels, colors_list)
     
-    def _create_pyqtgraph_simple_plot(self, title, x_data, y_data, x_label, y_label, color='blue'):
+    def _create_pyqtgraph_simple_plot(self, title, x_data, y_data, x_label, y_label, color='blue', name=None):
         """Create a simple PyQtGraph plot with single dataset."""
         if not HAS_PYQTGRAPH:
             return self._create_simple_chart(title, x_data, y_data, x_label, y_label)
@@ -1012,15 +1024,22 @@ class DashboardWidget(QWidget):
             plot_widget.setMouseEnabled(x=True, y=True)
             plot_widget.setLabel('bottom', x_label)
             plot_widget.setLabel('left', y_label)
-            plot_widget.addLegend()
-            
-            pen = pg.mkPen(color=self._color_to_pg(color), width=2)
-            plot_widget.plot(x_data, y_data, pen=pen, name='Data')
             plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            
+            pen = mkPen(color=self._color_to_pg(color), width=2)
+            # Use provided name or extract from title
+            data_name = name if name else title.split(' ')[0] if title else 'Data'
+            plot_widget.plot(x_data, y_data, pen=pen, name=data_name)
+            
+            # Add legend if we have a name
+            if data_name and data_name != 'Data':
+                plot_widget.addLegend()
             
             return plot_widget
         except Exception as e:
             logger.error(f"Error creating simple PyQtGraph plot: {e}")
+            import traceback
+            traceback.print_exc()
             return self._create_simple_chart(title, x_data, y_data, x_label, y_label)
     
     def _create_pyqtgraph_placeholder(self, title):
@@ -1033,8 +1052,9 @@ class DashboardWidget(QWidget):
             plot_widget.setMouseEnabled(x=False, y=False)
             
             # Add text item
-            text_item = pg.TextItem(text='Data not available\nin current simulation',
-                                    color=(150, 150, 150), anchor=(0.5, 0.5))
+            from pyqtgraph import TextItem
+            text_item = TextItem(text='Data not available\nin current simulation',
+                                 color=(150, 150, 150), anchor=(0.5, 0.5))
             text_item.setPos(0.5, 0.5)
             plot_widget.addItem(text_item)
             
