@@ -11,6 +11,7 @@ from PyQt6.QtGui import QColor, QPalette
 from models.app_state import ApplicationState
 from src.utils.simulation_manager import SimulationManager
 import logging
+logger = logging.getLogger(__name__)
 from datetime import datetime
 import csv
 import json
@@ -49,8 +50,6 @@ try:
     HAS_CARTOPY = True
 except ImportError:
     HAS_CARTOPY = False
-
-logger = logging.getLogger(__name__)
 
 
 class DashboardWidget(QWidget):
