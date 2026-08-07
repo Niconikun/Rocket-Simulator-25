@@ -4,10 +4,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, 
     QGridLayout, QPushButton, QTableWidget, QTableWidgetItem,
     QComboBox, QMessageBox, QFileDialog, QScrollArea, QTabWidget,
-    QHeaderView
+    QHeaderView, QApplication
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QPalette
 from models.app_state import ApplicationState
 from src.utils.simulation_manager import SimulationManager
 import logging
@@ -20,13 +20,23 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib import colors
 
-# Import matplotlib for plotting
+# Import matplotlib for plotting (kept for maps and compatibility)
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+
+# Import PyQtGraph for performance charts
+try:
+    import pyqtgraph as pg
+    from pyqtgraph import PlotWidget, PlotDataItem, PlotCurveItem, ViewBox, GraphicsLayoutWidget
+    from pyqtgraph.Qt import QtGui
+    HAS_PYQTGRAPH = True
+except ImportError:
+    HAS_PYQTGRAPH = False
+    logger.warning("PyQtGraph not available, falling back to matplotlib")
 
 from pathlib import Path
 
@@ -495,7 +505,7 @@ class DashboardWidget(QWidget):
         )
     
     def generate_performance_charts(self, sim_data):
-        """Generate performance charts as tabs from simulation data."""
+        """Generate performance charts as tabs from simulation data using PyQtGraph."""
         # Clear previous tabs
         self.charts_tab_widget.clear()
         
@@ -518,279 +528,285 @@ class DashboardWidget(QWidget):
             ranges = np.array([p.get('range', 0) for p in trajectory])
             machs = np.array([p.get('mach', 0) for p in trajectory])
             
-            # Chart 1: Altitude & Velocity vs Time
-            fig1 = self._create_chart(
-                "Altitude [m] & Velocity [m/s] vs Time [s]",
+            # Chart 1: Altitude & Velocity vs Time (Dual axis)
+            plot1 = self._create_pyqtgraph_plot(
+                "Altitude & Velocity",
                 times, [altitudes, velocities], 
-                ['Altitude', 'Velocity'], ['blue', 'red']
+                ['Altitude [m]', 'Velocity [m/s]'], ['blue', 'red'],
+                use_secondary_axis=True
             )
-            self._add_chart_as_tab(fig1, "Altitude & Velocity")
+            self._add_pyqtgraph_as_tab(plot1, "Altitude & Velocity")
             
             # Chart 2: Flight Path - Altitude vs Range
-            fig2 = self._create_simple_chart(
-                "Flight Path - Altitude [m] vs Range [m]",
-                ranges, altitudes, 'Range', 'Altitude'
+            plot2 = self._create_pyqtgraph_simple_plot(
+                "Flight Path",
+                ranges, altitudes, 'Range [m]', 'Altitude [m]'
             )
-            self._add_chart_as_tab(fig2, "Flight Path")
+            self._add_pyqtgraph_as_tab(plot2, "Flight Path")
             
-            # Chart 3: Mach & AoA vs Time  (placeholder - use mach data)
-            fig3 = self._create_simple_chart(
-                "Mach Number vs Time [s]",
-                times, machs, 'Time', 'Mach'
+            # Chart 3: Mach Number vs Time
+            plot3 = self._create_pyqtgraph_simple_plot(
+                "Mach Number",
+                times, machs, 'Time [s]', 'Mach'
             )
-            self._add_chart_as_tab(fig3, "Mach Number")
+            self._add_pyqtgraph_as_tab(plot3, "Mach Number")
             
-            # Charts 4-9: Additional performance data if available from history
-            if history:
-                # Try to extract data from history
-                if isinstance(history, dict):
-                    # Chart 4: Forces Analysis
-                    try:
-                        times = np.array(history.get('hist_time', []))
-                        thrust = np.array(history.get('hist_thrust', []))
-                        drag = np.array(history.get('hist_drag', []))
-                        lift = np.array(history.get('hist_lift', []))
-                        
-                        if len(times) > 0:
-                            fig4 = self._create_multiline_chart(
-                                "Forces Analysis [N] vs Time [s]",
-                                times, [thrust, drag, lift],
-                                ['Thrust', 'Drag', 'Lift'],
-                                ['green', 'red', 'blue']
-                            )
-                        else:
-                            fig4 = self._create_placeholder_chart("Forces Analysis [N] vs Time [s]")
-                    except Exception as e:
-                        logger.warning(f"Could not create forces chart: {e}")
-                        fig4 = self._create_placeholder_chart("Forces Analysis [N] vs Time [s]")
-                    self._add_chart_as_tab(fig4, "Forces")
-                    
-                    # Chart 5: Mass & Altitude
-                    try:
-                        times = np.array(history.get('hist_time', []))
-                        mass = np.array(history.get('hist_mass', []))
-                        altitude = np.array(history.get('hist_alt', []))
-                        
-                        if len(times) > 0:
-                            fig5 = self._create_chart(
-                                "Mass [kg] & Altitude [m] vs Time [s]",
-                                times, [mass, altitude],
-                                ['Mass', 'Altitude'], ['purple', 'cyan']
-                            )
-                        else:
-                            fig5 = self._create_placeholder_chart("Mass [kg] & Altitude [m] vs Time [s]")
-                    except Exception as e:
-                        logger.warning(f"Could not create mass chart: {e}")
-                        fig5 = self._create_placeholder_chart("Mass [kg] & Altitude [m] vs Time [s]")
-                    self._add_chart_as_tab(fig5, "Mass & Altitude")
-                    
-                    # Chart 6: Attitude (Euler Angles)
-                    try:
-                        times = np.array(history.get('hist_time', []))
-                        yaw = np.array(history.get('hist_yaw', []))
-                        pitch = np.array(history.get('hist_pitch', []))
-                        roll = np.array(history.get('hist_roll', []))
-                        
-                        if len(times) > 0:
-                            fig6 = self._create_multiline_chart(
-                                "Attitude - Euler Angles [°] vs Time [s]",
-                                times, [np.degrees(yaw), np.degrees(pitch), np.degrees(roll)],
-                                ['Yaw', 'Pitch', 'Roll'],
-                                ['orange', 'green', 'purple']
-                            )
-                        else:
-                            fig6 = self._create_placeholder_chart("Attitude Analysis - Euler Angles [°] vs Time [s]")
-                    except Exception as e:
-                        logger.warning(f"Could not create attitude chart: {e}")
-                        fig6 = self._create_placeholder_chart("Attitude Analysis - Euler Angles [°] vs Time [s]")
-                    self._add_chart_as_tab(fig6, "Attitude")
-                    
-                    # Chart 7: Velocity Components
-                    try:
-                        times = np.array(history.get('hist_time', []))
-                        v_bx = np.array(history.get('hist_v_bx', []))
-                        v_by = np.array(history.get('hist_v_by', []))
-                        v_bz = np.array(history.get('hist_v_bz', []))
-                        
-                        if len(times) > 0:
-                            fig7 = self._create_multiline_chart(
-                                "Velocity Components [m/s] vs Time [s]",
-                                times, [v_bx, v_by, v_bz],
-                                ['Vx', 'Vy', 'Vz'],
-                                ['red', 'green', 'blue']
-                            )
-                        else:
-                            fig7 = self._create_placeholder_chart("Velocity Components [m/s] vs Time [s]")
-                    except Exception as e:
-                        logger.warning(f"Could not create velocity chart: {e}")
-                        fig7 = self._create_placeholder_chart("Velocity Components [m/s] vs Time [s]")
-                    self._add_chart_as_tab(fig7, "Velocity Components")
-                    
-                    # Chart 8: Atmospheric Conditions
-                    try:
-                        altitude = np.array(history.get('hist_alt', []))
-                        density = np.array(history.get('hist_density', []))
-                        pressure = np.array(history.get('hist_press_amb', []))
-                        
-                        if len(altitude) > 0 and len(density) > 0:
-                            fig8 = self._create_chart(
-                                "Atmospheric Conditions vs Altitude [m]",
-                                altitude, [density, pressure],
-                                ['Density [kg/m³]', 'Pressure [Pa]'],
-                                ['darkblue', 'darkgreen']
-                            )
-                        else:
-                            fig8 = self._create_placeholder_chart("Atmospheric Conditions vs Altitude [m]")
-                    except Exception as e:
-                        logger.warning(f"Could not create atmosphere chart: {e}")
-                        fig8 = self._create_placeholder_chart("Atmospheric Conditions vs Altitude [m]")
-                    self._add_chart_as_tab(fig8, "Atmosphere")
-                    
-                    # Chart 9: Aerodynamic Coefficients
-                    try:
-                        times = np.array(history.get('hist_time', []))
-                        drag_coeff = np.array(history.get('hist_drag_coeff', []))
-                        lift_coeff = np.array(history.get('hist_lift_coeff', []))
-                        mach = np.array(history.get('hist_mach', []))
-                        
-                        if len(times) > 0:
-                            fig9 = self._create_multiline_chart(
-                                "Aerodynamic Coefficients [-] vs Time [s]",
-                                times, [drag_coeff, lift_coeff, mach],
-                                ['Cd', 'Cl', 'Mach'],
-                                ['brown', 'pink', 'gray']
-                            )
-                        else:
-                            fig9 = self._create_placeholder_chart("Aerodynamic Coefficients [-] vs Time [s]")
-                    except Exception as e:
-                        logger.warning(f"Could not create aero coefficients chart: {e}")
-                        fig9 = self._create_placeholder_chart("Aerodynamic Coefficients [-] vs Time [s]")
-                    self._add_chart_as_tab(fig9, "Aero Coefficients")
-                    
-                    # Chart 10: Dynamic Pressure (Q)
-                    try:
-                        times = np.array(history.get('hist_time', []))
-                        density = np.array(history.get('hist_density', []))
-                        v_norm = np.array(history.get('hist_v_norm', []))
-                        
-                        if len(times) > 0 and len(density) > 0 and len(v_norm) > 0:
-                            q_dynamic = 0.5 * density * v_norm**2
-                            max_q_idx = np.argmax(q_dynamic)
-                            
-                            fig10, ax = plt.subplots(figsize=(8, 6), dpi=100)
-                            fig10.suptitle("Dynamic Pressure (Q) [Pa] vs Time [s]", fontsize=12, fontweight='bold')
-                            ax.plot(times, q_dynamic, color='darkred', linewidth=2, label='Q')
-                            ax.axvline(x=times[max_q_idx], color='orange', linestyle='--', linewidth=1.5,
-                                      label=f'Max-Q: {q_dynamic[max_q_idx]:.0f} Pa @ {times[max_q_idx]:.2f}s')
-                            ax.set_xlabel('Time [s]')
-                            ax.set_ylabel('Dynamic Pressure [Pa]')
-                            ax.legend(loc='best')
-                            ax.grid(True, alpha=0.3)
-                            plt.tight_layout()
-                        else:
-                            fig10 = self._create_placeholder_chart("Dynamic Pressure (Q) [Pa] vs Time [s]")
-                    except Exception as e:
-                        logger.warning(f"Could not create dynamic pressure chart: {e}")
-                        fig10 = self._create_placeholder_chart("Dynamic Pressure (Q) [Pa] vs Time [s]")
-                    self._add_chart_as_tab(fig10, "Dynamic Pressure")
-                    
-                    # Chart 11: Thrust-to-Weight Ratio
-                    try:
-                        times = np.array(history.get('hist_time', []))
-                        thrust = np.array(history.get('hist_thrust', []))
-                        mass = np.array(history.get('hist_mass', []))
-                        
-                        if len(times) > 0 and len(thrust) > 0 and len(mass) > 0:
-                            g0 = 9.80665
-                            twr = np.where(mass > 0, thrust / (mass * g0), 0)
-                            
-                            fig11, ax = plt.subplots(figsize=(8, 6), dpi=100)
-                            fig11.suptitle("Thrust-to-Weight Ratio vs Time [s]", fontsize=12, fontweight='bold')
-                            ax.plot(times, twr, color='green', linewidth=2, label='TWR')
-                            ax.axhline(y=1.0, color='red', linestyle='--', linewidth=1.5, label='TWR = 1.0')
-                            ax.set_xlabel('Time [s]')
-                            ax.set_ylabel('TWR [-]')
-                            ax.legend(loc='best')
-                            ax.grid(True, alpha=0.3)
-                            plt.tight_layout()
-                        else:
-                            fig11 = self._create_placeholder_chart("Thrust-to-Weight Ratio vs Time [s]")
-                    except Exception as e:
-                        logger.warning(f"Could not create TWR chart: {e}")
-                        fig11 = self._create_placeholder_chart("Thrust-to-Weight Ratio vs Time [s]")
-                    self._add_chart_as_tab(fig11, "Thrust/Weight")
-                    
-                    # Chart 12: Energy Analysis
-                    try:
-                        times = np.array(history.get('hist_time', []))
-                        mass = np.array(history.get('hist_mass', []))
-                        v_norm = np.array(history.get('hist_v_norm', []))
-                        altitude = np.array(history.get('hist_alt', []))
-                        
-                        if len(times) > 0 and len(mass) > 0 and len(v_norm) > 0:
-                            g0 = 9.80665
-                            ke = 0.5 * mass * v_norm**2
-                            pe = mass * g0 * np.maximum(altitude, 0)
-                            total_e = ke + pe
-                            
-                            # Convert to kJ for readability
-                            fig12 = self._create_multiline_chart(
-                                "Energy Analysis [kJ] vs Time [s]",
-                                times, [ke / 1000, pe / 1000, total_e / 1000],
-                                ['Kinetic', 'Potential', 'Total'],
-                                ['red', 'blue', 'purple']
-                            )
-                        else:
-                            fig12 = self._create_placeholder_chart("Energy Analysis [kJ] vs Time [s]")
-                    except Exception as e:
-                        logger.warning(f"Could not create energy chart: {e}")
-                        fig12 = self._create_placeholder_chart("Energy Analysis [kJ] vs Time [s]")
-                    self._add_chart_as_tab(fig12, "Energy")
-                    
-                    # Chart 13: Stability Margin (CM to CP distance)
-                    try:
-                        times = np.array(history.get('hist_time', []))
-                        cm_b = np.array(history.get('hist_cm_b', []))
-                        cp_b = np.array(history.get('hist_cp_b', []))
-                        
-                        if len(times) > 0 and len(cm_b) > 0 and len(cp_b) > 0:
-                            # Static margin = distance from CM to CP along rocket axis (index 0)
-                            if cm_b.ndim == 2 and cp_b.ndim == 2:
-                                margin = cp_b[:, 0] - cm_b[:, 0]
-                            else:
-                                margin = np.array(history.get('hist_cm2cp_b', []))
-                                if margin.ndim == 2:
-                                    margin = margin[:, 0]
-                            
-                            fig13, ax = plt.subplots(figsize=(8, 6), dpi=100)
-                            fig13.suptitle("Static Margin [m] vs Time [s]", fontsize=12, fontweight='bold')
-                            ax.plot(times, margin, color='teal', linewidth=2, label='Static Margin')
-                            ax.axhline(y=0, color='red', linestyle='--', linewidth=1, alpha=0.7, label='Neutral stability')
-                            ax.set_xlabel('Time [s]')
-                            ax.set_ylabel('Static Margin [m]')
-                            ax.legend(loc='best')
-                            ax.grid(True, alpha=0.3)
-                            plt.tight_layout()
-                        else:
-                            fig13 = self._create_placeholder_chart("Static Margin [m] vs Time [s]")
-                    except Exception as e:
-                        logger.warning(f"Could not create stability chart: {e}")
-                        fig13 = self._create_placeholder_chart("Static Margin [m] vs Time [s]")
-                    self._add_chart_as_tab(fig13, "Stability")
-            else:
-                # Fill remaining charts with placeholders if no history
-                placeholders = ["Forces", "Mass & Altitude", "Attitude",
-                                "Velocity Components", "Atmosphere", "Aero Coefficients",
-                                "Dynamic Pressure", "Thrust/Weight", "Energy", "Stability"]
-                for name in placeholders:
-                    fig = self._create_placeholder_chart(name)
-                    self._add_chart_as_tab(fig, name)
+            # Charts 4-13: Additional performance data if available from history
+            # Generate advanced charts from history data using PyQtGraph
+            self._generate_advanced_charts(history)
             
-            logger.info("Performance charts generated successfully")
+            logger.info("Performance charts generated successfully with PyQtGraph")
             
         except Exception as e:
             logger.error(f"Error generating charts: {e}")
             QMessageBox.warning(self, "Chart Error", f"Failed to generate charts: {str(e)}")
+    
+    def _generate_advanced_charts(self, history):
+        """Generate advanced charts (4-13) using PyQtGraph."""
+        if not isinstance(history, dict):
+            # Fill with placeholders
+            placeholders = ["Forces", "Mass & Altitude", "Attitude",
+                          "Velocity Components", "Atmosphere", "Aero Coefficients",
+                          "Dynamic Pressure", "Thrust/Weight", "Energy", "Stability"]
+            for name in placeholders:
+                plot = self._create_pyqtgraph_placeholder(name)
+                self._add_pyqtgraph_as_tab(plot, name)
+            return
+        
+        # Chart 4: Forces Analysis
+        try:
+            times = np.array(history.get('hist_time', []))
+            thrust = np.array(history.get('hist_thrust', []))
+            drag = np.array(history.get('hist_drag', []))
+            lift = np.array(history.get('hist_lift', []))
+            
+            if len(times) > 0:
+                plot4 = self._create_pyqtgraph_plot(
+                    "Forces Analysis",
+                    times, [thrust, drag, lift],
+                    ['Thrust [N]', 'Drag [N]', 'Lift [N]'],
+                    ['green', 'red', 'blue']
+                )
+            else:
+                plot4 = self._create_pyqtgraph_placeholder("Forces Analysis")
+        except Exception as e:
+            logger.warning(f"Could not create forces chart: {e}")
+            plot4 = self._create_pyqtgraph_placeholder("Forces Analysis")
+        self._add_pyqtgraph_as_tab(plot4, "Forces")
+        
+        # Chart 5: Mass & Altitude
+        try:
+            times = np.array(history.get('hist_time', []))
+            mass = np.array(history.get('hist_mass', []))
+            altitude_hist = np.array(history.get('hist_alt', []))
+            
+            if len(times) > 0:
+                plot5 = self._create_pyqtgraph_plot(
+                    "Mass & Altitude",
+                    times, [mass, altitude_hist],
+                    ['Mass [kg]', 'Altitude [m]'],
+                    ['purple', 'cyan']
+                )
+            else:
+                plot5 = self._create_pyqtgraph_placeholder("Mass & Altitude")
+        except Exception as e:
+            logger.warning(f"Could not create mass chart: {e}")
+            plot5 = self._create_pyqtgraph_placeholder("Mass & Altitude")
+        self._add_pyqtgraph_as_tab(plot5, "Mass & Altitude")
+        
+        # Chart 6: Attitude (Euler Angles)
+        try:
+            times = np.array(history.get('hist_time', []))
+            yaw = np.array(history.get('hist_yaw', []))
+            pitch = np.array(history.get('hist_pitch', []))
+            roll = np.array(history.get('hist_roll', []))
+            
+            if len(times) > 0:
+                plot6 = self._create_pyqtgraph_plot(
+                    "Attitude",
+                    times, [np.degrees(yaw), np.degrees(pitch), np.degrees(roll)],
+                    ['Yaw [°]', 'Pitch [°]', 'Roll [°]'],
+                    ['orange', 'green', 'purple']
+                )
+            else:
+                plot6 = self._create_pyqtgraph_placeholder("Attitude")
+        except Exception as e:
+            logger.warning(f"Could not create attitude chart: {e}")
+            plot6 = self._create_pyqtgraph_placeholder("Attitude")
+        self._add_pyqtgraph_as_tab(plot6, "Attitude")
+        
+        # Chart 7: Velocity Components
+        try:
+            times = np.array(history.get('hist_time', []))
+            v_bx = np.array(history.get('hist_v_bx', []))
+            v_by = np.array(history.get('hist_v_by', []))
+            v_bz = np.array(history.get('hist_v_bz', []))
+            
+            if len(times) > 0:
+                plot7 = self._create_pyqtgraph_plot(
+                    "Velocity Components",
+                    times, [v_bx, v_by, v_bz],
+                    ['Vx [m/s]', 'Vy [m/s]', 'Vz [m/s]'],
+                    ['red', 'green', 'blue']
+                )
+            else:
+                plot7 = self._create_pyqtgraph_placeholder("Velocity Components")
+        except Exception as e:
+            logger.warning(f"Could not create velocity chart: {e}")
+            plot7 = self._create_pyqtgraph_placeholder("Velocity Components")
+        self._add_pyqtgraph_as_tab(plot7, "Velocity Components")
+        
+        # Chart 8: Atmospheric Conditions
+        try:
+            altitude_hist = np.array(history.get('hist_alt', []))
+            density = np.array(history.get('hist_density', []))
+            pressure = np.array(history.get('hist_press_amb', []))
+            
+            if len(altitude_hist) > 0 and len(density) > 0:
+                plot8 = self._create_pyqtgraph_plot(
+                    "Atmospheric Conditions",
+                    altitude_hist, [density, pressure],
+                    ['Density [kg/m³]', 'Pressure [Pa]'],
+                    ['darkblue', 'darkgreen']
+                )
+            else:
+                plot8 = self._create_pyqtgraph_placeholder("Atmosphere")
+        except Exception as e:
+            logger.warning(f"Could not create atmosphere chart: {e}")
+            plot8 = self._create_pyqtgraph_placeholder("Atmosphere")
+        self._add_pyqtgraph_as_tab(plot8, "Atmosphere")
+        
+        # Chart 9: Aerodynamic Coefficients
+        try:
+            times = np.array(history.get('hist_time', []))
+            drag_coeff = np.array(history.get('hist_drag_coeff', []))
+            lift_coeff = np.array(history.get('hist_lift_coeff', []))
+            mach = np.array(history.get('hist_mach', []))
+            
+            if len(times) > 0:
+                plot9 = self._create_pyqtgraph_plot(
+                    "Aerodynamic Coefficients",
+                    times, [drag_coeff, lift_coeff, mach],
+                    ['Cd', 'Cl', 'Mach'],
+                    ['brown', 'pink', 'gray']
+                )
+            else:
+                plot9 = self._create_pyqtgraph_placeholder("Aero Coefficients")
+        except Exception as e:
+            logger.warning(f"Could not create aero coefficients chart: {e}")
+            plot9 = self._create_pyqtgraph_placeholder("Aero Coefficients")
+        self._add_pyqtgraph_as_tab(plot9, "Aero Coefficients")
+        
+        # Chart 10: Dynamic Pressure (Q)
+        try:
+            times = np.array(history.get('hist_time', []))
+            density = np.array(history.get('hist_density', []))
+            v_norm = np.array(history.get('hist_v_norm', []))
+            
+            if len(times) > 0 and len(density) > 0 and len(v_norm) > 0:
+                q_dynamic = 0.5 * density * v_norm**2
+                max_q_idx = np.argmax(q_dynamic)
+                
+                plot10 = self._create_pyqtgraph_simple_plot(
+                    f"Dynamic Pressure (Max-Q: {q_dynamic[max_q_idx]:.0f} Pa @ {times[max_q_idx]:.2f}s)",
+                    times, q_dynamic, 'Time [s]', 'Q [Pa]'
+                )
+                
+                # Add vertical line at max-Q
+                if HAS_PYQTGRAPH:
+                    vr_line = pg.InfiniteLine(pos=times[max_q_idx], angle=90, 
+                                             pen=pg.mkPen('orange', width=1.5, style=Qt.PenStyle.DashLine))
+                    plot10.addItem(vr_line)
+            else:
+                plot10 = self._create_pyqtgraph_placeholder("Dynamic Pressure")
+        except Exception as e:
+            logger.warning(f"Could not create dynamic pressure chart: {e}")
+            plot10 = self._create_pyqtgraph_placeholder("Dynamic Pressure")
+        self._add_pyqtgraph_as_tab(plot10, "Dynamic Pressure")
+        
+        # Chart 11: Thrust-to-Weight Ratio
+        try:
+            times = np.array(history.get('hist_time', []))
+            thrust = np.array(history.get('hist_thrust', []))
+            mass = np.array(history.get('hist_mass', []))
+            
+            if len(times) > 0 and len(thrust) > 0 and len(mass) > 0:
+                g0 = 9.80665
+                twr = np.where(mass > 0, thrust / (mass * g0), 0)
+                
+                plot11 = self._create_pyqtgraph_simple_plot(
+                    "Thrust-to-Weight Ratio",
+                    times, twr, 'Time [s]', 'TWR'
+                )
+                
+                # Add horizontal line at TWR = 1.0
+                if HAS_PYQTGRAPH:
+                    hr_line = pg.InfiniteLine(pos=1.0, angle=0, 
+                                             pen=pg.mkPen('red', width=1.5, style=Qt.PenStyle.DashLine))
+                    plot11.addItem(hr_line)
+            else:
+                plot11 = self._create_pyqtgraph_placeholder("Thrust/Weight")
+        except Exception as e:
+            logger.warning(f"Could not create TWR chart: {e}")
+            plot11 = self._create_pyqtgraph_placeholder("Thrust/Weight")
+        self._add_pyqtgraph_as_tab(plot11, "Thrust/Weight")
+        
+        # Chart 12: Energy Analysis
+        try:
+            times = np.array(history.get('hist_time', []))
+            mass = np.array(history.get('hist_mass', []))
+            v_norm = np.array(history.get('hist_v_norm', []))
+            altitude_hist = np.array(history.get('hist_alt', []))
+            
+            if len(times) > 0 and len(mass) > 0 and len(v_norm) > 0:
+                g0 = 9.80665
+                ke = 0.5 * mass * v_norm**2
+                pe = mass * g0 * np.maximum(altitude_hist, 0)
+                total_e = ke + pe
+                
+                plot12 = self._create_pyqtgraph_plot(
+                    "Energy Analysis",
+                    times, [ke / 1000, pe / 1000, total_e / 1000],
+                    ['Kinetic [kJ]', 'Potential [kJ]', 'Total [kJ]'],
+                    ['red', 'blue', 'purple']
+                )
+            else:
+                plot12 = self._create_pyqtgraph_placeholder("Energy")
+        except Exception as e:
+            logger.warning(f"Could not create energy chart: {e}")
+            plot12 = self._create_pyqtgraph_placeholder("Energy")
+        self._add_pyqtgraph_as_tab(plot12, "Energy")
+        
+        # Chart 13: Stability Margin
+        try:
+            times = np.array(history.get('hist_time', []))
+            cm_b = np.array(history.get('hist_cm_b', []))
+            cp_b = np.array(history.get('hist_cp_b', []))
+            
+            if len(times) > 0 and len(cm_b) > 0 and len(cp_b) > 0:
+                if cm_b.ndim == 2 and cp_b.ndim == 2:
+                    margin = cp_b[:, 0] - cm_b[:, 0]
+                else:
+                    margin = np.array(history.get('hist_cm2cp_b', []))
+                    if margin.ndim == 2:
+                        margin = margin[:, 0]
+                
+                plot13 = self._create_pyqtgraph_simple_plot(
+                    "Static Margin",
+                    times, margin, 'Time [s]', 'Margin [m]'
+                )
+                
+                # Add horizontal line at y=0
+                if HAS_PYQTGRAPH:
+                    hr_line = pg.InfiniteLine(pos=0, angle=0, 
+                                             pen=pg.mkPen('red', width=1, style=Qt.PenStyle.DashLine, alpha=128))
+                    plot13.addItem(hr_line)
+            else:
+                plot13 = self._create_pyqtgraph_placeholder("Stability")
+        except Exception as e:
+            logger.warning(f"Could not create stability chart: {e}")
+            plot13 = self._create_pyqtgraph_placeholder("Stability")
+        self._add_pyqtgraph_as_tab(plot13, "Stability")
     
     def _create_chart(self, title, x_data, y_data_list, labels, colors_list):
         """Create a matplotlib figure with multiple y-axes."""
@@ -875,6 +891,161 @@ class DashboardWidget(QWidget):
         container.setLayout(layout)
 
         self.charts_tab_widget.addTab(container, tab_name)
+    
+    def _add_pyqtgraph_as_tab(self, plot_widget, tab_name):
+        """Add a PyQtGraph PlotWidget as a new tab."""
+        container = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Apply dark theme to PyQtGraph if available
+        if HAS_PYQTGRAPH:
+            try:
+                # Get current application palette to match theme
+                app = QApplication.instance()
+                if app:
+                    palette = app.palette()
+                    bg_color = palette.color(QPalette.ColorRole.Window)
+                    text_color = palette.color(QPalette.ColorRole.WindowText)
+                    
+                    # Set background color to match dark theme
+                    plot_widget.setBackground((bg_color.red(), bg_color.green(), bg_color.blue()))
+                    
+                    # Set text color
+                    plot_widget.getAxis('bottom').setTextPen((text_color.red(), text_color.green(), text_color.blue()))
+                    plot_widget.getAxis('left').setTextPen((text_color.red(), text_color.green(), text_color.blue()))
+                    
+                    # Set grid color
+                    plot_widget.showGrid(x=True, y=True, alpha=0.3)
+                    plot_widget.setMenuEnabled(False)  # Disable context menu for cleaner look
+            except Exception as e:
+                logger.warning(f"Could not apply theme to PyQtGraph: {e}")
+        
+        plot_widget.setMinimumHeight(450)
+        layout.addWidget(plot_widget, stretch=1)
+        container.setLayout(layout)
+        
+        self.charts_tab_widget.addTab(container, tab_name)
+    
+    def _color_to_pg(self, color):
+        """Convert color to PyQtGraph format (RGB tuple 0-255)."""
+        if isinstance(color, str):
+            # Common color names mapping
+            color_map = {
+                'blue': (0, 0, 255), 'red': (255, 0, 0), 'green': (0, 255, 0),
+                'cyan': (0, 255, 255), 'purple': (128, 0, 128), 'orange': (255, 165, 0),
+                'brown': (165, 42, 42), 'pink': (255, 192, 203), 'gray': (128, 128, 128),
+                'darkblue': (0, 0, 139), 'darkgreen': (0, 100, 0), 'teal': (0, 128, 128),
+                'limegreen': (50, 205, 50), 'darkred': (139, 0, 0)
+            }
+            return color_map.get(color.lower(), (200, 200, 200))
+        elif isinstance(color, tuple):
+            # Assume it's already RGB (0-255 or 0-1)
+            if len(color) >= 3:
+                # Normalize if 0-1 range
+                if all(0 <= c <= 1 for c in color[:3]):
+                    return tuple(int(c * 255) for c in color[:3])
+                return color[:3]
+        return (200, 200, 200)  # Default gray
+    
+    def _create_pyqtgraph_plot(self, title, x_data, y_data_list, labels, colors_list, 
+                               x_label="Time [s]", y_label="Value", use_secondary_axis=False):
+        """Create a PyQtGraph plot widget with multiple curves."""
+        if not HAS_PYQTGRAPH:
+            return self._create_multiline_chart(title, x_data, y_data_list, labels, colors_list)
+        
+        try:
+            plot_widget = PlotWidget(title=title)
+            plot_widget.setMouseEnabled(x=True, y=True)
+            plot_widget.setMouseTracking(True)
+            
+            # Set labels
+            plot_widget.setLabel('bottom', x_label)
+            
+            if use_secondary_axis and len(y_data_list) > 1:
+                # Create a viewbox for secondary axis
+                axis2 = ViewBox()
+                plot_widget.scene().addItem(axis2)
+                plot_widget.getAxis('right').linkToView(axis2)
+                plot_widget.getAxis('right').setLabel(y_label)
+                plot_widget.getAxis('right').show()
+                
+                # Plot first dataset on primary axis
+                curve1 = plot_widget.plot(x_data, y_data_list[0], 
+                                        pen=pg.mkPen(color=self._color_to_pg(colors_list[0]), width=2), 
+                                        name=labels[0])
+                
+                # Plot second dataset on secondary axis
+                curve2 = PlotCurveItem(x_data, y_data_list[1], 
+                                      pen=pg.mkPen(color=self._color_to_pg(colors_list[1]), width=2))
+                axis2.addItem(curve2)
+                axis2.setXLink(plot_widget)
+                
+                # Add legend
+                legend = plot_widget.addLegend()
+                legend.addItem(curve1, labels[0])
+                legend.addItem(curve2, labels[1])
+            else:
+                # Plot all datasets on same axis
+                for i, y_data in enumerate(y_data_list):
+                    if len(y_data) > 0:
+                        pen = pg.mkPen(color=self._color_to_pg(colors_list[i]), width=2)
+                        plot_widget.plot(x_data, y_data, pen=pen, name=labels[i])
+                
+                plot_widget.setLabel('left', y_label)
+                plot_widget.addLegend()
+                plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            
+            return plot_widget
+            
+        except Exception as e:
+            logger.error(f"Error creating PyQtGraph plot: {e}")
+            return self._create_multiline_chart(title, x_data, y_data_list, labels, colors_list)
+    
+    def _create_pyqtgraph_simple_plot(self, title, x_data, y_data, x_label, y_label, color='blue'):
+        """Create a simple PyQtGraph plot with single dataset."""
+        if not HAS_PYQTGRAPH:
+            return self._create_simple_chart(title, x_data, y_data, x_label, y_label)
+        
+        try:
+            plot_widget = PlotWidget(title=title)
+            plot_widget.setMouseEnabled(x=True, y=True)
+            plot_widget.setLabel('bottom', x_label)
+            plot_widget.setLabel('left', y_label)
+            plot_widget.addLegend()
+            
+            pen = pg.mkPen(color=self._color_to_pg(color), width=2)
+            plot_widget.plot(x_data, y_data, pen=pen, name='Data')
+            plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            
+            return plot_widget
+        except Exception as e:
+            logger.error(f"Error creating simple PyQtGraph plot: {e}")
+            return self._create_simple_chart(title, x_data, y_data, x_label, y_label)
+    
+    def _create_pyqtgraph_placeholder(self, title):
+        """Create a placeholder PyQtGraph plot."""
+        if not HAS_PYQTGRAPH:
+            return self._create_placeholder_chart(title)
+        
+        try:
+            plot_widget = PlotWidget(title=title)
+            plot_widget.setMouseEnabled(x=False, y=False)
+            
+            # Add text item
+            text_item = pg.TextItem(text='Data not available\nin current simulation',
+                                    color=(150, 150, 150), anchor=(0.5, 0.5))
+            text_item.setPos(0.5, 0.5)
+            plot_widget.addItem(text_item)
+            
+            plot_widget.hideAxis('bottom')
+            plot_widget.hideAxis('left')
+            
+            return plot_widget
+        except Exception as e:
+            logger.error(f"Error creating PyQtGraph placeholder: {e}")
+            return self._create_placeholder_chart(title)
     
     def generate_trajectory_maps(self, sim_data, metadata):
         """Generate 2D map (as tab) and 3D trajectory (left panel) from simulation data."""
