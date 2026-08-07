@@ -9,9 +9,10 @@ from PyQt6.QtWidgets import (
     QStatusBar, QMenuBar, QMenu, QMessageBox, QFileDialog
 )
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtGui import QIcon, QAction, QPalette, QColor
 from models.app_state import ApplicationState
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,18 @@ class MainWindow(QMainWindow):
         self.init_ui()
         self.setup_menu_bar()
         self.setup_status_bar()
+        
+        # Apply theme based on state (after UI is initialized)
+        self._apply_theme_from_state()
+    
+    def _apply_theme_from_state(self):
+        """Apply theme based on saved state."""
+        dark_mode = self.state.get('dark_mode_enabled', True)
+        self.dark_mode_action.setChecked(dark_mode)
+        if dark_mode:
+            self._apply_dark_theme()
+        else:
+            self._apply_light_theme()
     
     def init_ui(self):
         """Initialize the user interface."""
@@ -130,6 +143,13 @@ class MainWindow(QMainWindow):
         # View menu
         view_menu = menubar.addMenu("View")
         
+        # Dark mode toggle
+        self.dark_mode_action = QAction("Dark Mode", self)
+        self.dark_mode_action.setCheckable(True)
+        self.dark_mode_action.setChecked(True)  # Start with dark mode
+        self.dark_mode_action.triggered.connect(self.toggle_dark_mode)
+        view_menu.addAction(self.dark_mode_action)
+        
         # Help menu
         help_menu = menubar.addMenu("Help")
         
@@ -210,6 +230,226 @@ class MainWindow(QMainWindow):
     def close_application(self):
         """Close the application."""
         self.close()
+    
+    def toggle_dark_mode(self, checked: bool = None):
+        """Toggle dark mode on/off.
+        
+        Args:
+            checked: If provided, set dark mode to this value.
+                   If None, toggle current state.
+        """
+        if checked is None:
+            checked = not self.dark_mode_action.isChecked()
+        
+        self.dark_mode_action.setChecked(checked)
+        
+        # Apply theme
+        if checked:
+            self._apply_dark_theme()
+        else:
+            self._apply_light_theme()
+        
+        # Save preference in state
+        self.state.set('dark_mode_enabled', checked)
+        self.statusBar().showMessage(f"Dark mode {'enabled' if checked else 'disabled'}")
+    
+    def _apply_dark_theme(self):
+        """Apply dark theme to the application."""
+        dark_palette = QPalette()
+        
+        # Base colors
+        dark_palette.setColor(QPalette.ColorRole.Window, QColor(30, 30, 30))
+        dark_palette.setColor(QPalette.ColorRole.WindowText, QColor(220, 220, 220))
+        dark_palette.setColor(QPalette.ColorRole.Base, QColor(40, 40, 40))
+        dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(55, 55, 55))
+        dark_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(25, 25, 25))
+        dark_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(220, 220, 220))
+        
+        # Button colors
+        dark_palette.setColor(QPalette.ColorRole.Button, QColor(50, 50, 50))
+        dark_palette.setColor(QPalette.ColorRole.ButtonText, QColor(220, 220, 220))
+        dark_palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 255, 255))
+        
+        # Disabled state
+        dark_palette.setColor(QPalette.ColorRole.Disabled, QPalette.ColorRole.Text, QColor(120, 120, 120))
+        dark_palette.setColor(QPalette.ColorRole.Disabled, QPalette.ColorRole.ButtonText, QColor(120, 120, 120))
+        
+        # Highlight colors
+        dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 120, 215))
+        dark_palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+        
+        # Link colors
+        dark_palette.setColor(QPalette.ColorRole.Link, QColor(50, 150, 255))
+        dark_palette.setColor(QPalette.ColorRole.LinkVisited, QColor(200, 100, 255))
+        
+        self.setPalette(dark_palette)
+        
+        # Apply dark stylesheet
+        self.setStyleSheet(self._get_dark_stylesheet())
+    
+    def _apply_light_theme(self):
+        """Apply light theme to the application."""
+        # Reset to default palette
+        self.setPalette(QPalette())
+        
+        # Apply light stylesheet (optional, for consistency)
+        self.setStyleSheet(self._get_light_stylesheet())
+    
+    def _get_dark_stylesheet(self) -> str:
+        """Get dark theme stylesheet."""
+        return """
+            QMainWindow {
+                background-color: #2e2e2e;
+            }
+            QTabWidget::pane {
+                border: 1px solid #444;
+            }
+            QTabBar::tab {
+                background-color: #3a3a3a;
+                color: #ddd;
+                padding: 8px 16px;
+                border: 1px solid #444;
+            }
+            QTabBar::tab:selected {
+                background-color: #4a4a4a;
+                border-bottom: 2px solid #0078d7;
+            }
+            QTabBar::tab:hover {
+                background-color: #4a4a4a;
+            }
+            QPushButton {
+                background-color: #4a4a4a;
+                color: #eee;
+                border: 1px solid #555;
+                padding: 6px 12px;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                background-color: #5a5a5a;
+            }
+            QPushButton:pressed {
+                background-color: #3a3a3a;
+            }
+            QPushButton:disabled {
+                background-color: #3a3a3a;
+                color: #777;
+            }
+            QLineEdit, QDoubleSpinBox, QSpinBox {
+                background-color: #3a3a3a;
+                color: #eee;
+                border: 1px solid #555;
+                padding: 4px;
+            }
+            QComboBox {
+                background-color: #3a3a3a;
+                color: #eee;
+                border: 1px solid #555;
+                padding: 4px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #3a3a3a;
+                color: #eee;
+                selection-background-color: #0078d7;
+            }
+            QLabel {
+                color: #ddd;
+            }
+            QGroupBox {
+                border: 1px solid #444;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                color: #0078d7;
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+            QStatusBar {
+                background-color: #3a3a3a;
+                color: #ddd;
+            }
+            QMenuBar {
+                background-color: #3a3a3a;
+                color: #ddd;
+            }
+            QMenuBar::item {
+                background: transparent;
+            }
+            QMenuBar::item:selected {
+                background-color: #4a4a4a;
+            }
+            QMenu {
+                background-color: #3a3a3a;
+                color: #ddd;
+                border: 1px solid #555;
+            }
+            QMenu::item:selected {
+                background-color: #0078d7;
+                color: white;
+            }
+            QScrollArea {
+                background-color: #2e2e2e;
+                border: 1px solid #444;
+            }
+            QWidget {
+                background-color: #2e2e2e;
+                color: #ddd;
+            }
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #0078d7;
+                border: 1px solid #0078d7;
+            }
+            QTableWidget {
+                background-color: #3a3a3a;
+                color: #ddd;
+                gridline-color: #444;
+            }
+            QTableWidget::item:selected {
+                background-color: #0078d7;
+                color: white;
+            }
+            QHeaderView::section {
+                background-color: #4a4a4a;
+                color: #eee;
+                padding: 4px;
+                border: 1px solid #555;
+            }
+            QTextEdit {
+                background-color: #3a3a3a;
+                color: #eee;
+                border: 1px solid #555;
+            }
+            QFrame {
+                background-color: #2e2e2e;
+            }
+            QSplitter::handle {
+                background-color: #444;
+            }
+        """
+    
+    def _get_light_stylesheet(self) -> str:
+        """Get light theme stylesheet (minimal, mostly default)."""
+        return """
+            QTabBar::tab:selected {
+                border-bottom: 2px solid #0078d7;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+            QGroupBox::title {
+                color: #0078d7;
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """
     
     @staticmethod
     def create_icon():

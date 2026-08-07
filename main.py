@@ -13,7 +13,9 @@ To run as executable (after PyInstaller):
 import sys
 import os
 import logging
+import traceback
 from pathlib import Path
+from datetime import datetime
 
 # Disable Qt WebEngine sandbox before any Qt imports (required on Windows)
 os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
@@ -34,105 +36,184 @@ logger = logging.getLogger(__name__)
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from PyQt6.QtWidgets import QApplication, QSplashScreen
+from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QLinearGradient, QBrush, QPen
+from ui.splash import SplashScreen, SplashManager
 from ui.main_window import MainWindow
+from models.app_state import ApplicationState
 
 
-def create_splash_pixmap(width: int = 600, height: int = 380) -> QPixmap:
-    """Create a programmatic splash screen pixmap."""
-    pixmap = QPixmap(width, height)
-    pixmap.fill(Qt.GlobalColor.transparent)
+def apply_dark_theme(app):
+    """Apply dark theme to the application."""
+    from PyQt6.QtGui import QPalette, QColor
+    
+    dark_palette = QPalette()
+    
+    # Base colors
+    dark_palette.setColor(QPalette.ColorRole.Window, QColor(30, 30, 30))
+    dark_palette.setColor(QPalette.ColorRole.WindowText, QColor(220, 220, 220))
+    dark_palette.setColor(QPalette.ColorRole.Base, QColor(40, 40, 40))
+    dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(55, 55, 55))
+    dark_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(25, 25, 25))
+    dark_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(220, 220, 220))
+    
+    # Button colors
+    dark_palette.setColor(QPalette.ColorRole.Button, QColor(50, 50, 50))
+    dark_palette.setColor(QPalette.ColorRole.ButtonText, QColor(220, 220, 220))
+    dark_palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 255, 255))
+    
+    # Disabled state
+    dark_palette.setColor(QPalette.ColorRole.Disabled, QPalette.ColorRole.Text, QColor(120, 120, 120))
+    dark_palette.setColor(QPalette.ColorRole.Disabled, QPalette.ColorRole.ButtonText, QColor(120, 120, 120))
+    
+    # Highlight colors
+    dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 120, 215))
+    dark_palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+    
+    # Link colors
+    dark_palette.setColor(QPalette.ColorRole.Link, QColor(50, 150, 255))
+    dark_palette.setColor(QPalette.ColorRole.LinkVisited, QColor(200, 100, 255))
+    
+    app.setPalette(dark_palette)
+    
+    # Set style sheet for better dark theme
+    app.setStyleSheet("""
+        QMainWindow {
+            background-color: #2e2e2e;
+        }
+        QTabWidget::pane {
+            border: 1px solid #444;
+        }
+        QTabBar::tab {
+            background-color: #3a3a3a;
+            color: #ddd;
+            padding: 8px 16px;
+            border: 1px solid #444;
+        }
+        QTabBar::tab:selected {
+            background-color: #4a4a4a;
+            border-bottom: 2px solid #0078d7;
+        }
+        QPushButton {
+            background-color: #4a4a4a;
+            color: #eee;
+            border: 1px solid #555;
+            padding: 6px 12px;
+        }
+        QPushButton:hover {
+            background-color: #5a5a5a;
+        }
+        QPushButton:pressed {
+            background-color: #3a3a3a;
+        }
+        QLineEdit, QDoubleSpinBox, QSpinBox {
+            background-color: #3a3a3a;
+            color: #eee;
+            border: 1px solid #555;
+        }
+        QComboBox {
+            background-color: #3a3a3a;
+            color: #eee;
+            border: 1px solid #555;
+        }
+        QComboBox QAbstractItemView {
+            background-color: #3a3a3a;
+            color: #eee;
+        }
+        QLabel {
+            color: #ddd;
+        }
+        QGroupBox {
+            border: 1px solid #444;
+            margin-top: 10px;
+        }
+        QGroupBox::title {
+            color: #0078d7;
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 5px;
+        }
+        QStatusBar {
+            background-color: #3a3a3a;
+            color: #ddd;
+        }
+        QMenuBar {
+            background-color: #3a3a3a;
+            color: #ddd;
+        }
+        QMenuBar::item {
+            background: transparent;
+        }
+        QMenuBar::item:selected {
+            background-color: #4a4a4a;
+        }
+        QMenu {
+            background-color: #3a3a3a;
+            color: #ddd;
+            border: 1px solid #555;
+        }
+        QMenu::item:selected {
+            background-color: #0078d7;
+            color: white;
+        }
+        QScrollArea {
+            background-color: #2e2e2e;
+            border: 1px solid #444;
+        }
+        QWidget {
+            background-color: #2e2e2e;
+            color: #ddd;
+        }
+        QCheckBox {
+            spacing: 5px;
+        }
+        QCheckBox::indicator {
+            width: 16px;
+            height: 16px;
+        }
+        QTableWidget {
+            background-color: #3a3a3a;
+            color: #ddd;
+            gridline-color: #444;
+        }
+        QTableWidget::item:selected {
+            background-color: #0078d7;
+            color: white;
+        }
+        QHeaderView::section {
+            background-color: #4a4a4a;
+            color: #eee;
+            padding: 4px;
+            border: 1px solid #555;
+        }
+    """)
 
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    # Background gradient (dark space theme)
-    gradient = QLinearGradient(0, 0, 0, height)
-    gradient.setColorAt(0.0, QColor(10, 14, 35))
-    gradient.setColorAt(0.6, QColor(18, 28, 60))
-    gradient.setColorAt(1.0, QColor(8, 10, 25))
-    painter.fillRect(0, 0, width, height, QBrush(gradient))
+def load_state(app, state):
+    """Load application state from file."""
+    state_file = "last_session.json"
+    if os.path.exists(state_file):
+        try:
+            logger.info(f"Loading session from {state_file}")
+            if state.load_from_file(state_file):
+                logger.info("Session loaded successfully")
+                return True
+        except Exception as e:
+            logger.warning(f"Failed to load session: {e}")
+    return False
 
-    # Accent line at top
-    pen = QPen(QColor(255, 100, 30))
-    pen.setWidth(4)
-    painter.setPen(pen)
-    painter.drawLine(0, 3, width, 3)
 
-    # Accent line at bottom
-    painter.drawLine(0, height - 3, width, height - 3)
-
-    # App title
-    title_font = QFont("Segoe UI", 32, QFont.Weight.Bold)
-    painter.setFont(title_font)
-    painter.setPen(QColor(255, 255, 255))
-    painter.drawText(0, 80, width, 60, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "Rocket Simulator Pro")
-
-    # Subtitle / tagline
-    sub_font = QFont("Segoe UI", 13)
-    painter.setFont(sub_font)
-    painter.setPen(QColor(180, 200, 255))
-    painter.drawText(0, 145, width, 36, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "6-DOF Flight Simulation")
-
-    # Simple rocket icon (drawn programmatically)
-    cx = width // 2
-    rocket_top = 200
-
-    # Body
-    painter.setBrush(QBrush(QColor(220, 225, 240)))
-    painter.setPen(QPen(QColor(150, 160, 200), 1))
-    body_points = [
-        (cx - 12, rocket_top + 30),
-        (cx, rocket_top),
-        (cx + 12, rocket_top + 30),
-        (cx + 12, rocket_top + 65),
-        (cx - 12, rocket_top + 65),
-    ]
-    from PyQt6.QtGui import QPolygon
-    from PyQt6.QtCore import QPoint
-    painter.drawPolygon(QPolygon([QPoint(x, y) for x, y in body_points]))
-
-    # Window
-    painter.setBrush(QBrush(QColor(100, 180, 255, 200)))
-    painter.setPen(QPen(QColor(80, 140, 220), 1))
-    painter.drawEllipse(cx - 7, rocket_top + 22, 14, 14)
-
-    # Left fin
-    painter.setBrush(QBrush(QColor(255, 100, 30)))
-    painter.setPen(QPen(QColor(200, 70, 10), 1))
-    fin_l = [QPoint(cx - 12, rocket_top + 50), QPoint(cx - 24, rocket_top + 72), QPoint(cx - 12, rocket_top + 65)]
-    painter.drawPolygon(QPolygon(fin_l))
-
-    # Right fin
-    fin_r = [QPoint(cx + 12, rocket_top + 50), QPoint(cx + 24, rocket_top + 72), QPoint(cx + 12, rocket_top + 65)]
-    painter.drawPolygon(QPolygon(fin_r))
-
-    # Flame
-    flame_gradient = QLinearGradient(cx, rocket_top + 65, cx, rocket_top + 90)
-    flame_gradient.setColorAt(0.0, QColor(255, 200, 50, 230))
-    flame_gradient.setColorAt(0.5, QColor(255, 100, 10, 180))
-    flame_gradient.setColorAt(1.0, QColor(255, 50, 0, 0))
-    painter.setBrush(QBrush(flame_gradient))
-    painter.setPen(Qt.PenStyle.NoPen)
-    flame = [QPoint(cx - 8, rocket_top + 65), QPoint(cx, rocket_top + 90), QPoint(cx + 8, rocket_top + 65)]
-    painter.drawPolygon(QPolygon(flame))
-
-    # Version label
-    ver_font = QFont("Segoe UI", 10)
-    painter.setFont(ver_font)
-    painter.setPen(QColor(130, 150, 200))
-    painter.drawText(0, height - 45, width, 25, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "Version 2.0.0")
-
-    # Loading label
-    load_font = QFont("Segoe UI", 9)
-    painter.setFont(load_font)
-    painter.setPen(QColor(255, 100, 30))
-    painter.drawText(0, height - 22, width, 20, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "Loading...")
-
-    painter.end()
-    return pixmap
+def save_state(app, state):
+    """Save application state to file."""
+    state_file = "last_session.json"
+    try:
+        logger.info(f"Saving session to {state_file}")
+        if state.save_to_file(state_file):
+            logger.info("Session saved successfully")
+            return True
+    except Exception as e:
+        logger.warning(f"Failed to save session: {e}")
+    return False
 
 
 def main():
@@ -152,33 +233,71 @@ def main():
         # Set application properties
         app.setApplicationName("Rocket Simulator Pro")
         app.setApplicationVersion("2.0.0")
-        #app.setApplicationAuthor("Rocket Simulator Team")
+        app.setOrganizationName("Rocket Simulator Team")
         
         logger.info("PyQt6 Application initialized")
 
-        # Show splash screen
-        splash = QSplashScreen(create_splash_pixmap())
-        splash.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
-        splash.show()
+        # Initialize ApplicationState
+        state = ApplicationState.get_instance()
+        
+        # Show splash screen with progress
+        splash_manager = SplashManager(use_dark_theme=True)
+        splash_manager.show()
         app.processEvents()
-
-        # Create and show main window (maximized)
+        
+        # Update splash with initialization steps
+        splash_manager.begin_step("Initializing application...", 10)
+        app.processEvents()
+        
+        # Apply dark theme
+        splash_manager.begin_step("Applying dark theme...", 20)
+        app.processEvents()
+        apply_dark_theme(app)
+        logger.info("Dark theme applied")
+        
+        # Load last session if available
+        splash_manager.begin_step("Loading previous session...", 30)
+        app.processEvents()
+        load_state(app, state)
+        
+        # Initialize main window
+        splash_manager.begin_step("Creating main window...", 60)
+        app.processEvents()
         window = MainWindow()
+        
+        # Connect state persistence to window using aboutToQuit signal
+        app.aboutToQuit.connect(lambda: save_state(app, state))
+        
+        # Also save on window close
+        def handle_close(event):
+            save_state(app, state)
+            event.accept()
+        window.closeEvent = lambda event: save_state(app, state) or event.accept()
+        
+        # Final step
+        splash_manager.begin_step("Finalizing...", 100)
+        app.processEvents()
+        
+        # Create and show main window (maximized)
         window.showMaximized()
 
         # Close splash once the main window is ready
-        splash.finish(window)
+        splash_manager.finish(window)
         
         logger.info("Main window displayed")
         
         # Run application event loop
         exit_code = app.exec()
         
+        # Ensure state is saved on exit
+        save_state(app, state)
+        
         logger.info(f"Application closed with exit code: {exit_code}")
         return exit_code
         
     except Exception as e:
         logger.critical(f"Fatal error: {e}", exc_info=True)
+        traceback.print_exc()
         print(f"FATAL ERROR: {e}")
         return 1
 

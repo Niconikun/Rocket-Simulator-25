@@ -3,12 +3,23 @@ Application State Management
 
 Singleton class that replaces Streamlit's session_state for managing
 application-wide state across all PyQt widgets.
+
+Features:
+- Singleton pattern for centralized state management
+- Automatic persistence to/from JSON files
+- Thread-safe state access
+- Support for testing with reset capability
 """
+import json
+import os
 from datetime import datetime, date, time
 from typing import Any, Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Default session file name
+DEFAULT_SESSION_FILE = "last_session.json"
 
 
 class ApplicationState:
@@ -147,6 +158,210 @@ class ApplicationState:
         self._state.clear()
         self._initialize_defaults()
         logger.info("ApplicationState reset to defaults")
+    
+    def hard_reset(self) -> None:
+        """Completely reset the singleton instance.
+        
+        This method clears the singleton instance, allowing a fresh instance
+        to be created. Useful for testing to ensure a clean state.
+        
+        WARNING: This affects the global singleton state. Use with caution.
+        """
+        ApplicationState._instance = None
+        logger.info("ApplicationState singleton instance cleared")
+    
+    @classmethod
+    def reset_instance(cls) -> 'ApplicationState':
+        """Reset the singleton instance and create a new one.
+        
+        Returns:
+            A fresh ApplicationState instance
+        """
+        cls._instance = None
+        new_instance = cls()
+        logger.info("ApplicationState singleton reset and recreated")
+        return new_instance
+    
+    def save_to_file(self, filepath: str = None) -> bool:
+        """Save state to a JSON file.
+        
+        Args:
+            filepath: Path to save file. If None, uses DEFAULT_SESSION_FILE.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if filepath is None:
+            filepath = DEFAULT_SESSION_FILE
+        
+        try:
+            serializable_state = {}
+            for key, value in self._state.items():
+                if isinstance(value, (date, datetime)):
+                    serializable_state[key] = value.isoformat()
+                elif isinstance(value, time):
+                    serializable_state[key] = value.isoformat()
+                elif isinstance(value, (dict, list)):
+                    # Handle nested structures
+                    serializable_state[key] = self._serialize_nested(value)
+                else:
+                    serializable_state[key] = value
+            
+            # Ensure directory exists
+            dirname = os.path.dirname(filepath)
+            if dirname and not os.path.exists(dirname):
+                os.makedirs(dirname, exist_ok=True)
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(serializable_state, f, indent=2, default=str)
+            
+            logger.info(f"State saved to {filepath}")
+            self._state['last_saved'] = datetime.now()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save state to {filepath}: {e}")
+            return False
+    
+    def load_from_file(self, filepath: str = None) -> bool:
+        """Load state from a JSON file.
+        
+        Args:
+            filepath: Path to load file. If None, uses DEFAULT_SESSION_FILE.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if filepath is None:
+            filepath = DEFAULT_SESSION_FILE
+        
+        if not os.path.exists(filepath):
+            logger.warning(f"State file not found: {filepath}")
+            return False
+        
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            for key, value in data.items():
+                if key == 'sim_date' and isinstance(value, str):
+                    try:
+                        self._state[key] = date.fromisoformat(value)
+                    except ValueError:
+                        # Try parsing datetime
+                        self._state[key] = datetime.fromisoformat(value).date()
+                elif key == 'sim_time' and isinstance(value, str):
+                    try:
+                        self._state[key] = time.fromisoformat(value)
+                    except ValueError:
+                        # Try parsing from datetime
+                        dt = datetime.fromisoformat(value)
+                        self._state[key] = time(dt.hour, dt.minute, dt.second)
+                elif key == 'last_saved' and isinstance(value, str):
+                    self._state[key] = datetime.fromisoformat(value)
+                elif isinstance(value, dict):
+                    self._state[key] = self._deserialize_nested(value)
+                elif isinstance(value, list):
+                    self._state[key] = self._deserialize_list(value)
+                else:
+                    self._state[key] = value
+            
+            logger.info(f"State loaded from {filepath}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load state from {filepath}: {e}")
+            return False
+    
+    def _serialize_nested(self, obj: Any) -> Any:
+        """Recursively serialize nested objects for JSON."""
+        if isinstance(obj, (date, datetime)):
+            return obj.isoformat()
+        elif isinstance(obj, time):
+            return obj.isoformat()
+        elif isinstance(obj, dict):
+            return {k: self._serialize_nested(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [self._serialize_nested(item) for item in obj]
+        elif isinstance(obj, (bool, int, float, str, type(None))):
+            return obj
+        else:
+            # For complex objects, try to convert to string
+            try:
+                return str(obj)
+            except Exception:
+                return None
+    
+    def _deserialize_nested(self, obj: Any) -> Any:
+        """Recursively deserialize nested objects from JSON."""
+        if isinstance(obj, dict):
+            result = {}
+            for k, v in obj.items():
+                result[k] = self._deserialize_nested(v)
+            return result
+        elif isinstance(obj, list):
+            return [self._deserialize_nested(item) for item in obj]
+        elif isinstance(obj, str):
+            # Try to parse as date or datetime
+            try:
+                return date.fromisoformat(obj)
+            except ValueError:
+                pass
+            try:
+                return datetime.fromisoformat(obj)
+            except ValueError:
+                pass
+            return obj
+        else:
+            return obj
+    
+    def _deserialize_list(self, obj: list) -> list:
+        """Deserialize a list, handling special types."""
+        result = []
+        for item in obj:
+            if isinstance(item, str):
+                # Try to parse as date or datetime
+                try:
+                    result.append(date.fromisoformat(item))
+                except ValueError:
+                    try:
+                        result.append(datetime.fromisoformat(item))
+                    except ValueError:
+                        result.append(item)
+            elif isinstance(item, dict):
+                result.append(self._deserialize_nested(item))
+            elif isinstance(item, list):
+                result.append(self._deserialize_list(item))
+            else:
+                result.append(item)
+        return result
+    
+    def save_session(self, filepath: str = None) -> bool:
+        """Save current session to file (alias for save_to_file)."""
+        return self.save_to_file(filepath)
+    
+    def load_session(self, filepath: str = None) -> bool:
+        """Load session from file (alias for load_from_file)."""
+        return self.load_from_file(filepath)
+    
+    def auto_save(self, filepath: str = None) -> bool:
+        """Auto-save state with timestamp backup."""
+        if filepath is None:
+            filepath = DEFAULT_SESSION_FILE
+        
+        # Create backup with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filepath = f"{filepath}.bak_{timestamp}"
+        
+        # Save current state to backup first
+        if os.path.exists(filepath):
+            try:
+                import shutil
+                shutil.copy2(filepath, backup_filepath)
+                logger.debug(f"Backup created: {backup_filepath}")
+            except Exception as e:
+                logger.warning(f"Failed to create backup: {e}")
+        
+        # Save current state
+        return self.save_to_file(filepath)
     
     def save_to_file(self, filepath: str) -> bool:
         """Save state to a JSON file."""
