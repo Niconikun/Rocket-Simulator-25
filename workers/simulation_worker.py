@@ -149,7 +149,7 @@ class SimulationWorker(QThread):
                 'name': self.state.get('selected_parachute', 'Main Parachute'),
                 'diameter': self.state.get('parachute_diameter', 0.6),
                 'Cd': self.state.get('parachute_cd', 1.5),
-                'material': 'ripstop_nylon',
+                'material': self.state.get('parachute_material', 'ripstop_nylon'),
                 'deployment_altitude': self.state.get('parachute_deployment_altitude', 300.0),
                 'min_velocity': self.state.get('parachute_min_velocity', 5.0),
                 'max_velocity': self.state.get('parachute_max_velocity', 80.0),
@@ -162,6 +162,7 @@ class SimulationWorker(QThread):
                     'drogue_diameter': self.state.get('drogue_diameter', 0.25),
                     'drogue_Cd': self.state.get('drogue_cd', 1.5),
                     'drogue_deployment_altitude': self.state.get('drogue_deployment_altitude', 800.0),
+                    'drogue_inflation_time': self.state.get('drogue_inflation_time', 0.2),
                 })
                 
             parachute = Parachute(parachute_config)

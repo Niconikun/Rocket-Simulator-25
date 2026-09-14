@@ -1,7 +1,7 @@
 """Parachute Settings Widget - Parachute configuration."""
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDoubleSpinBox, QCheckBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox, QCheckBox,
     QPushButton, QGroupBox, QFormLayout, QMessageBox, QComboBox, QFileDialog,
     QSpinBox, QPlainTextEdit
 )
@@ -78,10 +78,22 @@ class ParachuteSettingsWidget(QWidget):
         deployment_group = QGroupBox("Main Parachute Configuration")
         deployment_layout = QFormLayout()
         
-        # Parachute name
-        self.parachute_name = QLabel("Standard Round")
+        # Parachute name (editable so custom profiles can be saved under a new name)
+        self.parachute_name = QLineEdit("Standard Round")
+        self.parachute_name.editingFinished.connect(
+            lambda: self.state.set('selected_parachute', self.parachute_name.text())
+        )
         deployment_layout.addRow("Parachute Name:", self.parachute_name)
-        
+
+        # Material (must match the enum in data/schemas/parachute.schema.json)
+        self.parachute_material = QComboBox()
+        self.parachute_material.addItems(['ripstop_nylon', 'silnylon', 'kevlar'])
+        self.parachute_material.setCurrentText(self.state.get('parachute_material', 'ripstop_nylon'))
+        self.parachute_material.currentTextChanged.connect(
+            lambda v: self.state.set('parachute_material', v)
+        )
+        deployment_layout.addRow("Material:", self.parachute_material)
+
         # Diameter
         self.parachute_diameter = QDoubleSpinBox()
         self.parachute_diameter.setRange(0.1, 5.0)
@@ -94,7 +106,18 @@ class ParachuteSettingsWidget(QWidget):
             lambda v: self.state.set('parachute_diameter', v)
         )
         deployment_layout.addRow("Canopy Diameter:", self.parachute_diameter)
-        
+
+        # Packed mass (recovery bay contribution — not yet added to rocket total mass)
+        self.parachute_mass = QDoubleSpinBox()
+        self.parachute_mass.setRange(0.0, 50.0)
+        self.parachute_mass.setDecimals(3)
+        self.parachute_mass.setValue(self.state.get('parachute_mass', 0.05))
+        self.parachute_mass.setSuffix(" kg")
+        self.parachute_mass.valueChanged.connect(
+            lambda v: self.state.set('parachute_mass', v)
+        )
+        deployment_layout.addRow("Packed Mass:", self.parachute_mass)
+
         # Drag coefficient
         self.parachute_cd = QDoubleSpinBox()
         self.parachute_cd.setRange(0.5, 2.5)
@@ -212,7 +235,31 @@ class ParachuteSettingsWidget(QWidget):
             lambda v: self.state.set('drogue_deployment_altitude', v)
         )
         drogue_layout.addRow("Drogue Deployment Altitude (Threshold):", self.drogue_deployment_altitude)
-        
+
+        # Drogue inflation time (previously hard-coded in the physics engine)
+        self.drogue_inflation_time = QDoubleSpinBox()
+        self.drogue_inflation_time.setRange(0.05, 2.0)
+        self.drogue_inflation_time.setDecimals(2)
+        self.drogue_inflation_time.setValue(self.state.get('drogue_inflation_time', 0.2))
+        self.drogue_inflation_time.setSuffix(" s")
+        self.drogue_inflation_time.setEnabled(self.drogue_enabled_check.isChecked())
+        self.drogue_inflation_time.valueChanged.connect(
+            lambda v: self.state.set('drogue_inflation_time', v)
+        )
+        drogue_layout.addRow("Drogue Inflation Time:", self.drogue_inflation_time)
+
+        # Drogue packed mass
+        self.drogue_mass = QDoubleSpinBox()
+        self.drogue_mass.setRange(0.0, 20.0)
+        self.drogue_mass.setDecimals(3)
+        self.drogue_mass.setValue(self.state.get('drogue_mass', 0.03))
+        self.drogue_mass.setSuffix(" kg")
+        self.drogue_mass.setEnabled(self.drogue_enabled_check.isChecked())
+        self.drogue_mass.valueChanged.connect(
+            lambda v: self.state.set('drogue_mass', v)
+        )
+        drogue_layout.addRow("Drogue Packed Mass:", self.drogue_mass)
+
         drogue_group.setLayout(drogue_layout)
         main_layout.addWidget(drogue_group)
         
@@ -304,7 +351,9 @@ class ParachuteSettingsWidget(QWidget):
         try:
             # Main parachute
             self.parachute_name.setText(config.get('name', 'Unknown'))
+            self.parachute_material.setCurrentText(config.get('material', 'ripstop_nylon'))
             self.parachute_diameter.setValue(config.get('diameter', 0.6))
+            self.parachute_mass.setValue(config.get('mass', 0.05))
             self.parachute_cd.setValue(config.get('Cd', 1.5))
             
             deployment = config.get('deployment', {})
@@ -313,15 +362,16 @@ class ParachuteSettingsWidget(QWidget):
             self.max_velocity.setValue(deployment.get('max_velocity', 80.0))
             self.inflation_time.setValue(deployment.get('deployment_time', 0.5))
             
-            # Drogue parachute
+            # Drogue parachute — always load the stored values, the checkbox
+            # below decides whether they are actually used in simulation
             drogue = config.get('drogue', {})
             drogue_enabled = drogue.get('enabled', False)
             self.drogue_enabled_check.setChecked(drogue_enabled)
-            
-            if drogue_enabled:
-                self.drogue_diameter.setValue(drogue.get('diameter', 0.25))
-                self.drogue_cd.setValue(drogue.get('Cd', 1.5))
-                self.drogue_deployment_altitude.setValue(drogue.get('deployment_altitude', 800.0))
+            self.drogue_diameter.setValue(drogue.get('diameter', 0.25))
+            self.drogue_cd.setValue(drogue.get('Cd', 1.5))
+            self.drogue_deployment_altitude.setValue(drogue.get('deployment_altitude', 800.0))
+            self.drogue_inflation_time.setValue(drogue.get('deployment_time', 0.2))
+            self.drogue_mass.setValue(drogue.get('mass', 0.03))
             
             # Update app state
             self.state.set('selected_parachute', config.get('name', 'Unknown'))
@@ -357,11 +407,17 @@ class ParachuteSettingsWidget(QWidget):
     
     def save_parachute_config(self):
         """Save current parachute configuration to a file."""
+        name = self.parachute_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Invalid Name", "Parachute name cannot be empty.")
+            return
+
         config = {
-            'name': self.parachute_name.text(),
+            'name': name,
             'diameter': self.parachute_diameter.value(),
             'Cd': self.parachute_cd.value(),
-            'material': 'ripstop_nylon',
+            'material': self.parachute_material.currentText(),
+            'mass': self.parachute_mass.value(),
             'deployment': {
                 'altitude': self.deployment_altitude.value(),
                 'min_velocity': self.min_velocity.value(),
@@ -372,13 +428,14 @@ class ParachuteSettingsWidget(QWidget):
                 'enabled': self.drogue_enabled_check.isChecked(),
                 'diameter': self.drogue_diameter.value(),
                 'Cd': self.drogue_cd.value(),
+                'mass': self.drogue_mass.value(),
                 'deployment_altitude': self.drogue_deployment_altitude.value(),
-                'deployment_time': 0.3
+                'deployment_time': self.drogue_inflation_time.value()
             }
         }
         
         # Generate default filename
-        default_filename = self.parachute_name.text().lower().replace(' ', '_') + '.json'
+        default_filename = name.lower().replace(' ', '_') + '.json'
         
         filepath, _ = QFileDialog.getSaveFileName(
             self,
@@ -415,11 +472,15 @@ class ParachuteSettingsWidget(QWidget):
         self.drogue_diameter.setEnabled(enabled)
         self.drogue_cd.setEnabled(enabled)
         self.drogue_deployment_altitude.setEnabled(enabled)
+        self.drogue_inflation_time.setEnabled(enabled)
+        self.drogue_mass.setEnabled(enabled)
         logger.info(f"Drogue parachute {'enabled' if enabled else 'disabled'}")
     
     def enable_parachute_controls(self, enabled: bool):
         """Enable or disable parachute control widgets."""
+        self.parachute_material.setEnabled(enabled)
         self.parachute_diameter.setEnabled(enabled)
+        self.parachute_mass.setEnabled(enabled)
         self.parachute_cd.setEnabled(enabled)
         self.deployment_altitude.setEnabled(enabled)
         self.min_velocity.setEnabled(enabled)

@@ -1,58 +1,101 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Parachute Configuration Schema",
+    "description": "Un archivo por perfil de paracaídas, como los de data/parachutes/configs/*.json",
     "type": "object",
-    "patternProperties": {
-        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+    "required": ["name", "diameter", "Cd", "material", "deployment"],
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Nombre del paracaídas"
+        },
+        "description": {
+            "type": "string",
+            "description": "Descripción libre del perfil de paracaídas"
+        },
+        "diameter": {
+            "type": "number",
+            "description": "Diámetro del paracaídas [m]",
+            "minimum": 0.1
+        },
+        "Cd": {
+            "type": "number",
+            "description": "Coeficiente de arrastre [-]",
+            "minimum": 0.1,
+            "maximum": 2.5
+        },
+        "material": {
+            "type": "string",
+            "enum": ["ripstop_nylon", "silnylon", "kevlar"],
+            "description": "Material del paracaídas"
+        },
+        "mass": {
+            "type": "number",
+            "description": "Masa empacada del paracaídas principal [kg]",
+            "minimum": 0
+        },
+        "deployment": {
             "type": "object",
-            "required": ["name", "diameter", "Cd", "material", "deployment"],
+            "required": ["altitude", "min_velocity", "max_velocity", "deployment_time"],
             "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Nombre del paracaídas"
+                "altitude": {
+                    "type": "number",
+                    "description": "Altitud de despliegue [m]",
+                    "minimum": 0
+                },
+                "min_velocity": {
+                    "type": "number",
+                    "description": "Velocidad mínima segura [m/s]",
+                    "minimum": 0
+                },
+                "max_velocity": {
+                    "type": "number",
+                    "description": "Velocidad máxima segura [m/s]",
+                    "minimum": 0
+                },
+                "deployment_time": {
+                    "type": "number",
+                    "description": "Tiempo de despliegue [s]",
+                    "minimum": 0.1,
+                    "maximum": 2.0
+                }
+            }
+        },
+        "drogue": {
+            "type": "object",
+            "description": "Configuración opcional del paracaídas drogue (dos etapas)",
+            "required": ["enabled"],
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "description": "Si el drogue está activo para este perfil"
                 },
                 "diameter": {
                     "type": "number",
-                    "description": "Diámetro del paracaídas [m]",
-                    "minimum": 0.1
+                    "description": "Diámetro del drogue [m]",
+                    "minimum": 0.05
                 },
                 "Cd": {
                     "type": "number",
-                    "description": "Coeficiente de arrastre [-]",
+                    "description": "Coeficiente de arrastre del drogue [-]",
                     "minimum": 0.1,
                     "maximum": 2.5
                 },
-                "material": {
-                    "type": "string",
-                    "enum": ["ripstop_nylon", "silnylon", "kevlar"],
-                    "description": "Material del paracaídas"
+                "mass": {
+                    "type": "number",
+                    "description": "Masa empacada del drogue [kg]",
+                    "minimum": 0
                 },
-                "deployment": {
-                    "type": "object",
-                    "required": ["altitude", "min_velocity", "max_velocity", "deployment_time"],
-                    "properties": {
-                        "altitude": {
-                            "type": "number",
-                            "description": "Altitud de despliegue [m]",
-                            "minimum": 0
-                        },
-                        "min_velocity": {
-                            "type": "number",
-                            "description": "Velocidad mínima segura [m/s]",
-                            "minimum": 0
-                        },
-                        "max_velocity": {
-                            "type": "number",
-                            "description": "Velocidad máxima segura [m/s]",
-                            "minimum": 0
-                        },
-                        "deployment_time": {
-                            "type": "number",
-                            "description": "Tiempo de despliegue [s]",
-                            "minimum": 0.1,
-                            "maximum": 2.0
-                        }
-                    }
+                "deployment_altitude": {
+                    "type": "number",
+                    "description": "Altitud de despliegue del drogue [m]",
+                    "minimum": 0
+                },
+                "deployment_time": {
+                    "type": "number",
+                    "description": "Tiempo de inflado del drogue [s]",
+                    "minimum": 0.05,
+                    "maximum": 2.0
                 }
             }
         }

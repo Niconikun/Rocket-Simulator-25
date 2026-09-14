@@ -161,7 +161,8 @@ class SimulationCache:
     def get_instance(cls) -> 'SimulationCache':
         """Get the singleton instance."""
         if cls._instance is None:
-            cls()
+            cls._instance = cls()
+        assert cls._instance is not None
         return cls._instance
     
     @property
@@ -332,17 +333,23 @@ class SimulationCache:
             # Import here to avoid circular imports
             from src.models.engine import EnhancedEngine
             
-            # Create engine from config
+            # EnhancedEngine needs the live ambient pressure/time normally supplied
+            # by Rocket at each simulation step; use sea-level/t=0 defaults here since
+            # this cache builds a template engine from static config only.
             engine = EnhancedEngine(
-                thrust_curve=lambda t: self._get_thrust_at_time(t, engine_config),
-                burn_time=engine_config.get('burn_time', 0),
-                total_mass=engine_config.get('total_mass', 0),
-                Isp=engine_config.get('Isp', 0),
-                diameter=engine_config.get('diameter', 0),
-                nozzle_radius=engine_config.get('nozzle_radius', 0),
-                throat_radius=engine_config.get('throat_radius', 0),
-                nozzle_efficiency=engine_config.get('nozzle_efficiency', 1.0),
-                combustion_efficiency=engine_config.get('combustion_efficiency', 1.0),
+                time=engine_config.get('time', 0.0),
+                burn_time=engine_config.get('burn_time', 0.0),
+                ambient_pressure=engine_config.get('ambient_pressure', 101325.0),
+                nozzle_exit_diameter=engine_config.get('nozzle_exit_diameter', 0.0),
+                propellant_mass=engine_config.get('propellant_mass', 0.0),
+                specific_impulse=engine_config.get('specific_impulse', 0.0),
+                mean_thrust=engine_config.get('mean_thrust', 0.0),
+                max_thrust=engine_config.get('max_thrust', 0.0),
+                mean_chamber_pressure=engine_config.get('mean_chamber_pressure', 0.0),
+                max_chamber_pressure=engine_config.get('max_chamber_pressure', 0.0),
+                thrust_to_weight_ratio=engine_config.get('thrust_to_weight_ratio', 0.0),
+                thrust_curve_file=engine_config.get('thrust_curve_file'),
+                thrust_curve_unit=engine_config.get('thrust_curve_unit', 'N'),
             )
             
             # Evict if at capacity
@@ -401,9 +408,9 @@ class SimulationCache:
             self._stats.misses += 1
             
             # Import here to avoid circular imports
-            from src.utils.wind_utils import create_wind_model
+            from src.utils.wind_utils import create_wind_model_from_state
             
-            wind = create_wind_model(wind_config)
+            wind = create_wind_model_from_state(wind_config)
             
             # Evict if at capacity
             if len(self._wind_cache) >= self._max_wind_models:

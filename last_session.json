@@ -46,7 +46,7 @@
   "drogue_diameter": 0.25,
   "drogue_cd": 1.5,
   "drogue_deployment_altitude": 800.0,
-  "wind_enabled": false,
+  "wind_enabled": true,
   "wind_model_type": "logarithmic",
   "wind_speed_ref": 5.0,
   "wind_reference_height": 10.0,
@@ -57,7 +57,8 @@
   "wind_gust_length_scale": 300.0,
   "monte_carlo_runs": 100,
   "monte_carlo_variations": {},
-  "current_tab": 4,
+  "current_tab": 7,
   "last_saved": null,
-  "dark_mode_enabled": true
+  "dark_mode_enabled": true,
+  "wind_speed": 10.0
 }

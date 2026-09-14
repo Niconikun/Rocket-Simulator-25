@@ -93,6 +93,8 @@ class ApplicationState:
         self._state['parachute_enabled'] = False
         self._state['parachute_deployment_altitude'] = 300.0  # meters
         self._state['parachute_diameter'] = 0.6  # meters
+        self._state['parachute_material'] = 'ripstop_nylon'
+        self._state['parachute_mass'] = 0.05  # kg (packed parachute mass)
         self._state['parachute_cd'] = 1.5  # drag coefficient
         self._state['parachute_min_velocity'] = 5.0  # m/s
         self._state['parachute_max_velocity'] = 80.0  # m/s
@@ -102,8 +104,10 @@ class ApplicationState:
         # Drogue parachute settings
         self._state['drogue_enabled'] = False
         self._state['drogue_diameter'] = 0.25  # meters
+        self._state['drogue_mass'] = 0.03  # kg (packed drogue mass)
         self._state['drogue_cd'] = 1.5  # drag coefficient
         self._state['drogue_deployment_altitude'] = 800.0  # meters
+        self._state['drogue_inflation_time'] = 0.2  # seconds
         
         # ========== WIND MODEL PARAMETERS ==========
         self._state['wind_enabled'] = False  # Enable/disable wind simulation

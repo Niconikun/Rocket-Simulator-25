@@ -43,6 +43,32 @@ def validate_all_rockets():
     
     print(f"\nResumen: {valid_count}/{total_count} archivos válidos")
 
+def validate_all_parachutes():
+    """Valida todos los archivos de configuración de paracaídas"""
+    schema = load_schema('parachute')
+    configs_dir = os.path.join('data', 'parachutes', 'configs')
+    valid_count = 0
+    total_count = 0
+
+    for filename in os.listdir(configs_dir):
+        if filename.endswith('.json'):
+            total_count += 1
+            file_path = os.path.join(configs_dir, filename)
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                validate(instance=data, schema=schema)
+                print(f"✅ Archivo válido: {filename}")
+                valid_count += 1
+            except ValidationError as e:
+                print(f"❌ Error en {filename}:")
+                print(f"   {e.message}")
+            except Exception as e:
+                print(f"❌ Error inesperado en {filename}:")
+                print(f"   {str(e)}")
+
+    print(f"\nResumen: {valid_count}/{total_count} archivos válidos")
+
 def validate_file(file_path, schema_name):
     """Valida un archivo contra un esquema dado"""
     try:
@@ -70,10 +96,10 @@ def validate_all_data():
     validate_all_rockets()
     
     print("\nValidando configuraciones de paracaídas...")
-    validate_file('rockets/parachutes/chutes.json', 'parachute')
+    validate_all_parachutes()
     
     print("\nValidando sitios de lanzamiento...")
-    validate_file('locations/launch_sites.json', 'launch_sites')
+    validate_file(os.path.join('data', 'locations', 'launch_sites.json'), 'launch_sites')
 
 if __name__ == '__main__':
     validate_all_data()

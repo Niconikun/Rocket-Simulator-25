@@ -165,6 +165,12 @@ class MonteCarloRunner(QObject):
                         break
 
                     overrides = sampler.sample()
+                    # wind_utils.create_wind_model_from_state() prefers the legacy
+                    # 'wind_speed' key over 'wind_speed_ref' when both exist in the
+                    # base ApplicationState, which would silently shadow this run's
+                    # sampled wind speed. Mirror the value so both keys agree.
+                    if 'wind_speed_ref' in overrides:
+                        overrides['wind_speed'] = overrides['wind_speed_ref']
                     logger.debug("Run %d/%d overrides: %s", i + 1, self._n_runs, overrides)
 
                     try:
