@@ -26,13 +26,14 @@ References:
 import math
 from typing import List, Optional
 import logging
+from src.utils.simulation_constants import PlanetConstants as PC
 
 logger = logging.getLogger(__name__)
 
 
-# Constants
-EARTH_ROTATION_SPEED = 7.2722e-5  # [rad/s] Earth rotation velocity, [Regan93]
-TWO_PI = 2.0 * math.pi  # [rad] Full circle in radians
+# Use constants from PlanetConstants
+EARTH_ROTATION_SPEED = PC.EARTH_ROTATION_SPEED
+TWO_PI = PC.TWO_PI
 
 
 class Planet:

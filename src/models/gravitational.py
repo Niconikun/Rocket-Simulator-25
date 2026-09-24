@@ -32,10 +32,11 @@ ___ _       _________ _                     ___ _
 import numpy as np
 import logging
 from src.utils.mattools import MatTools as Mat
+from src.utils.simulation_constants import GravitationalConstants as GC
 
-# Constants
-MU_EARTH = 3.986004418e14  # Earth gravitational parameter [m³/s²]
-EARTH_MIN_RADIUS = 6.371e6  # Minimum reasonable distance from Earth center [m]
+# Use constants from GravitationalConstants
+MU_EARTH = GC.MU_EARTH
+EARTH_MIN_RADIUS = GC.EARTH_MIN_RADIUS
 
 logger = logging.getLogger(__name__)
 

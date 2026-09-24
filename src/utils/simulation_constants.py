@@ -167,3 +167,101 @@ class EngineConstants:
     
     # Thrust curve
     THRUST_CURVE_INTERPOLATION = 'cubic'   # Method for thrust curve interpolation
+
+
+class WindConstants:
+    """Constants for wind model calculations and limits."""
+    
+    # Wind speed limits
+    MAX_WIND_SPEED = 100.0              # [m/s] Maximum realistic wind speed
+    MIN_WIND_SPEED = 0.0                # [m/s] Minimum wind speed
+    DEFAULT_WIND_SPEED = 5.0           # [m/s] Default wind speed
+    
+    # Altitude limits
+    DEFAULT_REFERENCE_HEIGHT = 10.0    # [m] Standard reference height for wind measurements
+    DEFAULT_LAUNCH_ALTITUDE = 0.0        # [m] Default launch site elevation
+    DEFAULT_SHEAR_ALTITUDE_RANGE = 1000.0  # [m] Default altitude range for shear
+    
+    # Surface roughness (z0)
+    ROUGHNESS_WATER = 0.0002            # [m] Water surface
+    ROUGHNESS_GRASSLAND = 0.01          # [m] Grassland
+    ROUGHNESS_FOREST = 0.1              # [m] Forest/edge
+    ROUGHNESS_URBAN = 0.5               # [m] Dense forest/urban
+    DEFAULT_ROUGHNESS = 0.1            # [m] Default surface roughness
+    
+    # Power law exponent (alpha)
+    POWER_LAW_SMOOTH = 0.10             # Smooth surfaces (water, grass)
+    POWER_LAW_AVERAGE = 0.20            # Average surfaces (crop land, suburban)
+    POWER_LAW_ROUGH = 0.40              # Rough surfaces (forest, urban)
+    DEFAULT_POWER_LAW_EXPONENT = 0.2    # Default exponent
+    MIN_POWER_LAW_EXPONENT = 0.05        # Minimum reasonable exponent
+    MAX_POWER_LAW_EXPONENT = 0.50        # Maximum reasonable exponent
+    
+    # Gust parameters
+    DEFAULT_GUST_INTENSITY = 0.1        # [0-1] Default turbulence intensity
+    DEFAULT_GUST_LENGTH_SCALE = 300.0   # [m] Default gust length scale
+    MIN_GUST_LENGTH_SCALE = 1.0         # [m] Minimum gust length scale
+    MAX_GUST_INTENSITY = 1.0            # Maximum turbulence intensity
+    NOMINAL_WIND_SPEED = 10.0           # [m/s] Reference speed for Dryden filter
+    
+    # Vertical wind limits
+    MAX_VERTICAL_WIND = 20.0            # [m/s] Maximum vertical wind (updraft/downdraft)
+    MIN_VERTICAL_WIND = -20.0           # [m/s] Minimum vertical wind
+    
+    # Shear parameters
+    DEFAULT_SHEAR_DIRECTION_CHANGE = 0.0  # [deg] Default directional shear
+    DEFAULT_VERTICAL_WIND = 0.0         # [m/s] Default vertical wind speed
+    SHEAR_SPEED_INCREASE_FACTOR = 0.1    # Speed increase factor per shear altitude range
+    
+    # Wind direction
+    DEFAULT_WIND_DIRECTION = 0.0        # [deg] Default wind direction (from North)
+    NORTH = 0.0                         # [deg] Wind from North
+    EAST = 90.0                        # [deg] Wind from East
+    SOUTH = 180.0                      # [deg] Wind from South
+    WEST = 270.0  # [deg] Wind from West
+
+
+class GravitationalConstants:
+    """Constants for gravitational calculations."""
+    
+    # Earth gravitational parameter
+    MU_EARTH = 3.986004418e14  # [m³/s²] Earth gravitational parameter
+    
+    # Earth dimensions
+    EARTH_MIN_RADIUS = 6.371e6  # [m] Minimum reasonable distance from Earth center
+    EARTH_MEAN_RADIUS = 6_371_000.0  # [m] Mean Earth radius (duplicate from AtmosphereConstants for convenience)
+
+
+class ParachuteConstants:
+    """Constants for parachute deployment and descent calculations."""
+    
+    # Default parachute parameters
+    DEFAULT_DIAMETER = 1.0  # [m] Default canopy diameter
+    DEFAULT_CD = 1.5  # [-] Default drag coefficient
+    DEFAULT_NAME = 'Main Parachute'  # Default parachute name
+    DEFAULT_MATERIAL = 'ripstop_nylon'  # Default parachute material
+    DEFAULT_INFLATION_TIME = 0.5  # [s] Default time to full inflation
+    
+    # Deployment parameters
+    DEFAULT_DEPLOYMENT_ALTITUDE = 300.0  # [m] Default altitude for main parachute deployment
+    DEFAULT_MIN_VELOCITY = 5.0  # [m/s] Minimum safe deployment velocity
+    DEFAULT_MAX_VELOCITY = 100.0  # [m/s] Maximum safe deployment velocity
+    
+    # Drogue chute parameters
+    DEFAULT_DROGUE_DIAMETER = 0.3  # [m] Default drogue diameter
+    DEFAULT_DROGUE_CD = 1.5  # [-] Default drogue drag coefficient
+    DEFAULT_DROGUE_DEPLOYMENT_ALTITUDE = 600.0  # [m] Default drogue deployment altitude
+    DEFAULT_DROGUE_INFLATION_TIME = 0.2  # [s] Default drogue inflation time
+    
+    # Physics constants
+    STANDARD_GRAVITY = 9.81  # [m/s²] Standard gravitational acceleration (duplicate for convenience)
+
+
+class PlanetConstants:
+    """Constants for planet/Earth rotation calculations."""
+    
+    # Earth rotation
+    EARTH_ROTATION_SPEED = 7.2722e-5  # [rad/s] Earth rotation velocity
+    
+    # Mathematical constants
+    TWO_PI = 2.0 * 3.141592653589793  # [rad] Full circle in radians (2π)

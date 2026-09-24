@@ -27,9 +27,9 @@ import numpy as np
 import logging
 from abc import ABC, abstractmethod
 from typing import Tuple
+from src.utils.simulation_constants import WindConstants as WC
 
 logger = logging.getLogger(__name__)
-
 
 class WindModel(ABC):
     """
@@ -44,7 +44,7 @@ class WindModel(ABC):
         launch_altitude (float): Height of launch site above sea level [m]
     """
     
-    def __init__(self, wind_direction: float = 0.0, launch_altitude: float = 0.0):
+    def __init__(self, wind_direction: float = 0.0, launch_altitude: float = WC.DEFAULT_LAUNCH_ALTITUDE):
         """
         Initialize wind model with basic parameters.
         
@@ -146,7 +146,7 @@ class ConstantWind(WindModel):
     """
     
     def __init__(self, wind_speed: float = 0.0, wind_direction: float = 0.0, 
-                 launch_altitude: float = 0.0):
+                 launch_altitude: float = WC.DEFAULT_LAUNCH_ALTITUDE):
         """
         Initialize constant wind model.
         
@@ -156,7 +156,7 @@ class ConstantWind(WindModel):
             launch_altitude (float): Launch site elevation [m]
         """
         super().__init__(wind_direction, launch_altitude)
-        self.wind_speed = np.clip(wind_speed, 0.0, 100.0)  # Limit to realistic range
+        self.wind_speed = np.clip(wind_speed, WC.MIN_WIND_SPEED, WC.MAX_WIND_SPEED)  # Limit to realistic range
         logger.info(f"ConstantWind: speed={self.wind_speed} m/s, from {wind_direction}°")
     
     def get_wind_vector(self, altitude: float) -> np.ndarray:
@@ -173,7 +173,7 @@ class ConstantWind(WindModel):
             altitude = 0
         
         # Convert meteorological direction (FROM) to mathematical direction (TO)
-        direction_rad = np.radians((self.wind_direction + 180.0) % 360.0)
+        direction_rad = np.radians((self.wind_direction + WC.SOUTH) % WC.WEST)
         
         east = self.wind_speed * np.sin(direction_rad)
         north = self.wind_speed * np.cos(direction_rad)
@@ -215,9 +215,9 @@ class LogarithmicWind(WindModel):
                                  0.5 = dense forest/urban
     """
     
-    def __init__(self, wind_speed_ref: float = 5.0, reference_height: float = 10.0,
-                 roughness_length: float = 0.1, wind_direction: float = 0.0,
-                 launch_altitude: float = 0.0):
+    def __init__(self, wind_speed_ref: float = WC.DEFAULT_WIND_SPEED, reference_height: float = WC.DEFAULT_REFERENCE_HEIGHT,
+                 roughness_length: float = WC.DEFAULT_ROUGHNESS, wind_direction: float = WC.DEFAULT_WIND_DIRECTION,
+                 launch_altitude: float = WC.DEFAULT_LAUNCH_ALTITUDE):
         """
         Initialize logarithmic wind profile.
         
@@ -234,11 +234,11 @@ class LogarithmicWind(WindModel):
         super().__init__(wind_direction, launch_altitude)
         
         # Validate and set parameters
-        if wind_speed_ref < 0 or wind_speed_ref > 100:
+        if wind_speed_ref < WC.MIN_WIND_SPEED or wind_speed_ref > WC.MAX_WIND_SPEED:
             raise ValueError(f"wind_speed_ref must be in [0, 100] m/s, got {wind_speed_ref}")
         if reference_height <= 0:
             raise ValueError(f"reference_height must be > 0, got {reference_height}")
-        if roughness_length < 0 or roughness_length >= reference_height:
+        if roughness_length < WC.MIN_WIND_SPEED or roughness_length >= reference_height:
             raise ValueError(f"roughness_length must be in [0, reference_height), got {roughness_length}")
         
         self.wind_speed_ref = float(wind_speed_ref)
@@ -264,7 +264,7 @@ class LogarithmicWind(WindModel):
             np.ndarray: [East, North, Up] wind components [m/s]
         """
         # Clamp altitude to reasonable range
-        altitude = max(0.0, altitude)
+        altitude = max(WC.MIN_WIND_SPEED, altitude)
         
         # Absolute height above sea level
         absolute_height = altitude + self.launch_altitude
@@ -275,10 +275,10 @@ class LogarithmicWind(WindModel):
         wind_speed = self.wind_speed_ref * numerator / self._denominator
         
         # Ensure wind speed is non-negative (should always be, but safety check)
-        wind_speed = max(0.0, wind_speed)
+        wind_speed = max(WC.MIN_WIND_SPEED, wind_speed)
         
         # Convert meteorological direction (FROM) to math direction (TO)
-        direction_rad = np.radians((self.wind_direction + 180.0) % 360.0)
+        direction_rad = np.radians((self.wind_direction + WC.SOUTH) % WC.WEST)
         
         east = wind_speed * np.sin(direction_rad)
         north = wind_speed * np.cos(direction_rad)
@@ -296,7 +296,7 @@ class LogarithmicWind(WindModel):
         Returns:
             float: Wind speed [m/s]
         """
-        altitude = max(0.0, altitude)
+        altitude = max(WC.MIN_WIND_SPEED, altitude)
         absolute_height = altitude + self.launch_altitude
         numerator = np.log((absolute_height + self.roughness_length) / self.roughness_length)
         return self.wind_speed_ref * numerator / self._denominator
@@ -334,9 +334,9 @@ class PowerLawWind(WindModel):
         - ISO 2450 (Wind energy resource assessment)
     """
     
-    def __init__(self, wind_speed_ref: float = 5.0, reference_height: float = 10.0,
-                 exponent: float = 0.2, wind_direction: float = 0.0,
-                 launch_altitude: float = 0.0):
+    def __init__(self, wind_speed_ref: float = WC.DEFAULT_WIND_SPEED, reference_height: float = WC.DEFAULT_REFERENCE_HEIGHT,
+                 exponent: float = WC.DEFAULT_POWER_LAW_EXPONENT, wind_direction: float = WC.DEFAULT_WIND_DIRECTION,
+                 launch_altitude: float = WC.DEFAULT_LAUNCH_ALTITUDE):
         """
         Initialize power law wind profile.
         
@@ -352,12 +352,12 @@ class PowerLawWind(WindModel):
         """
         super().__init__(wind_direction, launch_altitude)
         
-        if wind_speed_ref < 0 or wind_speed_ref > 100:
+        if wind_speed_ref < WC.MIN_WIND_SPEED or wind_speed_ref > WC.MAX_WIND_SPEED:
             raise ValueError(f"wind_speed_ref must be [0, 100], got {wind_speed_ref}")
         if reference_height <= 0:
             raise ValueError(f"reference_height must be > 0, got {reference_height}")
-        if exponent < 0.05 or exponent > 0.5:
-            logger.warning(f"Unusual exponent {exponent}; typical range is 0.1-0.4")
+        if exponent < WC.MIN_POWER_LAW_EXPONENT or exponent > WC.MAX_POWER_LAW_EXPONENT:
+            logger.warning(f"Unusual exponent {exponent}; typical range is {WC.POWER_LAW_SMOOTH}-{WC.POWER_LAW_ROUGH}")
         
         self.wind_speed_ref = float(wind_speed_ref)
         self.reference_height = float(reference_height)
@@ -378,7 +378,7 @@ class PowerLawWind(WindModel):
         Returns:
             np.ndarray: [East, North, Up] wind components [m/s]
         """
-        altitude = max(0.0, altitude)
+        altitude = max(WC.MIN_WIND_SPEED, altitude)
         absolute_height = altitude + self.launch_altitude
         
         # Avoid singularity: U(0) would be 0, minimum height is reference_height for safety
@@ -388,7 +388,7 @@ class PowerLawWind(WindModel):
         wind_speed = self.wind_speed_ref * (effective_height / self.reference_height) ** self.exponent
         
         # Convert direction
-        direction_rad = np.radians((self.wind_direction + 180.0) % 360.0)
+        direction_rad = np.radians((self.wind_direction + WC.SOUTH) % WC.WEST)
         
         east = wind_speed * np.sin(direction_rad)
         north = wind_speed * np.cos(direction_rad)
@@ -428,8 +428,8 @@ class GustWind(WindModel):
         - Hoblit, F. M. (1988). Gust loads on aircraft: concepts and applications
     """
     
-    def __init__(self, base_wind_model: WindModel = None, gust_intensity: float = 0.1,
-                 gust_length_scale: float = 300.0, random_seed: int = None):
+    def __init__(self, base_wind_model: WindModel = None, gust_intensity: float = WC.DEFAULT_GUST_INTENSITY,
+                 gust_length_scale: float = WC.DEFAULT_GUST_LENGTH_SCALE, random_seed: int = None):
         """
         Initialize gust wind model with Dryden spectrum filtering.
         
@@ -446,8 +446,8 @@ class GustWind(WindModel):
         
         super().__init__(base_wind_model.wind_direction, base_wind_model.launch_altitude)
         self.base_wind = base_wind_model
-        self.gust_intensity = np.clip(gust_intensity, 0.0, 1.0)
-        self.gust_length_scale = max(1.0, gust_length_scale)
+        self.gust_intensity = np.clip(gust_intensity, WC.MIN_WIND_SPEED, WC.MAX_GUST_INTENSITY)
+        self.gust_length_scale = max(WC.MIN_GUST_LENGTH_SCALE, gust_length_scale)
         
         if random_seed is not None:
             np.random.seed(random_seed)
@@ -461,7 +461,7 @@ class GustWind(WindModel):
         # Dryden filter coefficients (approximated by first-order system)
         # Time constant: tau = L / (mean_wind_speed)
         # Using nominal speed of 10 m/s for initialization
-        self.nominal_speed = 10.0  # m/s reference speed
+        self.nominal_speed = WC.NOMINAL_WIND_SPEED  # m/s reference speed
         self.base_tau = self.gust_length_scale / self.nominal_speed  # [s]
         
         logger.info(
@@ -590,9 +590,9 @@ class WindShearWind(WindModel):
         - Boundary layer wind structure (boundary layer meteorology)
     """
     
-    def __init__(self, base_wind_speed: float = 5.0, base_wind_direction: float = 0.0,
-                 shear_direction_change: float = 0.0, shear_altitude_range: float = 1000.0,
-                 vertical_wind_speed: float = 0.0, launch_altitude: float = 0.0):
+    def __init__(self, base_wind_speed: float = WC.DEFAULT_WIND_SPEED, base_wind_direction: float = WC.DEFAULT_WIND_DIRECTION,
+                 shear_direction_change: float = WC.DEFAULT_SHEAR_DIRECTION_CHANGE, shear_altitude_range: float = WC.DEFAULT_SHEAR_ALTITUDE_RANGE,
+                 vertical_wind_speed: float = 0.0, launch_altitude: float = WC.DEFAULT_LAUNCH_ALTITUDE):
         """
         Initialize wind shear model with directional and magnitude variation.
         
@@ -608,10 +608,10 @@ class WindShearWind(WindModel):
             launch_altitude (float): Launch site elevation [m]
         """
         super().__init__(base_wind_direction, launch_altitude)
-        self.base_wind_speed = np.clip(base_wind_speed, 0.0, 100.0)
+        self.base_wind_speed = np.clip(base_wind_speed, WC.MIN_WIND_SPEED, WC.MAX_WIND_SPEED)
         self.shear_direction_change = float(shear_direction_change)  # degrees
-        self.shear_altitude_range = max(1.0, shear_altitude_range)  # min 1m
-        self.vertical_wind_speed = np.clip(vertical_wind_speed, -20.0, 20.0)  # m/s
+        self.shear_altitude_range = max(WC.MIN_GUST_LENGTH_SCALE, shear_altitude_range)  # min 1m
+        self.vertical_wind_speed = np.clip(vertical_wind_speed, WC.MIN_VERTICAL_WIND, WC.MAX_VERTICAL_WIND)  # m/s
         
         # Pre-calculate shear rate (degrees per meter)
         self.shear_rate = self.shear_direction_change / self.shear_altitude_range
@@ -635,13 +635,13 @@ class WindShearWind(WindModel):
         Returns:
             np.ndarray: [East, North, Up] wind components [m/s]
         """
-        altitude = max(0.0, altitude)
+        altitude = max(WC.MIN_WIND_SPEED, altitude)
         
         # Calculate wind speed variation with altitude (linear shear)
         # Speed increases slightly with altitude (typical of boundary layer)
-        speed_increase_factor = 1.0 + 0.1 * (altitude / self.shear_altitude_range)
+        speed_increase_factor = 1.0 + WC.SHEAR_SPEED_INCREASE_FACTOR * (altitude / self.shear_altitude_range)
         wind_speed = self.base_wind_speed * speed_increase_factor
-        wind_speed = max(0.0, wind_speed)  # Ensure non-negative
+        wind_speed = max(WC.MIN_WIND_SPEED, wind_speed)  # Ensure non-negative
         
         # Calculate wind direction change with altitude (directional shear)
         # Linear variation from base at ground to base + shear_direction_change at top

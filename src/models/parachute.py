@@ -5,6 +5,8 @@ import logging
 from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+from src.utils.simulation_constants import ParachuteConstants as PC
+
 
 
 class Parachute:
@@ -37,24 +39,24 @@ class Parachute:
                 - drogue_Cd (float): Drogue drag coefficient
                 - drogue_deployment_altitude (float): Drogue deploy altitude in meters
         """
-        self.name = config.get('name', 'Main Parachute')
-        self.diameter = config.get('diameter', 1.0)  # meters
-        self.Cd = config.get('Cd', 1.5)  # drag coefficient
-        self.material = config.get('material', 'ripstop_nylon')
-        self.inflation_time = config.get('inflation_time', 0.5)  # seconds
+        self.name = config.get('name', PC.DEFAULT_NAME)
+        self.diameter = config.get('diameter', PC.DEFAULT_DIAMETER)  # meters
+        self.Cd = config.get('Cd', PC.DEFAULT_CD)  # drag coefficient
+        self.material = config.get('material', PC.DEFAULT_MATERIAL)
+        self.inflation_time = config.get('inflation_time', PC.DEFAULT_INFLATION_TIME)  # seconds
         
         # Deployment settings for main parachute
-        self.deployment_altitude = config.get('deployment_altitude', 300.0)  # meters
-        self.min_velocity = config.get('min_velocity', 5.0)  # m/s
-        self.max_velocity = config.get('max_velocity', 100.0)  # m/s
+        self.deployment_altitude = config.get('deployment_altitude', PC.DEFAULT_DEPLOYMENT_ALTITUDE)  # meters
+        self.min_velocity = config.get('min_velocity', PC.DEFAULT_MIN_VELOCITY)  # m/s
+        self.max_velocity = config.get('max_velocity', PC.DEFAULT_MAX_VELOCITY)  # m/s
         
         # Drogue chute settings
         self.drogue_enabled = config.get('drogue_enabled', False)
         if self.drogue_enabled:
-            self.drogue_diameter = config.get('drogue_diameter', 0.3)  # meters
-            self.drogue_Cd = config.get('drogue_Cd', 1.5)
-            self.drogue_deployment_altitude = config.get('drogue_deployment_altitude', 600.0)  # meters
-            self.drogue_inflation_time = config.get('drogue_inflation_time', 0.2)  # seconds
+            self.drogue_diameter = config.get('drogue_diameter', PC.DEFAULT_DROGUE_DIAMETER)  # meters
+            self.drogue_Cd = config.get('drogue_Cd', PC.DEFAULT_DROGUE_CD)
+            self.drogue_deployment_altitude = config.get('drogue_deployment_altitude', PC.DEFAULT_DROGUE_DEPLOYMENT_ALTITUDE)  # meters
+            self.drogue_inflation_time = config.get('drogue_inflation_time', PC.DEFAULT_DROGUE_INFLATION_TIME)  # seconds
         
         # State variables
         self.deployed = False
@@ -188,7 +190,7 @@ class Parachute:
         return drag_main + drag_drogue
     
     def calculate_descent_rate(
-        self, mass: float, air_density: float, g: float = 9.81
+        self, mass: float, air_density: float, g: float = PC.STANDARD_GRAVITY
     ) -> float:
         """
         Calculate equilibrium descent rate under parachute.

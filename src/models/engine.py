@@ -23,6 +23,7 @@ References:
 """
 
 import logging
+logger = logging.getLogger(__name__)
 import os
 from math import sqrt, exp, sin, pi
 
@@ -184,7 +185,7 @@ class EnhancedEngine:
             raise ValueError("Thrust-to-weight ratio must be positive")
         
         if max_thrust < mean_thrust:
-            logging.warning("Max thrust is less than mean thrust - this may indicate data issues")
+            logger.warning("Max thrust is less than mean thrust - this may indicate data issues")
         
     def _load_thrust_curve(self):
         """
@@ -228,7 +229,7 @@ class EnhancedEngine:
 
         # Align burn_time with the curve if they diverge significantly
         if abs(curve_data.duration - self.burn_time) > 0.1:
-            logging.info(
+            logger.info(
                 "Updating burn_time from %.3fs to %.3fs based on thrust curve.",
                 self.burn_time, curve_data.duration,
             )
@@ -237,7 +238,7 @@ class EnhancedEngine:
         self._curve_data = curve_data
         self.use_experimental_thrust = True
         self.thrust_source = 'experimental'
-        logging.info(
+        logger.info(
             "Experimental thrust curve ready: %d points, %.2fs, max=%.1fN.",
             curve_data.n_points, curve_data.duration, curve_data.max_thrust,
         )
@@ -298,7 +299,7 @@ class EnhancedEngine:
         N = 500
         total = sum(self._shape_function((i + 0.5) / N) for i in range(N))
         integral = total / N
-        logging.debug("Analytical shape integral = %.4f (N=%d)", integral, N)
+        logger.debug("Analytical shape integral = %.4f (N=%d)", integral, N)
         return integral
 
     def _thrust_at_time(self, t: float) -> float:
@@ -338,7 +339,7 @@ class EnhancedEngine:
                 thrust = shape * self.mean_thrust
             return float(max(0.0, min(thrust, self.max_thrust)))
         except Exception as exc:
-            logging.error("_thrust_at_time analytical fallback: %s", exc)
+            logger.error("_thrust_at_time analytical fallback: %s", exc)
             return self._fallback_thrust_value(t_norm)
 
     def _precompute_cumulative_impulse(self) -> None:
@@ -364,7 +365,7 @@ class EnhancedEngine:
         measured  = float(cumul[-1])
         expected  = self.propellant_mass * self.specific_impulse * 9.80665
         error_pct = abs(measured - expected) / expected * 100.0 if expected > 0.0 else 0.0
-        logging.info(
+        logger.info(
             "Cumulative impulse table ready: measured=%.1f N\u00b7s, "
             "expected=%.1f N\u00b7s (%.1f%% diff).",
             measured, expected, error_pct,
@@ -399,10 +400,10 @@ class EnhancedEngine:
             
             self.ideal_thrust_coefficient = sqrt(term1 * term2 * term3)
             
-            logging.debug(f"Nozzle performance: c*={self.characteristic_velocity:.1f} m/s, Cf={self.ideal_thrust_coefficient:.2f}")
+            logger.debug(f"Nozzle performance: c*={self.characteristic_velocity:.1f} m/s, Cf={self.ideal_thrust_coefficient:.2f}")
             
         except Exception as e:
-            logging.error(f"Nozzle performance calculation failed: {e}")
+            logger.error(f"Nozzle performance calculation failed: {e}")
             # Fallback values
             self.characteristic_velocity = 1500.0
             self.ideal_thrust_coefficient = 1.5
@@ -469,7 +470,7 @@ class EnhancedEngine:
             self.actual_isp  = self.specific_impulse
 
         except Exception as exc:
-            logging.error("Performance calculation error: %s", exc)
+            logger.error("Performance calculation error: %s", exc)
             self._fallback_performance()
 
     def _fallback_performance(self) -> None:
@@ -551,7 +552,7 @@ class EnhancedEngine:
             'max_thrust_used': round(max(thrust_vals), 3) if thrust_vals else 0.0,
         }
         if not result['valid']:
-            logging.warning("Thrust curve validation: %s", result)
+            logger.warning("Thrust curve validation: %s", result)
         return result
 
     def get_performance_metrics(self):

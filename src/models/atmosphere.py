@@ -34,13 +34,16 @@ Examples:
 # Imports
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from fluids import ATMOSPHERE_1976 as atmos76
-from functools import lru_cache
+import logging
 import numpy as np
+from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from fluids import Atmosphere as FluidsAtmosphere
 
+from fluids import ATMOSPHERE_1976 as atmos76
 
 class Atmosphere:
     """
