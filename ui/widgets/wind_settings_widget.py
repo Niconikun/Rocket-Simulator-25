@@ -368,6 +368,7 @@ class WindSettingsWidget(QWidget):
         """
         # Update state with new values
         self.state.set('wind_speed', self.wind_speed_spin.value())
+        self.state.set('wind_speed_ref', self.wind_speed_spin.value())
         self.state.set('wind_direction', self.wind_direction_spin.value())
         self.state.set('wind_reference_height', self.wind_ref_height_spin.value())
         self.state.set('wind_roughness_length', self.wind_roughness_spin.value())

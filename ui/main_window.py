@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
         from ui.widgets.units_converter_widget import UnitsConverterWidget
         from ui.widgets.parachute_settings_widget import ParachuteSettingsWidget
         from ui.widgets.wind_settings_widget import WindSettingsWidget
+        from ui.widgets.wind_scenario_editor_widget import WindScenarioEditorWidget
         
         # Create widget instances
         self.simulation_widget = SimulationWidget()
@@ -81,20 +82,39 @@ class MainWindow(QMainWindow):
         self.units_widget = UnitsConverterWidget()
         self.parachute_widget = ParachuteSettingsWidget()
         self.wind_widget = WindSettingsWidget()
+        self.wind_scenario_editor_widget = WindScenarioEditorWidget()
         
         # Add tabs in order matching the application workflow
         self.tabs.addTab(self.simulation_widget, "🚀 Simulation")
         self.tabs.addTab(self.rocket_widget, "🛸 Rocket Settings")
         self.tabs.addTab(self.location_widget, "📍 Location")
         self.tabs.addTab(self.wind_widget, "💨 Wind")
+        self.tabs.addTab(self.wind_scenario_editor_widget, "🌪️ Wind Scenarios")
+        self.tabs.addTab(self.parachute_widget, "🪂 Parachute")
         self.tabs.addTab(self.dashboard_widget, "📊 Dashboard")
         self.tabs.addTab(self.monte_carlo_widget, "📈 Monte Carlo")
         self.tabs.addTab(self.units_widget, "⚖️ Units")
-        self.tabs.addTab(self.parachute_widget, "🪂 Parachute")
+        
         
         # Connect widget signals for wind updates
         self.wind_widget.wind_changed.connect(self.on_wind_settings_changed)
         self.simulation_widget.status_message.connect(self.statusBar().showMessage)
+        
+        # Connect wind scenario editor signals
+        self.wind_scenario_editor_widget.scenario_selected.connect(
+            self.wind_widget.load_wind_settings
+        )
+        self.wind_scenario_editor_widget.scenario_selected.connect(
+            lambda scenario: self.statusBar().showMessage(
+                f"Wind scenario applied: {scenario.get('model_type', 'unknown')}"
+            )
+        )
+        self.wind_scenario_editor_widget.scenario_saved.connect(
+            lambda name: self.statusBar().showMessage(f"Scenario '{name}' saved")
+        )
+        
+        # Set up two-way sync between wind widgets
+        self.wind_scenario_editor_widget.set_wind_settings_widget(self.wind_widget)
         
         # Auto-refresh dashboard when a new simulation is saved
         self.simulation_widget.simulation_saved.connect(

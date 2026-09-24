@@ -18,6 +18,11 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
+import matplotlib
+# Use Agg backend for non-interactive plotting, then display as image
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QGroupBox, QFormLayout,
     QComboBox, QDoubleSpinBox, QSpinBox, QPushButton, QLabel, QListWidget,
@@ -139,6 +144,14 @@ class WindScenarioEditorWidget(QWidget):
         self.scenarios_dir = Path("data/scenarios")
         self.scenarios_dir.mkdir(exist_ok=True)
         
+        # For graphical preview
+        self.figure = None
+        self.canvas = None
+        self.plot_dialog = None
+        
+        # For two-way sync with wind settings
+        self.wind_settings_widget = None
+        
         self.init_ui()
         self.load_custom_scenarios()
         
@@ -221,6 +234,12 @@ class WindScenarioEditorWidget(QWidget):
         customize_btn.clicked.connect(self._on_customize_template)
         button_layout.addWidget(customize_btn)
         
+        # Apply and simulate button for templates
+        apply_simulate_template_btn = QPushButton("Apply & Simulate")
+        apply_simulate_template_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+        apply_simulate_template_btn.clicked.connect(lambda: self._on_apply_and_simulate(self.current_scenario))
+        button_layout.addWidget(apply_simulate_template_btn)
+        
         layout.addLayout(button_layout)
         layout.addStretch()
         
@@ -238,17 +257,28 @@ class WindScenarioEditorWidget(QWidget):
         
         # Scenario name input
         name_layout = QHBoxLayout()
-        name_layout.addWidget(QLabel("Scenario Name:"))
+        name_label = QLabel("Scenario Name:")
+        name_label.setToolTip("Name for your custom wind scenario (used for saving)")
+        name_layout.addWidget(name_label)
         self.scenario_name_input = QLineEdit()
         self.scenario_name_input.setPlaceholderText("e.g., My Custom Wind")
+        self.scenario_name_input.setToolTip("Enter a descriptive name for your scenario")
         name_layout.addWidget(self.scenario_name_input)
         layout.addLayout(name_layout)
         
         # Wind model selection
         model_layout = QHBoxLayout()
-        model_layout.addWidget(QLabel("Wind Model:"))
+        self.custom_model_label = QLabel("Wind Model:")
+        self.custom_model_label.setToolTip("Type of atmospheric wind model\n\n"
+                               "• constant: Uniform wind at all altitudes\n"
+                               "• logarithmic: Industry standard boundary layer profile\n"
+                               "• power_law: Simplified algebraic profile\n"
+                               "• gust: Turbulent fluctuations (Dryden spectrum)\n"
+                               "• shear: Directional and magnitude variation with altitude")
+        model_layout.addWidget(self.custom_model_label)
         self.custom_model_combo = QComboBox()
         self.custom_model_combo.addItems(["constant", "logarithmic", "power_law", "gust", "shear"])
+        self.custom_model_combo.setToolTip("Select wind model type")
         self.custom_model_combo.currentTextChanged.connect(self._on_custom_model_changed)
         model_layout.addWidget(self.custom_model_combo)
         layout.addLayout(model_layout)
@@ -258,72 +288,128 @@ class WindScenarioEditorWidget(QWidget):
         params_layout = QFormLayout(params_box)
         
         # Common parameters
+        speed_label = QLabel("Wind Speed:")
+        speed_label.setToolTip("Wind speed at reference height [m/s]\n\n"
+                              "Typical values:\n"
+                              "• Calm: 0-2 m/s\n"
+                              "• Light breeze: 2-5 m/s\n"
+                              "• Moderate: 5-10 m/s\n"
+                              "• Strong: 10-15 m/s\n"
+                              "• Storm: >15 m/s")
         self.custom_speed_spin = QDoubleSpinBox()
         self.custom_speed_spin.setRange(0.0, 50.0)
         self.custom_speed_spin.setValue(5.0)
         self.custom_speed_spin.setSuffix(" m/s")
-        params_layout.addRow("Wind Speed:", self.custom_speed_spin)
+        self.custom_speed_spin.setToolTip("Wind speed at reference height")
+        params_layout.addRow(speed_label, self.custom_speed_spin)
         
+        direction_label = QLabel("Wind Direction (FROM):")
+        direction_label.setToolTip("Direction wind is coming FROM (meteorological convention)\n\n"
+                                   "0° = from North (blows South)\n"
+                                   "90° = from East (blows West)\n"
+                                   "180° = from South (blows North)\n"
+                                   "270° = from West (blows East)")
         self.custom_direction_spin = QDoubleSpinBox()
         self.custom_direction_spin.setRange(0.0, 360.0)
         self.custom_direction_spin.setValue(0.0)
         self.custom_direction_spin.setSuffix("°")
-        params_layout.addRow("Wind Direction (FROM):", self.custom_direction_spin)
+        self.custom_direction_spin.setToolTip("Wind direction in degrees (FROM)")
+        params_layout.addRow(direction_label, self.custom_direction_spin)
         
+        ref_height_label = QLabel("Reference Height:")
+        ref_height_label.setToolTip("Height at which reference wind speed is measured [m]\n\n"
+                                    "Standard meteorological reference height is 10m above ground")
         self.custom_ref_height_spin = QDoubleSpinBox()
         self.custom_ref_height_spin.setRange(1.0, 100.0)
         self.custom_ref_height_spin.setValue(10.0)
         self.custom_ref_height_spin.setSuffix(" m")
-        params_layout.addRow("Reference Height:", self.custom_ref_height_spin)
+        self.custom_ref_height_spin.setToolTip("Reference height for wind speed measurement")
+        params_layout.addRow(ref_height_label, self.custom_ref_height_spin)
         
         # Model-specific parameters
+        self.custom_roughness_label = QLabel("Roughness Length (z₀):")
+        self.custom_roughness_label.setToolTip("Surface roughness length [m] - affects logarithmic wind profile\n\n"
+                                   "Typical values:\n"
+                                   "• 0.0002: Water surface\n"
+                                   "• 0.01: Grassland\n"
+                                   "• 0.1: Forest edge\n"
+                                   "• 0.5: Dense forest/urban")
         self.custom_roughness_spin = QDoubleSpinBox()
         self.custom_roughness_spin.setRange(0.001, 2.0)
         self.custom_roughness_spin.setValue(0.1)
         self.custom_roughness_spin.setSuffix(" m")
-        self.custom_roughness_label = QLabel("Roughness Length (z₀):")
+        self.custom_roughness_spin.setToolTip("Surface roughness for logarithmic profile")
         params_layout.addRow(self.custom_roughness_label, self.custom_roughness_spin)
         
+        self.custom_exponent_label = QLabel("Power Law Exponent (α):")
+        self.custom_exponent_label.setToolTip("Power law exponent for wind profile\n\n"
+                                  "Typical values:\n"
+                                  "• 0.10-0.14: Smooth surfaces (water, grass)\n"
+                                  "• 0.20: Average surfaces (crop land, suburban)\n"
+                                  "• 0.40: Rough surfaces (forest, urban)")
         self.custom_exponent_spin = QDoubleSpinBox()
         self.custom_exponent_spin.setRange(0.05, 0.5)
         self.custom_exponent_spin.setValue(0.2)
-        self.custom_exponent_label = QLabel("Power Law Exponent (α):")
+        self.custom_exponent_spin.setToolTip("Power law exponent (α)")
         params_layout.addRow(self.custom_exponent_label, self.custom_exponent_spin)
         
         # Gust parameters
+        self.custom_gust_intensity_label = QLabel("Gust Intensity:")
+        self.custom_gust_intensity_label.setToolTip("Turbulence intensity (std dev / mean wind)\n\n"
+                                       "0.0 = No turbulence\n"
+                                       "0.1 = Light turbulence\n"
+                                       "0.2-0.3 = Moderate turbulence\n"
+                                       "0.5+ = Severe turbulence")
         self.custom_gust_intensity_spin = QDoubleSpinBox()
         self.custom_gust_intensity_spin.setRange(0.0, 1.0)
         self.custom_gust_intensity_spin.setValue(0.1)
-        self.custom_gust_intensity_label = QLabel("Gust Intensity:")
+        self.custom_gust_intensity_spin.setToolTip("Turbulence intensity (0-1)")
         params_layout.addRow(self.custom_gust_intensity_label, self.custom_gust_intensity_spin)
         
+        self.custom_gust_length_label = QLabel("Gust Length Scale:")
+        self.custom_gust_length_label.setToolTip("Integral length scale for Dryden turbulence model [m]\n\n"
+                                      "Typical values:\n"
+                                      "• 200-400m: Low altitude (<600m)\n"
+                                      "• 500-2000m: Medium/high altitude")
         self.custom_gust_length_spin = QDoubleSpinBox()
         self.custom_gust_length_spin.setRange(50.0, 5000.0)
         self.custom_gust_length_spin.setValue(300.0)
         self.custom_gust_length_spin.setSuffix(" m")
-        self.custom_gust_length_label = QLabel("Gust Length Scale:")
+        self.custom_gust_length_spin.setToolTip("Gust length scale for turbulence")
         params_layout.addRow(self.custom_gust_length_label, self.custom_gust_length_spin)
         
         # Shear parameters
+        self.custom_shear_angle_label = QLabel("Direction Change (Shear):")
+        self.custom_shear_angle_label.setToolTip("Total wind direction change over shear range [°]\n\n"
+                                     "Positive = Clockwise (backing)\n"
+                                     "Negative = Counter-clockwise (veering)")
         self.custom_shear_angle_spin = QDoubleSpinBox()
         self.custom_shear_angle_spin.setRange(-180.0, 180.0)
         self.custom_shear_angle_spin.setValue(0.0)
         self.custom_shear_angle_spin.setSuffix("°")
-        self.custom_shear_angle_label = QLabel("Direction Change (Shear):")
+        self.custom_shear_angle_spin.setToolTip("Direction change over altitude range")
         params_layout.addRow(self.custom_shear_angle_label, self.custom_shear_angle_spin)
         
+        self.custom_shear_range_label = QLabel("Shear Altitude Range:")
+        self.custom_shear_range_label.setToolTip("Altitude range over which directional shear occurs [m]\n\n"
+                                    "Wind direction changes linearly from base at ground to base+change at this altitude")
         self.custom_shear_range_spin = QDoubleSpinBox()
         self.custom_shear_range_spin.setRange(100.0, 5000.0)
         self.custom_shear_range_spin.setValue(1000.0)
         self.custom_shear_range_spin.setSuffix(" m")
-        self.custom_shear_range_label = QLabel("Shear Altitude Range:")
+        self.custom_shear_range_spin.setToolTip("Altitude range for directional shear")
         params_layout.addRow(self.custom_shear_range_label, self.custom_shear_range_spin)
         
+        self.custom_vertical_wind_label = QLabel("Vertical Wind:")
+        self.custom_vertical_wind_label.setToolTip("Vertical wind component [m/s]\n\n"
+                                       "Positive = Updraft\n"
+                                       "Negative = Downdraft\n"
+                                       "0 = No vertical wind")
         self.custom_vertical_wind_spin = QDoubleSpinBox()
         self.custom_vertical_wind_spin.setRange(-20.0, 20.0)
         self.custom_vertical_wind_spin.setValue(0.0)
         self.custom_vertical_wind_spin.setSuffix(" m/s")
-        self.custom_vertical_wind_label = QLabel("Vertical Wind:")
+        self.custom_vertical_wind_spin.setToolTip("Vertical wind component (updraft/downdraft)")
         params_layout.addRow(self.custom_vertical_wind_label, self.custom_vertical_wind_spin)
         
         layout.addWidget(params_box)
@@ -342,6 +428,12 @@ class WindScenarioEditorWidget(QWidget):
         use_btn = QPushButton("Use Scenario")
         use_btn.clicked.connect(self._on_use_custom_scenario)
         button_layout.addWidget(use_btn)
+        
+        # Apply and simulate button
+        apply_simulate_btn = QPushButton("Apply & Simulate")
+        apply_simulate_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+        apply_simulate_btn.clicked.connect(self._on_apply_and_simulate)
+        button_layout.addWidget(apply_simulate_btn)
         
         layout.addLayout(button_layout)
         layout.addStretch()
@@ -384,6 +476,12 @@ class WindScenarioEditorWidget(QWidget):
         view_btn = QPushButton("View Details")
         view_btn.clicked.connect(self._on_view_scenario_details)
         button_column.addWidget(view_btn)
+        
+        # Apply and simulate button
+        apply_simulate_mgmt_btn = QPushButton("Apply & Simulate")
+        apply_simulate_mgmt_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+        apply_simulate_mgmt_btn.clicked.connect(self._on_apply_and_simulate_from_saved)
+        button_column.addWidget(apply_simulate_mgmt_btn)
         
         button_column.addStretch()
         
@@ -458,6 +556,7 @@ class WindScenarioEditorWidget(QWidget):
         show_gust = model_type in ["gust"]
         show_shear = model_type == "shear"
         
+        # Model label is always visible
         self.custom_roughness_label.setVisible(show_roughness)
         self.custom_roughness_spin.setVisible(show_roughness)
         
@@ -477,13 +576,18 @@ class WindScenarioEditorWidget(QWidget):
         self.custom_vertical_wind_spin.setVisible(show_shear)
     
     def _on_preview_custom(self):
-        """Preview custom scenario wind profile."""
+        """Preview custom scenario wind profile with graphical plot."""
         try:
+            from io import BytesIO
+            from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel
+            from PyQt6.QtGui import QPixmap, QImage
+            
             scenario = self._get_custom_scenario()
             wind_model = create_wind_model_from_state(scenario)
             
             # Calculate wind profile at various altitudes
-            altitudes = np.linspace(0, 2000, 20)
+            max_altitude = 2000
+            altitudes = np.linspace(0, max_altitude, 100)
             wind_magnitudes = []
             directions = []
             
@@ -493,16 +597,73 @@ class WindScenarioEditorWidget(QWidget):
                 wind_magnitudes.append(mag)
                 directions.append(wind_model.get_direction_from(alt))
             
-            # Show preview in message box
-            profile_str = "Altitude [m]\t| Wind Speed [m/s]\t| Direction [°]\n"
-            profile_str += "-" * 55 + "\n"
-            for alt, mag, dir_ in zip(altitudes[::2], wind_magnitudes[::2], directions[::2]):
-                profile_str += f"{alt:6.0f}\t| {mag:8.2f}\t\t| {dir_:6.1f}\n"
+            # Create figure with two subplots
+            self.figure = plt.Figure(figsize=(10, 6), dpi=100)
+            self.figure.suptitle(f'Wind Profile Preview: {scenario.get("model_type", "unknown").title()} Model', 
+                                  fontsize=12, fontweight='bold')
             
-            QMessageBox.information(self, "Wind Profile Preview", profile_str)
+            # Subplot 1: Wind Speed vs Altitude
+            ax1 = self.figure.add_subplot(2, 1, 1)
+            ax1.plot(wind_magnitudes, altitudes, 'b-', linewidth=2, label='Wind Speed')
+            ax1.fill_betweenx(altitudes, 0, wind_magnitudes, alpha=0.2, color='blue')
+            ax1.set_xlabel('Wind Speed [m/s]')
+            ax1.set_ylabel('Altitude [m]')
+            ax1.set_title('Wind Speed Profile')
+            ax1.grid(True, alpha=0.3)
+            ax1.legend()
+            ax1.set_xlim(0, max(wind_magnitudes) * 1.1 if max(wind_magnitudes) > 0 else 1)
+            ax1.set_ylim(0, max_altitude)
+            
+            # Subplot 2: Wind Direction vs Altitude
+            ax2 = self.figure.add_subplot(2, 1, 2)
+            ax2.plot(directions, altitudes, 'r-', linewidth=2, label='Wind Direction')
+            ax2.set_xlabel('Wind Direction [° FROM]')
+            ax2.set_ylabel('Altitude [m]')
+            ax2.set_title('Wind Direction Profile')
+            ax2.grid(True, alpha=0.3)
+            ax2.legend()
+            ax2.set_xlim(0, 360)
+            ax2.set_ylim(0, max_altitude)
+            
+            # Adjust layout
+            self.figure.tight_layout()
+            
+            # Save to buffer and display
+            buf = BytesIO()
+            self.figure.savefig(buf, format='png', dpi=100)
+            buf.seek(0)
+            
+            # Convert to QImage and QPixmap
+            img_data = buf.getvalue()
+            img = QImage.fromData(img_data)
+            pixmap = QPixmap.fromImage(img)
+            
+            # Create dialog to show the plot
+            plot_dialog = QDialog(self)
+            plot_dialog.setWindowTitle("Wind Profile Preview")
+            plot_dialog.setMinimumSize(700, 600)
+            
+            dialog_layout = QVBoxLayout(plot_dialog)
+            
+            # Create label to display the image
+            img_label = QLabel()
+            img_label.setPixmap(pixmap)
+            img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            dialog_layout.addWidget(img_label)
+            
+            # Add close button
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(plot_dialog.accept)
+            dialog_layout.addWidget(close_btn)
+            
+            plot_dialog.exec()
+            
+            # Clean up
+            plt.close(self.figure)
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not generate preview: {str(e)}")
+            logger.error(f"Preview error: {e}", exc_info=True)
     
     def _on_save_custom_scenario(self):
         """Save custom scenario to file."""
@@ -540,6 +701,62 @@ class WindScenarioEditorWidget(QWidget):
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Invalid scenario: {str(e)}")
+    
+    def _on_apply_and_simulate(self, scenario=None):
+        """Apply scenario and run simulation."""
+        try:
+            if scenario is None:
+                scenario = self._get_custom_scenario()
+            
+            self._apply_scenario(scenario)
+            
+            # Trigger simulation
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(100, self._trigger_simulation)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not apply and simulate: {str(e)}")
+    
+    def _on_apply_and_simulate_from_saved(self):
+        """Apply saved scenario and run simulation."""
+        item = self.saved_scenarios_list.currentItem()
+        if item is None:
+            QMessageBox.warning(self, "No Selection", "Please select a scenario.")
+            return
+        
+        scenario_name = item.text()
+        scenario_file = self.scenarios_dir / f"{scenario_name}.json"
+        
+        try:
+            with open(scenario_file, 'r') as f:
+                scenario = json.load(f)
+            
+            self._apply_scenario(scenario)
+            
+            # Trigger simulation
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(100, self._trigger_simulation)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not apply and simulate: {str(e)}")
+    
+    def _trigger_simulation(self):
+        """Trigger simulation from the main window's simulation widget."""
+        try:
+            # Find the main window and trigger its simulation widget
+            main_window = self.parent()
+            while main_window and not hasattr(main_window, 'simulation_widget'):
+                main_window = main_window.parent()
+            
+            if main_window and hasattr(main_window, 'simulation_widget'):
+                # Focus on simulation tab and run
+                main_window.tabs.setCurrentIndex(0)  # Switch to Simulation tab
+                main_window.simulation_widget.run_simulation()
+            else:
+                QMessageBox.information(self, "Info", "Simulation started. Please check the Simulation tab.")
+        except Exception as e:
+            QMessageBox.warning(self, "Warning", f"Could not auto-start simulation: {str(e)}")
+            logger.warning(f"Auto-simulation failed: {e}")
     
     def _on_saved_scenario_selected(self):
         """Handle saved scenario selection."""
@@ -742,3 +959,49 @@ class WindScenarioEditorWidget(QWidget):
         self.current_scenario = scenario
         self.scenario_selected.emit(scenario)
         logger.info(f"Wind scenario applied: {scenario.get('model_type')}")
+    
+    def sync_from_wind_settings(self):
+        """Update custom tab UI from wind settings widget state."""
+        try:
+            # Get current values from state
+            model_type = self.state.get('wind_model_type', 'logarithmic')
+            wind_speed = self.state.get('wind_speed', 5.0)
+            wind_direction = self.state.get('wind_direction', 0.0)
+            ref_height = self.state.get('wind_reference_height', 10.0)
+            roughness = self.state.get('wind_roughness_length', 0.1)
+            exponent = self.state.get('wind_exponent', 0.2)
+            gust_intensity = self.state.get('wind_gust_intensity', 0.1)
+            gust_length = self.state.get('wind_gust_length_scale', 300.0)
+            shear_angle = self.state.get('shear_direction_change', 0.0)
+            shear_range = self.state.get('shear_altitude_range', 1000.0)
+            vertical_wind = self.state.get('vertical_wind', 0.0)
+            
+            # Update UI without triggering signals
+            self.custom_model_combo.blockSignals(True)
+            self.custom_model_combo.setCurrentText(model_type)
+            self.custom_model_combo.blockSignals(False)
+            
+            self.custom_speed_spin.setValue(wind_speed)
+            self.custom_direction_spin.setValue(wind_direction)
+            self.custom_ref_height_spin.setValue(ref_height)
+            self.custom_roughness_spin.setValue(roughness)
+            self.custom_exponent_spin.setValue(exponent)
+            self.custom_gust_intensity_spin.setValue(gust_intensity)
+            self.custom_gust_length_spin.setValue(gust_length)
+            self.custom_shear_angle_spin.setValue(shear_angle)
+            self.custom_shear_range_spin.setValue(shear_range)
+            self.custom_vertical_wind_spin.setValue(vertical_wind)
+            
+            # Update parameter visibility based on model
+            self._on_custom_model_changed()
+            
+            logger.info("Wind scenario editor synced from wind settings")
+            
+        except Exception as e:
+            logger.error(f"Error syncing from wind settings: {e}")
+    
+    def set_wind_settings_widget(self, wind_widget):
+        """Set reference to wind settings widget for two-way sync."""
+        self.wind_settings_widget = wind_widget
+        if wind_widget:
+            wind_widget.wind_changed.connect(self.sync_from_wind_settings)

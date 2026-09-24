@@ -3,14 +3,14 @@ Version information for Rocket Simulator Pro
 Follows Semantic Versioning: MAJOR.MINOR.PATCH
 """
 
-__version__ = "0.5.1"
+__version__ = "2.0.2"
 __author__ = "Rocket Simulator Team"
 __license__ = "MIT"
 
 # Version components for easy access
-VERSION_MAJOR = 0
-VERSION_MINOR = 5
-VERSION_PATCH = 7
+VERSION_MAJOR = 2
+VERSION_MINOR = 0
+VERSION_PATCH = 2
 
 def get_version_string():
     """Get full version string."""

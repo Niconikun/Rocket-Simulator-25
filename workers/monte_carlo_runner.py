@@ -77,6 +77,10 @@ class MonteCarloRunner(QObject):
         When ``True`` the full trajectory list is stored per-run in the JSONL
         output.  Set to ``False`` (default) to save only metrics and keep file
         sizes small.
+    n_workers:
+        Number of OS processes to run simulations in parallel with
+        ``concurrent.futures.ProcessPoolExecutor``.  ``1`` (default) keeps the
+        original single-process, single-thread behaviour.
     """
 
     # ---- Qt signals -------------------------------------------------------
@@ -95,6 +99,7 @@ class MonteCarloRunner(QObject):
         save_trajectory: bool = False,
         use_cache: bool = True,
         clear_cache_before: bool = True,
+        n_workers: int = 1,
     ) -> None:
         super().__init__()
         self._state = state
@@ -104,6 +109,7 @@ class MonteCarloRunner(QObject):
         self._save_trajectory = save_trajectory
         self._use_cache = use_cache
         self._clear_cache_before = clear_cache_before
+        self._n_workers = max(1, n_workers)
 
         self._is_running = False
         self._batch_id: str = ""
@@ -146,9 +152,6 @@ class MonteCarloRunner(QObject):
         )
         logger.info(sampler.summary())
 
-        # Build a persistent SimulationWorker with caching enabled (state will be overridden per run)
-        worker = SimulationWorker(self._state, use_cache=self._use_cache)
-
         # Prepare output file
         output_path = os.path.join(_OUTPUT_DIR, f"{self._batch_id}.jsonl")
         os.makedirs(_OUTPUT_DIR, exist_ok=True)
@@ -159,61 +162,10 @@ class MonteCarloRunner(QObject):
 
         try:
             with open(output_path, "w", encoding="utf-8") as out_file:
-                for i in range(self._n_runs):
-                    if not self._is_running:
-                        logger.info("Monte Carlo batch cancelled at run %d.", i)
-                        break
-
-                    overrides = sampler.sample()
-                    # wind_utils.create_wind_model_from_state() prefers the legacy
-                    # 'wind_speed' key over 'wind_speed_ref' when both exist in the
-                    # base ApplicationState, which would silently shadow this run's
-                    # sampled wind speed. Mirror the value so both keys agree.
-                    if 'wind_speed_ref' in overrides:
-                        overrides['wind_speed'] = overrides['wind_speed_ref']
-                    logger.debug("Run %d/%d overrides: %s", i + 1, self._n_runs, overrides)
-
-                    try:
-                        # Run physics engine synchronously with this run's parameters
-                        result = worker.run_with_params(overrides)
-
-                        metrics = result.get("metrics", {})
-                        impact_x, impact_y = self._extract_impact_position(result)
-
-                        run_record = {
-                            "run": i,
-                            "overrides": overrides,
-                            "metrics": {
-                                "max_altitude":    metrics.get("max_altitude", 0.0),
-                                "max_velocity":    metrics.get("max_velocity", 0.0),
-                                "max_mach":        metrics.get("max_mach", 0.0),
-                                "max_range":       metrics.get("max_range", 0.0),
-                                "flight_duration": metrics.get("flight_duration", 0.0),
-                                "apogee_time":     metrics.get("apogee_time", 0.0),
-                                "max_accel_g":     metrics.get("max_accel_g", 0.0),
-                                "impact_x":        impact_x,
-                                "impact_y":        impact_y,
-                            },
-                        }
-                        if self._save_trajectory:
-                            run_record["trajectory"] = result.get("trajectory", [])
-
-                        # Incremental write — safe even if interrupted
-                        out_file.write(json.dumps(run_record) + "\n")
-                        out_file.flush()
-
-                        successful.append(run_record["metrics"])
-                        self.run_completed.emit(i, run_record["metrics"])
-
-                    except Exception as run_err:
-                        reason = str(run_err)
-                        logger.warning("Run %d failed: %s", i + 1, reason)
-                        failed_runs.append(i)
-                        self.run_failed.emit(i, reason)
-
-                    # Emit overall progress
-                    pct = int((i + 1) / self._n_runs * 100)
-                    self.progress.emit(pct)
+                if self._n_workers > 1 and self._n_runs > 1:
+                    self._run_parallel(sampler, out_file, successful, failed_runs)
+                else:
+                    self._run_serial(sampler, out_file, successful, failed_runs)
 
         except Exception as fatal:
             logger.error("Fatal error in Monte Carlo batch: %s", fatal, exc_info=True)
@@ -256,20 +208,157 @@ class MonteCarloRunner(QObject):
         self.finished.emit(summary)
 
     # ------------------------------------------------------------------
+    # Execution strategies
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _mirror_wind_speed_override(overrides: dict) -> None:
+        """Keep 'wind_speed' and 'wind_speed_ref' in sync in-place.
+
+        wind_utils.create_wind_model_from_state() prefers the legacy
+        'wind_speed' key over 'wind_speed_ref' when both exist in the base
+        ApplicationState, which would silently shadow this run's sampled
+        wind speed. Mirroring the value keeps both keys in agreement.
+        """
+        if 'wind_speed_ref' in overrides:
+            overrides['wind_speed'] = overrides['wind_speed_ref']
+
+    def _record_result(
+        self,
+        run_index: int,
+        metrics: dict,
+        overrides: dict,
+        out_file,
+        successful: list[dict],
+    ) -> None:
+        run_record = {"run": run_index, "overrides": overrides, "metrics": metrics}
+        out_file.write(json.dumps(run_record) + "\n")
+        out_file.flush()
+        successful.append(metrics)
+        self.run_completed.emit(run_index, metrics)
+
+    def _run_serial(self, sampler, out_file, successful: list[dict], failed_runs: list[int]) -> None:
+        """Original single-process execution path (one run after another)."""
+        worker = SimulationWorker(self._state, use_cache=self._use_cache)
+
+        for i in range(self._n_runs):
+            if not self._is_running:
+                logger.info("Monte Carlo batch cancelled at run %d.", i)
+                break
+
+            overrides = sampler.sample()
+            self._mirror_wind_speed_override(overrides)
+            logger.debug("Run %d/%d overrides: %s", i + 1, self._n_runs, overrides)
+
+            try:
+                result = worker.run_with_params(overrides)
+                metrics = result.get("metrics", {})
+                impact_x, impact_y = self._extract_impact_position(result)
+                metrics_out = {
+                    "max_altitude":    metrics.get("max_altitude", 0.0),
+                    "max_velocity":    metrics.get("max_velocity", 0.0),
+                    "max_mach":        metrics.get("max_mach", 0.0),
+                    "max_range":       metrics.get("max_range", 0.0),
+                    "flight_duration": metrics.get("flight_duration", 0.0),
+                    "apogee_time":     metrics.get("apogee_time", 0.0),
+                    "max_accel_g":     metrics.get("max_accel_g", 0.0),
+                    "impact_x":        impact_x,
+                    "impact_y":        impact_y,
+                }
+                self._record_result(i, metrics_out, overrides, out_file, successful)
+            except Exception as run_err:
+                reason = str(run_err)
+                logger.warning("Run %d failed: %s", i + 1, reason)
+                failed_runs.append(i)
+                self.run_failed.emit(i, reason)
+
+            self.progress.emit(int((i + 1) / self._n_runs * 100))
+
+    def _run_parallel(self, sampler, out_file, successful: list[dict], failed_runs: list[int]) -> None:
+        """Run simulations across multiple OS processes via ProcessPoolExecutor.
+
+        Samples are still drawn sequentially in this (parent) process so the
+        RNG sequence stays reproducible for a given seed; only the expensive
+        physics integration itself is distributed across workers.
+        """
+        from concurrent.futures import ProcessPoolExecutor, FIRST_COMPLETED, wait
+        from workers.monte_carlo_process_worker import run_single_montecarlo
+
+        base_state_dict = dict(self._state._state)
+        n_workers = min(self._n_workers, self._n_runs)
+        completed = 0
+        submitted = 0
+        in_flight: dict = {}
+
+        logger.info("Running Monte Carlo batch across %d parallel worker processes", n_workers)
+
+        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+
+            def _submit_next() -> bool:
+                nonlocal submitted
+                if submitted >= self._n_runs or not self._is_running:
+                    return False
+                overrides = sampler.sample()
+                self._mirror_wind_speed_override(overrides)
+                fut = executor.submit(
+                    run_single_montecarlo, submitted, base_state_dict, overrides, self._use_cache
+                )
+                in_flight[fut] = submitted
+                submitted += 1
+                return True
+
+            # Keep a bounded pipeline of in-flight tasks so memory stays capped
+            # for very large batches while still saturating all worker processes.
+            for _ in range(min(self._n_runs, n_workers * 2)):
+                _submit_next()
+
+            while in_flight:
+                done, _ = wait(in_flight.keys(), return_when=FIRST_COMPLETED)
+                for fut in done:
+                    idx = in_flight.pop(fut)
+                    completed += 1
+                    try:
+                        record = fut.result()
+                    except Exception as exc:
+                        record = {"run": idx, "overrides": {}, "error": str(exc), "metrics": None}
+
+                    if record.get("error") is not None or record.get("metrics") is None:
+                        reason = record.get("error") or "unknown error"
+                        logger.warning("Run %d failed: %s", idx + 1, reason)
+                        failed_runs.append(idx)
+                        self.run_failed.emit(idx, reason)
+                    else:
+                        self._record_result(
+                            idx, record["metrics"], record["overrides"], out_file, successful
+                        )
+
+                    self.progress.emit(int(completed / self._n_runs * 100))
+                    _submit_next()
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
     @staticmethod
     def _extract_impact_position(result: dict) -> tuple[float, float]:
-        """Return the (x, y) ENU impact coordinates from a simulation result.
+        """Return the (east, north) ENU impact coordinates from a simulation result.
 
         Prefers the optimised ``history`` arrays; falls back to the last
         trajectory point.
         """
         history = result.get("history", {})
         if history:
-            # history stores field arrays; r_enu is [x, y, z] × timesteps
-            r_enu = history.get("r_enu")
+            # Bug fix: the finalized history dict keys are prefixed with
+            # 'hist_' (e.g. 'hist_east'/'hist_north'/'hist_r_enu'), not 'r_enu'.
+            # Reading the wrong key silently fell through to the range-only
+            # fallback below, collapsing every impact onto north=0 (a straight
+            # line) regardless of azimuth/wind direction.
+            east = history.get("hist_east")
+            north = history.get("hist_north")
+            if east and north:
+                return float(east[-1]), float(north[-1])
+
+            r_enu = history.get("hist_r_enu")
             if r_enu is not None:
                 try:
                     arr = np.asarray(r_enu)
@@ -280,11 +369,11 @@ class MonteCarloRunner(QObject):
                 except Exception:
                     pass
 
-        # Fallback: last trajectory point
+        # Fallback: last trajectory point (lossy - only total horizontal
+        # range is stored there, not the east/north direction)
         trajectory = result.get("trajectory", [])
         if trajectory:
             last = trajectory[-1]
-            # trajectory stores horizontal range, not x/y separately
             range_val = last.get("range", 0.0)
             return float(range_val), 0.0
 

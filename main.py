@@ -297,5 +297,10 @@ def main():
 
 
 if __name__ == "__main__":
+    # Required so PyInstaller-frozen builds don't relaunch the whole app when
+    # the Monte Carlo widget spawns ProcessPoolExecutor worker processes.
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     exit_code = main()
     sys.exit(exit_code)

@@ -26,6 +26,7 @@ from src.utils.simulation_manager import SimulationManager
 from src.utils.monte_carlo_aggregator import MonteCarloAggregator
 from workers.monte_carlo_runner import MonteCarloRunner
 import logging
+import os
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -144,6 +145,14 @@ class MonteCarloWidget(QWidget):
         self.seed_spinbox.setRange(0, 999999)
         self.seed_spinbox.setValue(0)
         run_form.addRow("RNG Seed (0 = random):", self.seed_spinbox)
+
+        self.workers_spinbox = QSpinBox()
+        self.workers_spinbox.setRange(1, max(1, os.cpu_count() or 1))
+        self.workers_spinbox.setValue(
+            self.state.get('monte_carlo_workers', max(1, (os.cpu_count() or 1) - 1))
+        )
+        self.workers_spinbox.valueChanged.connect(lambda v: self.state.set('monte_carlo_workers', v))
+        run_form.addRow("Parallel Workers (processes):", self.workers_spinbox)
 
         layout.addWidget(run_group)
 
@@ -400,6 +409,7 @@ class MonteCarloWidget(QWidget):
             n_runs=n_runs,
             seed=seed,
             sampler_configs=extra,
+            n_workers=self.workers_spinbox.value(),
         )
         self._runner.moveToThread(self._thread)
 
@@ -412,8 +422,9 @@ class MonteCarloWidget(QWidget):
 
         self.run_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        self.status_label.setText(f"Running 0 / {n_runs} …")
-        logger.info("Monte Carlo batch started: %d runs, seed=%s", n_runs, seed)
+        n_workers = self.workers_spinbox.value()
+        self.status_label.setText(f"Running 0 / {n_runs} … ({n_workers} parallel worker(s))")
+        logger.info("Monte Carlo batch started: %d runs, seed=%s, workers=%d", n_runs, seed, n_workers)
         self._thread.start()
 
     def stop_monte_carlo(self):

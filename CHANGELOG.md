@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.2] - 2026-09-24
+
+### Added
+- **Wind Scenario Editor Widget**: New dedicated widget (`ui/widgets/wind_scenario_editor_widget.py`) for creating, editing, and managing wind scenarios
+  - Pre-built wind scenario templates (Calm Day, Light Breeze, Moderate Wind, Strong Wind, Turbulent, Directional Shear, High Altitude Jet)
+  - Custom scenario creation with all wind model types (constant, logarithmic, power_law, gust, shear)
+  - Scenario saving/loading from JSON files
+  - Import/export scenarios to/from external files
+  - Parameter validation
+- **Wind Scenario Editor Tab**: Added new tab "🌪️ Wind Scenarios" to main window for easy access
+- **Signal Integration**: Connected wind scenario editor signals to wind settings widget
+  - Auto-updates Wind Settings tab when a scenario is applied
+  - Status bar notifications for scenario application and save operations
+
+### Changed
+- **Wind Model Factory**: Added `create_wind_model_from_state()` function to `src/models/wind.py` to support scenario-to-model conversion
+
+### Enhanced (2.0.2)
+- **Graphical Wind Profile Plot**: Replaced text-based preview with matplotlib visualization showing:
+  - Wind speed vs altitude (with filled area under curve)
+  - Wind direction vs altitude
+  - Model type in title
+- **Apply & Simulate Buttons**: Added one-click buttons in all three tabs (Templates, Custom, Manage) that:
+  - Apply the selected/configured scenario
+  - Automatically switch to Simulation tab
+  - Trigger simulation run
+- **Comprehensive Tooltips**: Added detailed tooltips to all wind parameters explaining:
+  - Parameter purpose and units
+  - Typical value ranges
+  - Physical interpretation
+- **Two-Way Sync**: Real-time synchronization between Wind Scenario Editor and Wind Settings widget
+  - Changes in editor update settings widget via signals
+  - Changes in settings widget update editor via state tracking
+
+### Fixed
+- **Missing Import**: Added `create_wind_model_from_state` function that was referenced by WindScenarioEditorWidget but missing from wind.py module
+
+---
+
 ## [2.0.0] - 2026-08-07
 
 ### Added
@@ -165,6 +204,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[2.0.2]: https://github.com/Niconikun/Rocket-Simulator-25/compare/v2.0.1...v2.0.2
+[2.0.1]: https://github.com/Niconikun/Rocket-Simulator-25/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/Niconikun/Rocket-Simulator-25/compare/v0.5.7...v2.0.0
 [0.5.7]: https://github.com/Niconikun/Rocket-Simulator-25/compare/v0.5.5...v0.5.7
 [0.5.5]: https://github.com/Niconikun/Rocket-Simulator-25/compare/v0.3.3...v0.5.5

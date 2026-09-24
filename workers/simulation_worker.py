@@ -75,7 +75,9 @@ class SimulationWorker(QThread):
     finished = pyqtSignal(object)  # Emit results dictionary
     error = pyqtSignal(str)  # Emit error message
     
-    def __init__(self, state: ApplicationState, use_cache: bool = True):
+    def __init__(self, state, use_cache: bool = True):
+        """``state`` is duck-typed: ApplicationState, _StateProxy, or any object
+        exposing .get(key, default) and a ._state dict (e.g. process-pool _FrozenState)."""
         super().__init__()
         self.state = state
         self.is_running = True
