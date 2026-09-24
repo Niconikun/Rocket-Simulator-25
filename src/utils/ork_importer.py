@@ -145,7 +145,7 @@ class OrkImporter:
             raise ValueError(f"Failed to parse XML inside .ork file: {exc}") from exc
 
     def _find_rocket_element(self, root: ET.Element) -> ET.Element:
-        rocket = root.find("rocket")
+        rocket = root if root.tag.lower() == "rocket" else root.find("rocket")
         if rocket is None:
             raise ValueError(
                 "No <rocket> element found in the OpenRocket file. "
@@ -158,16 +158,21 @@ class OrkImporter:
     # ------------------------------------------------------------------
 
     def _parse_nosecone(self, elem: ET.Element) -> Dict[str, Any]:
-        shape_raw = _child_text(elem, "shape", "OGIVE").upper()
+        shape_raw = (_child_text(elem, "shape") or _child_text(elem, "type", "OGIVE")).upper()
         nc_len = _child_float(elem, "length")
-        # OpenRocket stores aftradius (half-diameter) for nosecone
+        # Support both OpenRocket names and the names emitted by the exporter.
         nc_radius = _child_float(elem, "aftradius")
-        # Fall back to radius attribute if present
+        if nc_radius == 0.0:
+            nc_radius = _child_float(elem, "baseradius")
         if nc_radius == 0.0:
             nc_radius = _child_float(elem, "radius")
         nc_diam = nc_radius * 2.0
-        shape_param = _child_float(elem, "shapeparameter", 0.5)
-        haack_raw = _child_text(elem, "shapetype", "LD-HAACK").upper()
+        shape_param = _child_float(elem, "shapeparameter")
+        if shape_param == 0.0:
+            shape_param = _child_float(elem, "power")
+        if shape_param == 0.0:
+            shape_param = _child_float(elem, "parameter", 0.5)
+        haack_raw = _child_text(elem, "shapetype") or shape_raw
         return {
             "type": shape_raw.capitalize(),
             "shape": _ORK_SHAPE_MAP.get(shape_raw, "ogive"),
@@ -191,11 +196,16 @@ class OrkImporter:
 
     def _parse_finset(self, elem: ET.Element) -> Dict[str, Any]:
         tag = elem.tag.lower()
-        n_fins = _child_int(elem, "fincount", 3)
+        n_fins = _child_int(elem, "fincount") or _child_int(elem, "count", 3)
         root_chord = _child_float(elem, "rootchord")
         tip_chord = _child_float(elem, "tipchord")
-        height = _child_float(elem, "height")   # semi-span
+        height = _child_float(elem, "height")
+        if height == 0.0:
+            height = _child_float(elem, "span")
         sweep_len = _child_float(elem, "sweeplength")
+        if sweep_len == 0.0:
+            sweep_angle = _child_float(elem, "sweep")
+            sweep_len = height * math.tan(math.radians(sweep_angle)) if height > 0 else 0.0
 
         # Sweep angle from geometry
         if height > 0:
@@ -551,17 +561,18 @@ class OrkExporter:
         shape = nosecone.get("shape", nosecone.get("type", "")).lower()
         ork_type = self._SHAPE_MAP.get(shape, "CONICAL")
         ET.SubElement(nc, "type").text = ork_type
+        ET.SubElement(nc, "shape").text = ork_type
         
-        # Dimensions (in metres)
-        length = nosecone.get("length", 0.0) / 1000.0
-        diameter = nosecone.get("diameter", 0.0) / 1000.0
+        # Project geometry is stored in metres, matching OpenRocket's SI units.
+        length = nosecone.get("length", 0.0)
+        diameter = nosecone.get("diameter", 0.0)
         ET.SubElement(nc, "length").text = f"{length:.6f}"
         ET.SubElement(nc, "baseradius").text = f"{diameter/2:.6f}"
         ET.SubElement(nc, "tipradius").text = "0.0"
         
         # Type-specific parameters
         if ork_type == "OGIVE":
-            ogive_radius = nosecone.get("ogive_radius", 0.0) / 1000.0
+            ogive_radius = nosecone.get("ogive_radius", 0.0)
             ET.SubElement(nc, "radius").text = f"{ogive_radius:.6f}"
         elif ork_type == "POWER":
             power = nosecone.get("power_value", 0.5)
@@ -572,7 +583,7 @@ class OrkExporter:
         elif ork_type == "HAACK":
             haack_type = nosecone.get("haack_type", "LD-Haack")
             ork_haack = self._HAACK_MAP.get(haack_type, "LD-HAACK")
-            ET.SubElement(nc, "type").text = ork_haack
+            ET.SubElement(nc, "shapetype").text = ork_haack
         
         # Shoulder
         ET.SubElement(nc, "shoulderlength").text = "0.0"
@@ -584,9 +595,9 @@ class OrkExporter:
         """Create a <bodytube> element."""
         bt = ET.Element("bodytube")
         ET.SubElement(bt, "name").text = name
-        ET.SubElement(bt, "length").text = f"{length/1000:.6f}"  # Convert mm to m
-        ET.SubElement(bt, "radius").text = f"{diameter/2000:.6f}"  # Convert mm to m
-        ET.SubElement(bt, "position").text = f"{position/1000:.6f}"  # Convert mm to m
+        ET.SubElement(bt, "length").text = f"{length:.6f}"
+        ET.SubElement(bt, "radius").text = f"{diameter/2:.6f}"
+        ET.SubElement(bt, "position").text = f"{position:.6f}"
         return bt
     
     def _create_finset_element(self) -> Optional[ET.Element]:
@@ -597,23 +608,24 @@ class OrkExporter:
         
         fs = ET.Element("trapezoidfinset")
         ET.SubElement(fs, "name").text = f"{self.config.get('name', 'Rocket')} Fins"
-        ET.SubElement(fs, "count").text = str(fins.get("N_fins", 4))
+        ET.SubElement(fs, "fincount").text = str(fins.get("N_fins", 4))
         
-        # Fin dimensions (in metres)
-        span = fins.get("span", 0.0) / 1000.0
-        root_chord = fins.get("chord_root", 0.0) / 1000.0
-        tip_chord = fins.get("chord_tip", 0.0) / 1000.0
+        # Fin dimensions are stored in metres.
+        span = fins.get("span", 0.0)
+        root_chord = fins.get("chord_root", 0.0)
+        tip_chord = fins.get("chord_tip", 0.0)
         sweep = fins.get("sweep_angle", 0.0)
         
-        ET.SubElement(fs, "span").text = f"{span:.6f}"
+        ET.SubElement(fs, "height").text = f"{span:.6f}"
         ET.SubElement(fs, "rootchord").text = f"{root_chord:.6f}"
         ET.SubElement(fs, "tipchord").text = f"{tip_chord:.6f}"
-        ET.SubElement(fs, "sweep").text = f"{sweep:.6f}"
+        sweep_length = span * math.tan(math.radians(sweep)) if span > 0 else 0.0
+        ET.SubElement(fs, "sweeplength").text = f"{sweep_length:.6f}"
         ET.SubElement(fs, "position").text = "0.0"
         
         # Mid chord
         mid_chord = fins.get("mid_chord", (root_chord + tip_chord) / 2)
-        ET.SubElement(fs, "midchord").text = f"{mid_chord/1000:.6f}"
+        ET.SubElement(fs, "midchord").text = f"{mid_chord:.6f}"
         
         return fs
     

@@ -50,10 +50,10 @@ def calculate_relative_velocity(rocket_velocity_enu: np.ndarray,
     return relative_velocity
 
 
-def calculate_wind_corrected_angle_of_attack(rocket_velocity_enu: np.ndarray,
-                                            wind_vector_enu: np.ndarray) -> float:
+def calculate_flight_path_angle(rocket_velocity_enu: np.ndarray,
+                                wind_vector_enu: np.ndarray) -> float:
     """
-    Calculate angle of attack accounting for wind effects.
+    Calculate the flight-path angle of the relative velocity.
     
     Without wind, angle of attack is based on rocket velocity.
     With wind, it's based on relative velocity between rocket and air.
@@ -67,7 +67,7 @@ def calculate_wind_corrected_angle_of_attack(rocket_velocity_enu: np.ndarray,
         wind_vector_enu (np.ndarray): Wind vector [m/s]
     
     Returns:
-        float: Angle of attack [degrees]
+        float: Flight-path angle [degrees]
     """
     v_rel = calculate_relative_velocity(rocket_velocity_enu, wind_vector_enu)
     
@@ -85,6 +85,34 @@ def calculate_wind_corrected_angle_of_attack(rocket_velocity_enu: np.ndarray,
     angle_deg = np.degrees(angle_rad)
     
     return angle_deg
+
+
+def calculate_wind_corrected_angle_of_attack(
+    rocket_velocity_enu: np.ndarray,
+    wind_vector_enu: np.ndarray,
+    rocket_axis_enu: np.ndarray | None = None,
+) -> float:
+    """Calculate aerodynamic angle of attack from body-axis orientation.
+
+    The angle of attack is the angle between the rocket longitudinal axis and
+    the relative velocity vector. A two-argument call is retained for
+    compatibility and returns the explicitly named flight-path angle.
+    """
+    if rocket_axis_enu is None:
+        return calculate_flight_path_angle(rocket_velocity_enu, wind_vector_enu)
+
+    v_rel = calculate_relative_velocity(rocket_velocity_enu, wind_vector_enu)
+    axis = np.asarray(rocket_axis_enu, dtype=float)
+    if axis.shape != (3,):
+        raise ValueError("rocket_axis_enu must be a 3-element vector")
+
+    velocity_norm = float(np.linalg.norm(v_rel))
+    axis_norm = float(np.linalg.norm(axis))
+    if velocity_norm < 1e-9 or axis_norm < 1e-9:
+        return 0.0
+
+    cosine = float(np.dot(axis, v_rel) / (axis_norm * velocity_norm))
+    return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
 
 
 def calculate_dynamic_pressure(relative_velocity_magnitude: float,
@@ -117,7 +145,8 @@ def calculate_dynamic_pressure(relative_velocity_magnitude: float,
 
 def get_wind_effect_metrics(rocket_velocity_enu: np.ndarray,
                            wind_vector_enu: np.ndarray,
-                           air_density: float) -> dict:
+                           air_density: float,
+                           rocket_axis_enu: np.ndarray | None = None) -> dict:
     """
     Calculate comprehensive wind effect metrics for diagnostics/logging.
     
@@ -131,7 +160,8 @@ def get_wind_effect_metrics(rocket_velocity_enu: np.ndarray,
             - rocket_speed: Rocket ground speed [m/s]
             - wind_speed: Wind speed magnitude [m/s]
             - relative_velocity: Relative wind magnitude [m/s]
-            - angle_of_attack: AOA with wind correction [degrees]
+            - flight_path_angle: Relative flight-path angle [degrees]
+            - angle_of_attack: AOA with wind correction when rocket_axis_enu is supplied [degrees]
             - dynamic_pressure: Based on relative velocity [Pa]
             - wind_impact_percent: (1 - v_rel/v_rocket) * 100 [%]
     """
@@ -141,7 +171,14 @@ def get_wind_effect_metrics(rocket_velocity_enu: np.ndarray,
     wind_speed = np.linalg.norm(wind_vector_enu[:2])        # Horizontal only
     relative_speed = np.linalg.norm(v_rel[:2])              # Horizontal only
     
-    aoa = calculate_wind_corrected_angle_of_attack(rocket_velocity_enu, wind_vector_enu)
+    flight_path_angle = calculate_flight_path_angle(rocket_velocity_enu, wind_vector_enu)
+    aoa = (
+        calculate_wind_corrected_angle_of_attack(
+            rocket_velocity_enu, wind_vector_enu, rocket_axis_enu
+        )
+        if rocket_axis_enu is not None
+        else None
+    )
     q_dyn = calculate_dynamic_pressure(np.linalg.norm(v_rel), air_density)
     
     # Calculate wind impact percentage
@@ -154,6 +191,7 @@ def get_wind_effect_metrics(rocket_velocity_enu: np.ndarray,
         'rocket_speed': rocket_speed,
         'wind_speed': wind_speed,
         'relative_velocity_magnitude': relative_speed,
+        'flight_path_angle_degrees': flight_path_angle,
         'angle_of_attack_degrees': aoa,
         'dynamic_pressure_pa': q_dyn,
         'wind_impact_percent': wind_impact,

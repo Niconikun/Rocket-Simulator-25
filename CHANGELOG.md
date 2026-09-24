@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.4] - 2026-09-24
+
+### Changed
+- **OpenRocket round-trip compatibility**: Aligned `.ork` XML tags and SI-unit handling between `OrkImporter` and `OrkExporter`, including root elements, nosecones, fins, and HAACK parameters.
+- **Wind angle diagnostics**: Separated relative flight-path angle from aerodynamic angle of attack; AoA can now be calculated from the rocket longitudinal axis while preserving legacy two-argument calls.
+- **Simulation validation**: Extended NaN/Inf detection to NumPy scalars, arrays, nested dictionaries, and propulsion history.
+- **STL geometry contract**: Clarified that reference area is the projected frontal silhouette area and validated the longitudinal axis argument.
+
+### Fixed
+- **Impulse consistency**: Prevented division by zero when expected impulse is zero.
+- **Simulation IDs**: Rejected unsafe IDs before using them in filesystem paths and prevented metadata mutation when listing simulations.
+
+### Testing
+- Added OpenRocket export/import round-trip coverage.
+- Verified 40 focused utility tests, recursive compilation, and modified-file diff cleanliness.
+
+---
+
 ## [2.0.3] - 2026-09-24
 
 ### Added

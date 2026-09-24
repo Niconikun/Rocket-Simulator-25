@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 import uuid
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,11 @@ class SimulationManager:
     def reload_metadata(self):
         """Reload metadata from disk, picking up changes from other instances."""
         self._load_metadata()
+
+    @staticmethod
+    def _is_valid_simulation_id(sim_id: str) -> bool:
+        """Return whether an ID is safe to use as a simulation filename."""
+        return isinstance(sim_id, str) and re.fullmatch(r"[A-Za-z0-9_-]+", sim_id) is not None
     
     def save_simulation(self, simulation_data: Dict[str, Any], metadata: Dict[str, Any]) -> Optional[str]:
         """
@@ -131,6 +137,10 @@ class SimulationManager:
         Returns:
             Dictionary with simulation data or None if not found
         """
+        if not self._is_valid_simulation_id(sim_id):
+            logger.warning(f"Invalid simulation ID: {sim_id!r}")
+            return None
+
         data_file = self.data_dir / f"{sim_id}.json"
         
         if not data_file.exists():
@@ -155,17 +165,18 @@ class SimulationManager:
         """
         simulations = []
         for sim_id, meta in self.metadata.items():
-            meta['id'] = sim_id
-            simulations.append(meta)
+            simulation_meta = dict(meta)
+            simulation_meta['id'] = sim_id
+            simulations.append(simulation_meta)
         
         # Sort by timestamp (newest first)
         simulations.sort(
             key=lambda x: x.get('timestamp', ''),
             reverse=True
         )
-        
+
         return simulations
-    
+
     def get_recent_simulation(self) -> Optional[Dict[str, Any]]:
         """Get the most recent simulation."""
         simulations = self.list_simulations()
@@ -183,6 +194,10 @@ class SimulationManager:
         Returns:
             True if successful, False otherwise
         """
+        if not self._is_valid_simulation_id(sim_id):
+            logger.warning(f"Invalid simulation ID: {sim_id!r}")
+            return False
+
         try:
             data_file = self.data_dir / f"{sim_id}.json"
             if data_file.exists():

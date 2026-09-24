@@ -2,7 +2,7 @@
 
 Uses ``trimesh`` (optional dependency) to load an STL mesh and compute:
 
-- **Reference area**: cross-sectional area perpendicular to the rocket axis (X)
+    - **Reference area**: projected frontal area perpendicular to the rocket axis (X)
 - **Volume**: convex hull volume (used as a proxy for structural analysis)
 - **Moments of inertia**: for a uniform-density solid of the given mass
 
@@ -62,6 +62,8 @@ class StlImporter:
                 "trimesh is not installed. "
                 "Install it with: pip install trimesh"
             )
+        if rocket_axis not in (0, 1, 2):
+            raise ValueError("rocket_axis must be 0 (X), 1 (Y), or 2 (Z)")
         self.filepath = str(filepath)
         self.mass_kg = max(mass_kg, 1e-9)
         self.rocket_axis = rocket_axis
@@ -78,12 +80,12 @@ class StlImporter:
 
     @staticmethod
     def _reference_area(mesh, axis: int) -> float:
-        """Compute the maximum cross-sectional area perpendicular to ``axis``.
+        """Compute the projected frontal area perpendicular to ``axis``.
 
         This projects all vertices onto the plane perpendicular to the axis
-        and returns the area of the 2-D convex hull of that projection.
+        and returns the area of the 2-D convex hull of that projection. This
+        is a silhouette area, not a sampled area of individual cross-sections.
         """
-        import trimesh
         import numpy as np
 
         # Project vertices onto the plane normal to `axis`

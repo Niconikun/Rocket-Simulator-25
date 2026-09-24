@@ -3,112 +3,172 @@
 #         E-mail: joorozco@udec.cl
 
 """
-
-*** Clock.py ***
+Clock Module
 
 Contains:
-Clock object to calculate date related variables
+    Clock object to calculate date related variables
 
 External dependencies:
-numpy       -Numpy Python extension. http://numpy.org/
-             Version: Numpy 1.22.3
-datetime    -Datetime Library. https://github.com/zopefoundation/DateTime
-             Version: Datetime 4.3
+    numpy - Numpy Python extension. http://numpy.org/
+    datetime - Datetime Library. https://docs.python.org/3/library/datetime.html
 
 Internal dependencies:
-cmath       -cMath Python extension. https://docs.python.org/3/library/cmath.html
+    None
 
 Changelog:
-Date          Name              Change
-__ _          __ _              ____ _
-15/08/2022    Jorge Orozco      Initial release
+    Date          Name              Change
+    15/08/2022    Jorge Orozco      Initial release
 
 References:
-Short       Author,Year            Title
-___ _       _________ _            ___ _
-[Vall13]    Vallado/McClain,2013   Fundamentals of Astrodynamics and Applications
-[Schl17]    Schlyter,2017          TIMESCALES. https://stjarnhimlen.se/comp/time.html#deltat72p
+    [Vall13]    Vallado/McClain,2013   Fundamentals of Astrodynamics and Applications
+    [Schl17]    Schlyter,2017          TIMESCALES. https://stjarnhimlen.se/comp/time.html#deltat72p
 """
+
 # Imports
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, time
 import numpy as np
+from typing import Optional, Union, Tuple
+import logging
 
-# Auxiliary functions
-deg2rad=np.pi/180
-rad2deg=180/np.pi
+logger = logging.getLogger(__name__)
 
-class Clock(object):
-    "julian day, GMST..."
-    def __init__(self):
-        """Inicialización del reloj"""
-        self.Delta_UT1 = 0.0
+
+# Constants for GMST calculation
+JD_REFERENCE = 2451545.0  # Reference Julian Date (J2000.0)
+GMST_COEFF_A = 67310.54841  # GMST coefficient
+GMST_COEFF_B = 876600 * 3600 + 8640184.812866  # GMST coefficient
+GMST_COEFF_C = 0.093104  # GMST coefficient
+GMST_COEFF_D = -6.2 / 1e6  # GMST coefficient
+SECONDS_PER_DAY = 86400.0  # Seconds in a day
+DEG2RAD = np.pi / 180.0  # Degrees to radians
+RAD2DEG = 180.0 / np.pi  # Radians to degrees
+
+
+class Clock:
+    """
+    Clock class for time and date calculations.
+    
+    This class provides Julian day calculations, GMST (Greenwich Mean Sidereal Time),
+    and current UTC time for astronomical and simulation purposes.
+    
+    Attributes:
+        Delta_UT1: UT1 - UTC time difference [s]
+        time_vector: Current time as numpy array [year, month, day, hour, minute, second]
+        j_day: Current Julian day
+    """
+    
+    def __init__(self) -> None:
+        """
+        Initialize Clock with current time.
+        """
+        self.Delta_UT1 = 0.0  # [s]
         self.time_vector = self._get_current_time()
         self.j_day = self.julian_day(self.time_vector)
-
-
-    # List of date and time
-    def time_utc(self):
-        """Retorna el vector de tiempo actual considerando Delta_UT1"""
-        time = self._get_current_time()
-        # Aplicar Delta_UT1 solo a los segundos
-        time[5] = time[5] + self.Delta_UT1
         
-        # Manejar el wraparound de segundos si es necesario
-        if time[5] >= 60:
-            time[5] = time[5] % 60
-            time[4] += 1  # Incrementar minutos
-        
-        return time
+        logger.debug(f"Clock initialized: JD={self.j_day:.2f}, UTC={self.time_vector}")
     
-    # Calculation of julian day, [Vall13]
-    def julian_day(self,time_vector):                                                 
-        'Julian Day from [year, month, day, hour(consider utc), minute, second]'
-
-        j_day=(367*time_vector[0] - int((7*(time_vector[0]+int((time_vector[1]+9)/(12))))/(4)) + 
-                   int((275*time_vector[1])/9) + time_vector[2] + 1721013.5 + 
-                   ((((time_vector[5]/60)+time_vector[4])/60)+time_vector[3])/24)
+    def time_utc(self) -> np.ndarray:
+        """
+        Returns current UTC time vector with Delta_UT1 applied.
         
-        return j_day
+        Returns:
+            numpy array: [year, month, day, hour, minute, second] with Delta_UT1 applied
+        """
+        time_vec = self._get_current_time()
+        
+        # Apply Delta_UT1 only to seconds
+        time_vec[5] = time_vec[5] + self.Delta_UT1
+        
+        # Handle second wraparound if necessary
+        if time_vec[5] >= 60:
+            time_vec[5] = time_vec[5] % 60
+            time_vec[4] += 1  # Increment minutes
+        
+        return time_vec
     
-
-    # Obtains Greenwich Mean Sidereal Time using Vallado's first Method, [Vall13]
-    def gmst(self,julian_day,rad_or_deg):
+    def julian_day(self, time_vector: np.ndarray) -> float:
         """
-        Greenwich Mean Sidereal Time ...
-        rad_or_deg: -.1 for [rads] -.2 for [deg]...
+        Calculate Julian Day from time vector.
+        
+        Args:
+            time_vector: numpy array [year, month, day, hour, minute, second]
+            
+        Returns:
+            Julian Day number
+            
+        Raises:
+            ValueError: If time_vector is not a 6-element array
         """
-
-        self.T_ut1=(julian_day-2451545.0)/36525
-        self.Theta_GMST=(67310.54841 + ((876600*3600) + 8640184.812866)*self.T_ut1 +    
-                        0.093104*(self.T_ut1**2) - 6.2*(1/1000000)*(self.T_ut1**3))
-        self.GMST_leap=self.Theta_GMST-(int(self.Theta_GMST/86400)*86400)
-        self.GMST_degrees=self.GMST_leap/240
-       
-        # Corrects angle for interval between 0° to 360°
-        if self.GMST_degrees < 0:                        
-            self.GMST_degrees=self.GMST_degrees+360
+        if not isinstance(time_vector, np.ndarray) or time_vector.shape != (6,):
+            raise ValueError("time_vector must be a 6-element numpy array [year, month, day, hour, minute, second]")
+        
+        j_day = (
+            367 * time_vector[0] - int((7 * (time_vector[0] + int((time_vector[1] + 9) / 12))) / 4) +
+            int((275 * time_vector[1]) / 9) + time_vector[2] + 1721013.5 +
+            (((time_vector[5] / 60) + time_vector[4]) / 60 + time_vector[3]) / 24
+        )
+        
+        return float(j_day)
+    
+    def gmst(self, julian_day: float, rad_or_deg: int = 1) -> float:
+        """
+        Calculate Greenwich Mean Sidereal Time using Vallado's first Method.
+        
+        Args:
+            julian_day: Julian Day number
+            rad_or_deg: Output unit - 1 for radians, 2 for degrees
+            
+        Returns:
+            GMST in requested units [rad or deg]
+            
+        Raises:
+            ValueError: If rad_or_deg is not 1 or 2
+        """
+        if rad_or_deg not in (1, 2):
+            raise ValueError(f"rad_or_deg must be 1 (radians) or 2 (degrees), got {rad_or_deg}")
+        
+        self.T_ut1 = (julian_day - JD_REFERENCE) / 36525
+        self.Theta_GMST = (
+            GMST_COEFF_A + GMST_COEFF_B * self.T_ut1 +
+            GMST_COEFF_C * (self.T_ut1 ** 2) + GMST_COEFF_D * (self.T_ut1 ** 3)
+        )
+        self.GMST_leap = self.Theta_GMST - (int(self.Theta_GMST / SECONDS_PER_DAY) * SECONDS_PER_DAY)
+        self.GMST_degrees = self.GMST_leap / 240
+        
+        # Correct angle for interval between 0° to 360°
+        if self.GMST_degrees < 0:
+            self.GMST_degrees += 360
         elif self.GMST_degrees > 360:
-            self.GMST_degrees=self.GMST_degrees-360
-        else:
-            self.GMST_degrees=self.GMST_degrees
-
-        # Gives gmst in [rad] or [deg]
-        if rad_or_deg==2:                                   
-            self.GMST=self.GMST_degrees
-        elif rad_or_deg==1:
-            self.GMST=(self.GMST_degrees)*deg2rad
+            self.GMST_degrees -= 360
         
-        return self.GMST
-
-    def _calculate_julian_day(self):
-        # Julian day calculation, [Vall13]
-        self.j_day=(367*self.time_vector[0] - 
-            int((7*(self.time_vector[0]+int((self.time_vector[1]+9)/(12))))/(4)) + 
-            int((275*self.time_vector[1])/9) + self.time_vector[2] + 1721013.5 + 
-            ((((self.time_vector[5]/60)+self.time_vector[4])/60)+self.time_vector[3])/24)
+        # Return in requested units
+        if rad_or_deg == 2:
+            return float(self.GMST_degrees)
+        else:
+            return float(self.GMST_degrees * DEG2RAD)
     
-    def _get_current_time(self):
-        """Obtiene el tiempo actual en UTC"""
+    def _calculate_julian_day(self) -> float:
+        """
+        Internal method to calculate Julian Day from current time_vector.
+        
+        Returns:
+            Julian Day number
+        """
+        self.j_day = (
+            367 * self.time_vector[0] -
+            int((7 * (self.time_vector[0] + int((self.time_vector[1] + 9) / 12))) / 4) +
+            int((275 * self.time_vector[1]) / 9) + self.time_vector[2] + 1721013.5 +
+            (((self.time_vector[5] / 60) + self.time_vector[4]) / 60 + self.time_vector[3]) / 24
+        )
+        return self.j_day
+    
+    def _get_current_time(self) -> np.ndarray:
+        """
+        Get current UTC time as numpy array.
+        
+        Returns:
+            numpy array: [year, month, day, hour, minute, second.fraction]
+        """
         current = datetime.now(timezone.utc)
         return np.array([
             current.year,
@@ -116,5 +176,5 @@ class Clock(object):
             current.day,
             current.hour,
             current.minute,
-            current.second + current.microsecond/1e6
+            current.second + current.microsecond / 1e6
         ])

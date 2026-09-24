@@ -103,24 +103,32 @@ class SimulationValidator:
         nan_count = 0
         inf_count = 0
         nan_fields = []
-        
-        # Check trajectory
+
+        def inspect(value, path):
+            nonlocal nan_count, inf_count
+            if isinstance(value, dict):
+                for key, nested_value in value.items():
+                    inspect(nested_value, f"{path}.{key}")
+                return
+
+            try:
+                values = np.asarray(value)
+            except (TypeError, ValueError):
+                return
+            if not np.issubdtype(values.dtype, np.number):
+                return
+
+            nan_mask = np.isnan(values)
+            inf_mask = np.isinf(values)
+            nan_count += int(np.count_nonzero(nan_mask))
+            inf_count += int(np.count_nonzero(inf_mask))
+            if np.any(nan_mask) and len(nan_fields) < 5:
+                nan_fields.append(path)
+
         for i, point in enumerate(trajectory):
-            for key, value in point.items():
-                if isinstance(value, float):
-                    if np.isnan(value):
-                        nan_count += 1
-                        nan_fields.append((i, key))
-                    elif np.isinf(value):
-                        inf_count += 1
-        
-        # Check metrics
-        for key, value in metrics.items():
-            if isinstance(value, float):
-                if np.isnan(value):
-                    nan_count += 1
-                elif np.isinf(value):
-                    inf_count += 1
+            inspect(point, f"trajectory[{i}]")
+        inspect(history, "history")
+        inspect(metrics, "metrics")
         
         if nan_count > 0 or inf_count > 0:
             self.report['checks']['nan_check'] = False

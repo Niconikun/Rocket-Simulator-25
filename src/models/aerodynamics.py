@@ -3,43 +3,80 @@
 #         E-mail: joorozco@udec.cl
 
 """
-*** EnhancedAerodynamics.py ***
+Enhanced Aerodynamics Module
 
 Enhanced aerodynamics module with component-based drag modeling
 and Barrowman stability calculations.
 
 External dependencies:
-numpy       -Numpy Python extension. http://numpy.org/
-scipy       -Scipy Python extension. https://www.scipy.org
-fluids      -For atmospheric properties (via Atmosphere class)
+    numpy - Numpy Python extension. http://numpy.org/
+    scipy - Scipy Python extension. https://www.scipy.org
+    fluids - For atmospheric properties (via Atmosphere class)
 
 Changelog:
-Date          Name              Change
-15/08/2022    Jorge Orozco      Initial release
-[Current]     Enhanced          Component-based drag model & Barrowman method
+    Date          Name              Change
+    15/08/2022    Jorge Orozco      Initial release
+    [Current]     Enhanced          Component-based drag model & Barrowman method
 """
 
 import numpy as np
 import math
-from scipy import interpolate
 import logging
+from typing import Dict, Any, Tuple, Optional
+
+
+# Constants
+MAX_ANGLE_OF_ATTACK = 10.0  # Maximum angle of attack in degrees
+SUTHERLAND_C1 = 1.458e-6  # Sutherland's constant for air [kg/(m·s·K^0.5)]
+SUTHERLAND_S = 110.4  # Sutherland's temperature constant for air [K]
+SPEED_OF_SOUND_SEA_LEVEL = 340.0  # Approximate speed of sound at sea level [m/s]
+
 
 class EnhancedAerodynamics:
-    def __init__(self, mach, angle_attack, height, atmosphere, rocket_data, current_mass_props):
+    def __init__(
+        self,
+        mach: float,
+        angle_attack: float,
+        height: float,
+        atmosphere: Any,
+        rocket_data: Dict[str, Any],
+        current_mass_props: Dict[str, Any]
+    ) -> None:
+        """
+        Initialize aerodynamics calculations.
+        
+        Args:
+            mach: Mach number [-]
+            angle_attack: Angle of attack [deg]
+            height: Altitude [m]
+            atmosphere: Atmosphere object with give_dens, give_temp, give_v_sonic methods
+            rocket_data: Dictionary containing rocket configuration
+            current_mass_props: Dictionary containing mass properties
+            
+        Raises:
+            KeyError: If required rocket_data keys are missing
+            ValueError: If input values are invalid
+        """
         logging.debug(f"Inicializando cálculos aerodinámicos: Mach={mach:.2f}, α={angle_attack:.1f}°, h={height:.1f}m")
         try:
-            self.mach = mach
+            # Validate inputs
+            if mach < 0:
+                raise ValueError(f"Mach number must be non-negative, got {mach}")
+            if height < 0:
+                raise ValueError(f"Height must be non-negative, got {height}")
+            
+            self.mach = float(mach)
             self.alpha = self._validate_angle(angle_attack)
-            self.height = height
+            self.height = float(height)
             self.atmosphere = atmosphere
             self.rocket_data = rocket_data
             self.mass_props = current_mass_props
             
             # Atmospheric properties
-            self.rho = atmosphere.give_dens(height)
-            self.temp = atmosphere.give_temp(height)
-            self.speed_of_sound = atmosphere.give_v_sonic(height)
-            self.velocity = mach * self.speed_of_sound
+            self.rho = atmosphere.give_dens(height)  # [kg/m³]
+            self.temp = atmosphere.give_temp(height)  # [K]
+            self.speed_of_sound = atmosphere.give_v_sonic(height)  # [m/s]
+            self.velocity = mach * self.speed_of_sound  # [m/s]
             
             # Reference parameters
             self.ref_area = rocket_data['reference_area']  # [m²]
@@ -53,19 +90,34 @@ class EnhancedAerodynamics:
             
             logging.debug(f"Coeficientes calculados: CD={self.cd:.3f}, CL={self.cl:.3f}, Stability={self.stability_margin:.2f} calibers")
             
+        except KeyError as e:
+            logging.error(f"Missing required rocket_data key: {str(e)}")
+            raise
         except Exception as e:
             logging.error(f"Error en cálculos aerodinámicos: {str(e)}")
             raise
 
-    def _validate_angle(self, angle):
-        """Valida y ajusta el ángulo de ataque"""
-        a_max = 10  # [deg]
-        if abs(angle) >= a_max:
-            return a_max * (abs(angle)/angle)
-        return angle
+    def _validate_angle(self, angle: float) -> float:
+        """
+        Validate and adjust the angle of attack.
+        
+        Args:
+            angle: Angle of attack [deg]
+            
+        Returns:
+            Validated angle of attack, clamped to MAX_ANGLE_OF_ATTACK [deg]
+        """
+        if abs(angle) >= MAX_ANGLE_OF_ATTACK:
+            return MAX_ANGLE_OF_ATTACK * (abs(angle) / angle) if angle != 0 else 0.0
+        return float(angle)
 
-    def _calculate_drag_coefficient(self):
-        """Calculates total drag coefficient using component-based model"""
+    def _calculate_drag_coefficient(self) -> float:
+        """
+        Calculates total drag coefficient using component-based model.
+        
+        Returns:
+            Total drag coefficient [-]
+        """
         try:
             # Calculate individual drag components
             cd_skin_friction = self._calculate_skin_friction_drag()
@@ -83,7 +135,7 @@ class EnhancedAerodynamics:
             logging.debug(f"Drag components - Skin: {cd_skin_friction:.4f}, Pressure: {cd_pressure:.4f}, "
                          f"Base: {cd_base:.4f}, Interference: {cd_interference:.4f}, Wave: {cd_wave:.4f}")
             
-            return total_cd
+            return float(total_cd)
             
         except Exception as e:
             logging.error(f"Error in drag calculation: {str(e)}")
@@ -217,14 +269,15 @@ class EnhancedAerodynamics:
         else:
             return 1.2  # Constant factor for supersonic
 
-    def _calculate_dynamic_viscosity(self):
-        """Calculates dynamic viscosity using Sutherland's formula"""
-        T = self.temp  # [K]
-        # Sutherland's constants for air
-        C1 = 1.458e-6  # [kg/(m·s·K^0.5)]
-        S = 110.4      # [K]
+    def _calculate_dynamic_viscosity(self) -> float:
+        """
+        Calculates dynamic viscosity using Sutherland's formula.
         
-        return (C1 * T**1.5) / (T + S)
+        Returns:
+            Dynamic viscosity [Pa·s]
+        """
+        T = self.temp  # [K]
+        return (SUTHERLAND_C1 * T**1.5) / (T + SUTHERLAND_S)
 
     def _get_surface_roughness_factor(self):
         """Returns surface roughness multiplier (1.0 = smooth, >1.0 = rough)"""
@@ -398,16 +451,30 @@ class EnhancedAerodynamics:
         
         return stability_calibers
 
-    def get_aerodynamic_forces(self, dynamic_pressure):
-        """Returns aerodynamic forces in rocket frame"""
+    def get_aerodynamic_forces(self, dynamic_pressure: float) -> Dict[str, Any]:
+        """
+        Returns aerodynamic forces in rocket frame.
+        
+        Args:
+            dynamic_pressure: Dynamic pressure [Pa]
+            
+        Returns:
+            Dictionary containing:
+                - drag: Drag force [N]
+                - lift: Lift force [N]
+                - cd: Drag coefficient [-]
+                - cl: Lift coefficient [-]
+                - cp_position: Center of pressure position [m]
+                - stability_margin: Stability margin [calibers]
+        """
         drag_force = self.cd * dynamic_pressure * self.ref_area
         lift_force = self.cl * dynamic_pressure * self.ref_area
         
         return {
-            'drag': drag_force,
-            'lift': lift_force,
-            'cd': self.cd,
-            'cl': self.cl,
+            'drag': float(drag_force),
+            'lift': float(lift_force),
+            'cd': float(self.cd),
+            'cl': float(self.cl),
             'cp_position': self.xcp,
-            'stability_margin': self.stability_margin
+            'stability_margin': float(self.stability_margin)
         }

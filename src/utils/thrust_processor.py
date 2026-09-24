@@ -216,7 +216,10 @@ class ThrustCurveProcessor:
         """
         g0 = 9.80665
         expected_impulse = propellant_mass * isp * g0
-        impulse_error = abs(data.total_impulse - expected_impulse) / expected_impulse
+        if expected_impulse <= 0.0:
+            impulse_error = 0.0 if data.total_impulse <= 0.0 else 1.0
+        else:
+            impulse_error = abs(data.total_impulse - expected_impulse) / expected_impulse
 
         report = {
             'valid': impulse_error <= tolerance,
@@ -224,7 +227,7 @@ class ThrustCurveProcessor:
             'measured_impulse': round(data.total_impulse, 2),
             'expected_impulse': round(expected_impulse, 2),
             'measured_avg_thrust': round(data.mean_thrust, 2),
-            'expected_avg_thrust': round(expected_impulse / data.duration, 2),
+            'expected_avg_thrust': round(expected_impulse / data.duration, 2) if data.duration > 0 else 0.0,
         }
 
         if not report['valid']:

@@ -3,58 +3,102 @@
 #         E-mail: joorozco@udec.cl
 
 """
-
-*** Planet.py ***
+Planet Module
 
 Contains:
-Module that updates Greenwich Mean Sidereal Time from simulation time
+    Module that updates Greenwich Mean Sidereal Time from simulation time
 
 External dependencies:
+    None
 
 Internal dependencies:
-cmath       -cMath Python extension. https://docs.python.org/3/library/cmath.html
+    math - Python math library
 
 Changelog:
-Date          Name              Change
-__ _          __ _              ____ _
-15/08/2022    Jorge Orozco      Initial release
+    Date          Name              Change
+    15/08/2022    Jorge Orozco      Initial release
 
 References:
-Short       Author,Year                 Title
-___ _       _________ _                 ___ _
-[Regan93]   Regan/Anandakrishnan,1993   Dynamics of Atmospheric Re-Entry
-
+    [Regan93]   Regan/Anandakrishnan,1993   Dynamics of Atmospheric Re-Entry
 """
+
 # Imports
-from cmath import pi
+import math
+from typing import List, Optional
+import logging
 
-# Define Planet class for Planet module
-class Planet(object):
-    def __init__(self, gmst_0):
-        'gmst_0= Initial Greenwich Mean Sidereal Time in [rad]'
-        self.gmst=gmst_0    # [rad]
+logger = logging.getLogger(__name__)
 
-        # Earth rotation velocity, [Regan93]
-        self.rotation_speed=7.2722*1e-5    # [rad/s]               
-  
-        # List to save data
-        self.hist_gmst=[]          
+
+# Constants
+EARTH_ROTATION_SPEED = 7.2722e-5  # [rad/s] Earth rotation velocity, [Regan93]
+TWO_PI = 2.0 * math.pi  # [rad] Full circle in radians
+
+
+class Planet:
+    """
+    Planet class for tracking Greenwich Mean Sidereal Time (GMST).
     
-    def update(self,dt):
-        'Updates gmst value according to simulation current cycle. dt in [s]'
-
-        self.gmst += self.rotation_speed*dt  # [rad]
+    This class simulates Earth's rotation and tracks the Greenwich Mean Sidereal Time
+    which is used for astronomical calculations and coordinate transformations.
+    
+    Attributes:
+        gmst: Current Greenwich Mean Sidereal Time [rad]
+        rotation_speed: Earth rotation velocity [rad/s]
+        hist_gmst: Historical list of GMST values [rad]
+    """
+    
+    def __init__(self, gmst_0: float) -> None:
+        """
+        Initialize Planet with initial GMST value.
         
-        # Limits for gmst between 0 rad and 2pi rad
-        self.gmst%=2*pi                     
+        Args:
+            gmst_0: Initial Greenwich Mean Sidereal Time [rad]
+            
+        Raises:
+            ValueError: If gmst_0 is negative
+        """
+        if gmst_0 < 0:
+            raise ValueError(f"Initial GMST must be non-negative, got {gmst_0}")
+        
+        self.gmst = float(gmst_0)  # [rad]
+        self.rotation_speed = EARTH_ROTATION_SPEED  # [rad/s]
+        self.hist_gmst: List[float] = []
+        
+        logger.debug(f"Planet initialized with GMST={self.gmst:.4f} rad")
     
-    def save_data(self):
-        'Saves current rotation in hist_gmst'
-
+    def update(self, dt: float) -> None:
+        """
+        Updates GMST value according to simulation time step.
+        
+        Args:
+            dt: Time step [s]
+            
+        Raises:
+            ValueError: If dt is negative
+        """
+        if dt < 0:
+            raise ValueError(f"Time step must be non-negative, got {dt}")
+        
+        self.gmst += self.rotation_speed * dt  # [rad]
+        
+        # Limit GMST between 0 and 2pi radians
+        self.gmst %= TWO_PI
+        
+        logger.debug(f"GMST updated to {self.gmst:.4f} rad")
+    
+    def save_data(self) -> None:
+        """
+        Saves current GMST value to history.
+        """
         self.hist_gmst.append(self.gmst)
-
-    def give_gmst(self): 
-        'Delivers gmst value in [rad]'
-
-        return self.gmst    #[rad]
-
+        logger.debug(f"GMST saved to history, total entries: {len(self.hist_gmst)}")
+    
+    def give_gmst(self) -> float:
+        """
+        Returns current GMST value.
+        
+        Returns:
+            Current Greenwich Mean Sidereal Time [rad]
+        """
+        return self.gmst
