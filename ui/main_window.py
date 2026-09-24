@@ -98,19 +98,19 @@ class MainWindow(QMainWindow):
         
         # Connect widget signals for wind updates
         self.wind_widget.wind_changed.connect(self.on_wind_settings_changed)
-        self.simulation_widget.status_message.connect(self.statusBar().showMessage)
+        self.simulation_widget.status_message.connect(self.statusBar().showMessage) # pyright: ignore[reportOptionalMemberAccess]
         
         # Connect wind scenario editor signals
         self.wind_scenario_editor_widget.scenario_selected.connect(
             self.wind_widget.load_wind_settings
         )
         self.wind_scenario_editor_widget.scenario_selected.connect(
-            lambda scenario: self.statusBar().showMessage(
+            lambda scenario: self.statusBar().showMessage( # pyright: ignore[reportOptionalMemberAccess]
                 f"Wind scenario applied: {scenario.get('model_type', 'unknown')}"
             )
         )
         self.wind_scenario_editor_widget.scenario_saved.connect(
-            lambda name: self.statusBar().showMessage(f"Scenario '{name}' saved")
+            lambda name: self.statusBar().showMessage(f"Scenario '{name}' saved") # pyright: ignore[reportOptionalMemberAccess]
         )
         
         # Set up two-way sync between wind widgets
@@ -136,53 +136,53 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
         
         # File menu
-        file_menu = menubar.addMenu("File")
+        file_menu = menubar.addMenu("File") # type: ignore
         
         new_sim_action = QAction("New Simulation", self)
         new_sim_action.triggered.connect(self.new_simulation)
-        file_menu.addAction(new_sim_action)
+        file_menu.addAction(new_sim_action) # type: ignore
         
         open_action = QAction("Open Configuration...", self)
         open_action.triggered.connect(self.open_configuration)
-        file_menu.addAction(open_action)
+        file_menu.addAction(open_action) # type: ignore
         
         save_action = QAction("Save Configuration...", self)
         save_action.triggered.connect(self.save_configuration)
-        file_menu.addAction(save_action)
+        file_menu.addAction(save_action) # type: ignore
         
-        file_menu.addSeparator()
+        file_menu.addSeparator() # type: ignore
         
         exit_action = QAction("Exit", self)
         exit_action.triggered.connect(self.close_application)
-        file_menu.addAction(exit_action)
+        file_menu.addAction(exit_action) # type: ignore
         
         # Edit menu
-        edit_menu = menubar.addMenu("Edit")
+        edit_menu = menubar.addMenu("Edit") # type: ignore
         
         reset_action = QAction("Reset to Defaults", self)
         reset_action.triggered.connect(self.reset_to_defaults)
-        edit_menu.addAction(reset_action)
+        edit_menu.addAction(reset_action) # type: ignore
         
         # View menu
-        view_menu = menubar.addMenu("View")
+        view_menu = menubar.addMenu("View") # type: ignore
         
         # Dark mode toggle
         self.dark_mode_action = QAction("Dark Mode", self)
         self.dark_mode_action.setCheckable(True)
         self.dark_mode_action.setChecked(True)  # Start with dark mode
         self.dark_mode_action.triggered.connect(self.toggle_dark_mode)
-        view_menu.addAction(self.dark_mode_action)
+        view_menu.addAction(self.dark_mode_action) # type: ignore
         
         # Help menu
-        help_menu = menubar.addMenu("Help")
+        help_menu = menubar.addMenu("Help") # type: ignore
         
         about_action = QAction("About", self)
         about_action.triggered.connect(self.show_about)
-        help_menu.addAction(about_action)
+        help_menu.addAction(about_action) # type: ignore
     
     def setup_status_bar(self):
         """Setup application status bar."""
-        self.statusBar().showMessage("Ready")
+        self.statusBar().showMessage("Ready") # type: ignore
     
     def on_tab_changed(self, index: int):
         """Handle tab change events."""
@@ -202,7 +202,7 @@ class MainWindow(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.state.reset()
-            self.statusBar().showMessage("New simulation created")
+            self.statusBar().showMessage("New simulation created") # pyright: ignore[reportOptionalMemberAccess]
     
     def open_configuration(self):
         """Open a saved configuration file."""
@@ -212,7 +212,7 @@ class MainWindow(QMainWindow):
         )
         if filepath:
             if self.state.load_from_file(filepath):
-                self.statusBar().showMessage(f"Configuration loaded from {filepath}")
+                self.statusBar().showMessage(f"Configuration loaded from {filepath}") # pyright: ignore[reportOptionalMemberAccess]
             else:
                 QMessageBox.critical(self, "Error", "Failed to load configuration")
     
@@ -224,7 +224,7 @@ class MainWindow(QMainWindow):
         )
         if filepath:
             if self.state.save_to_file(filepath):
-                self.statusBar().showMessage(f"Configuration saved to {filepath}")
+                self.statusBar().showMessage(f"Configuration saved to {filepath}") # pyright: ignore[reportOptionalMemberAccess]
             else:
                 QMessageBox.critical(self, "Error", "Failed to save configuration")
     
@@ -237,7 +237,7 @@ class MainWindow(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.state.reset()
-            self.statusBar().showMessage("All parameters reset to defaults")
+            self.statusBar().showMessage("All parameters reset to defaults") # pyright: ignore[reportOptionalMemberAccess]
     
     def show_about(self):
         """Show about dialog."""
@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
         """Close the application."""
         self.close()
     
-    def toggle_dark_mode(self, checked: bool = None):
+    def toggle_dark_mode(self, checked: bool = None):  # type: ignore
         """Toggle dark mode on/off.
         
         Args:
@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
         
         # Save preference in state
         self.state.set('dark_mode_enabled', checked)
-        self.statusBar().showMessage(f"Dark mode {'enabled' if checked else 'disabled'}")
+        self.statusBar().showMessage(f"Dark mode {'enabled' if checked else 'disabled'}") # pyright: ignore[reportOptionalMemberAccess]
     
     def _apply_dark_theme_to_app(self):
         """Apply dark theme palette to the entire application."""
@@ -315,7 +315,7 @@ class MainWindow(QMainWindow):
         dark_palette.setColor(QPalette.ColorRole.Link, QColor(50, 150, 255))
         dark_palette.setColor(QPalette.ColorRole.LinkVisited, QColor(200, 100, 255))
         
-        self._app.setPalette(dark_palette)
+        self._app.setPalette(dark_palette) # type: ignore
     
     def _apply_light_theme_to_app(self):
         """Apply light theme palette to the entire application."""
@@ -349,7 +349,7 @@ class MainWindow(QMainWindow):
         # Placeholder text (for disabled state)
         light_palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(150, 150, 150))
         
-        self._app.setPalette(light_palette)
+        self._app.setPalette(light_palette) # type: ignore
     
     def _apply_dark_theme(self):
         """Apply dark theme to this window only (legacy)."""

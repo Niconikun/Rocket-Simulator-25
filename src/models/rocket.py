@@ -42,7 +42,7 @@ from math import pi
 import json
 import logging
 from src.models.engine import EnhancedEngine
-from src.models.aerodynamics_wrapper import AerodynamicsWrapper
+from src.models.aerodynamics import AerodynamicsWrapper
 from src.utils.mattools import MatTools as Mat
 from src.utils.geotools import GeoTools as Geo
 from src.utils.numerical_utils import QuaternionUtils, StateValidator, NumericalRecovery
