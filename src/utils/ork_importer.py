@@ -465,3 +465,243 @@ class OrkImporter:
         with open(output_path, "w", encoding="utf-8") as fh:
             json.dump(config, fh, indent=4, ensure_ascii=False)
         logger.info("OrkImporter: saved config to '%s'", output_path)
+
+
+# ---------------------------------------------------------------------------
+# OpenRocket Exporter
+# ---------------------------------------------------------------------------
+
+class OrkExporter:
+    """Export rocket configuration to OpenRocket .ork format.
+    
+    .ork files are ZIP archives containing an XML file with rocket geometry
+    in SI units (metres, kilograms).
+    
+    Usage::
+    
+        from src.utils.ork_importer import OrkExporter
+        
+        exporter = OrkExporter(rocket_config)
+        exporter.export("my_rocket.ork")
+    """
+    
+    # Reverse mapping: project schema → OpenRocket
+    _SHAPE_MAP: Dict[str, str] = {
+        "conical": "CONICAL",
+        "ogive": "OGIVE",
+        "elliptical": "ELLIPSOID",
+        "parabolic": "PARABOLIC",
+        "power": "POWER",
+        "haack": "HAACK",
+        "von_karman": "VON_KARMAN",
+    }
+    
+    _HAACK_MAP: Dict[str, str] = {
+        "LD-Haack": "LD-HAACK",
+        "LV-Haack": "LV-HAACK",
+    }
+    
+    def __init__(self, config: Dict[str, Any]):
+        """Initialize exporter with rocket configuration.
+        
+        Parameters
+        ----------
+        config:
+            Rocket configuration dict (same format as used by RocketSettingsWidget).
+        """
+        self.config = config
+    
+    def _create_rocket_element(self) -> ET.Element:
+        """Create the root <rocket> element."""
+        rocket = ET.Element("rocket")
+        rocket.set("version", "1.1")
+        
+        # Add rocket name
+        name = self.config.get("name", "Unnamed Rocket")
+        ET.SubElement(rocket, "name").text = name
+        
+        # Add design stage
+        ET.SubElement(rocket, "designer").text = "Rocket Simulator Pro"
+        ET.SubElement(rocket, "revision").text = "1"
+        ET.SubElement(rocket, "designed").text = "true"
+        
+        # Add override mass if available
+        initial_mass = self.config.get("initial_mass", 0.0)
+        if initial_mass > 0:
+            ET.SubElement(rocket, "overridemass").text = f"{initial_mass}"
+        
+        # Add reference length (total length)
+        geometry = self.config.get("geometry", {})
+        total_length = geometry.get("total_length", geometry.get("total length", 0.0))
+        if total_length > 0:
+            ET.SubElement(rocket, "length").text = f"{total_length}"
+        
+        return rocket
+    
+    def _create_nosecone_element(self) -> Optional[ET.Element]:
+        """Create <nosecone> element from config."""
+        nosecone = self.config.get("nosecone", {})
+        if not nosecone or nosecone.get("length", 0.0) <= 0:
+            return None
+        
+        nc = ET.Element("nosecone")
+        ET.SubElement(nc, "name").text = f"{self.config.get('name', 'Rocket')} Nosecone"
+        
+        # Type
+        shape = nosecone.get("shape", nosecone.get("type", "")).lower()
+        ork_type = self._SHAPE_MAP.get(shape, "CONICAL")
+        ET.SubElement(nc, "type").text = ork_type
+        
+        # Dimensions (in metres)
+        length = nosecone.get("length", 0.0) / 1000.0
+        diameter = nosecone.get("diameter", 0.0) / 1000.0
+        ET.SubElement(nc, "length").text = f"{length:.6f}"
+        ET.SubElement(nc, "baseradius").text = f"{diameter/2:.6f}"
+        ET.SubElement(nc, "tipradius").text = "0.0"
+        
+        # Type-specific parameters
+        if ork_type == "OGIVE":
+            ogive_radius = nosecone.get("ogive_radius", 0.0) / 1000.0
+            ET.SubElement(nc, "radius").text = f"{ogive_radius:.6f}"
+        elif ork_type == "POWER":
+            power = nosecone.get("power_value", 0.5)
+            ET.SubElement(nc, "power").text = f"{power:.6f}"
+        elif ork_type == "PARABOLIC":
+            param = nosecone.get("parabolic_parameter", 0.5)
+            ET.SubElement(nc, "parameter").text = f"{param:.6f}"
+        elif ork_type == "HAACK":
+            haack_type = nosecone.get("haack_type", "LD-Haack")
+            ork_haack = self._HAACK_MAP.get(haack_type, "LD-HAACK")
+            ET.SubElement(nc, "type").text = ork_haack
+        
+        # Shoulder
+        ET.SubElement(nc, "shoulderlength").text = "0.0"
+        ET.SubElement(nc, "shoulderradius").text = f"{diameter/2:.6f}"
+        
+        return nc
+    
+    def _create_body_tube_element(self, name: str, length: float, diameter: float, position: float) -> ET.Element:
+        """Create a <bodytube> element."""
+        bt = ET.Element("bodytube")
+        ET.SubElement(bt, "name").text = name
+        ET.SubElement(bt, "length").text = f"{length/1000:.6f}"  # Convert mm to m
+        ET.SubElement(bt, "radius").text = f"{diameter/2000:.6f}"  # Convert mm to m
+        ET.SubElement(bt, "position").text = f"{position/1000:.6f}"  # Convert mm to m
+        return bt
+    
+    def _create_finset_element(self) -> Optional[ET.Element]:
+        """Create <trapezoidfinset> element from config."""
+        fins = self.config.get("fins", {})
+        if not fins or fins.get("N_fins", 0) <= 0:
+            return None
+        
+        fs = ET.Element("trapezoidfinset")
+        ET.SubElement(fs, "name").text = f"{self.config.get('name', 'Rocket')} Fins"
+        ET.SubElement(fs, "count").text = str(fins.get("N_fins", 4))
+        
+        # Fin dimensions (in metres)
+        span = fins.get("span", 0.0) / 1000.0
+        root_chord = fins.get("chord_root", 0.0) / 1000.0
+        tip_chord = fins.get("chord_tip", 0.0) / 1000.0
+        sweep = fins.get("sweep_angle", 0.0)
+        
+        ET.SubElement(fs, "span").text = f"{span:.6f}"
+        ET.SubElement(fs, "rootchord").text = f"{root_chord:.6f}"
+        ET.SubElement(fs, "tipchord").text = f"{tip_chord:.6f}"
+        ET.SubElement(fs, "sweep").text = f"{sweep:.6f}"
+        ET.SubElement(fs, "position").text = "0.0"
+        
+        # Mid chord
+        mid_chord = fins.get("mid_chord", (root_chord + tip_chord) / 2)
+        ET.SubElement(fs, "midchord").text = f"{mid_chord/1000:.6f}"
+        
+        return fs
+    
+    def _create_motor_mount_element(self) -> Optional[ET.Element]:
+        """Create <motormount> element."""
+        engine = self.config.get("engine", {})
+        if not engine or engine.get("max_thrust", 0.0) <= 0:
+            return None
+        
+        mm = ET.Element("motormount")
+        ET.SubElement(mm, "name").text = "Motor Mount"
+        ET.SubElement(mm, "diameter").text = "0.032"  # Default 32mm
+        ET.SubElement(mm, "length").text = "0.1"  # 10cm
+        ET.SubElement(mm, "position").text = "0.0"
+        return mm
+    
+    def export(self, output_path: str) -> None:
+        """Export rocket configuration to .ork file.
+        
+        Parameters
+        ----------
+        output_path:
+            Destination .ork file path.
+        
+        Raises
+        ------
+        ValueError
+            If required data is missing from config.
+        """
+        import os
+        import io
+        
+        # Create rocket element
+        rocket = self._create_rocket_element()
+        
+        # Create subcomponents element
+        subcomponents = ET.SubElement(rocket, "subcomponents")
+        
+        # Add nosecone
+        nosecone_elem = self._create_nosecone_element()
+        if nosecone_elem is not None:
+            subcomponents.append(nosecone_elem)
+        
+        # Add body tube
+        fuselage = self.config.get("fuselage", {})
+        fus_length = fuselage.get("length", 0.0)
+        fus_diameter = fuselage.get("diameter", 0.0)
+        if fus_length > 0 and fus_diameter > 0:
+            bt_elem = self._create_body_tube_element(
+                "Body Tube", 
+                fus_length, 
+                fus_diameter,
+                nosecone_elem.get("length", 0.0) if nosecone_elem else 0.0
+            )
+            subcomponents.append(bt_elem)
+        
+        # Add rear section as second body tube
+        rear = self.config.get("rear_section", {})
+        rear_length = rear.get("length", 0.0)
+        rear_diameter = rear.get("diameter", 0.0)
+        if rear_length > 0 and rear_diameter > 0:
+            bt_elem = self._create_body_tube_element(
+                "Rear Section",
+                rear_length,
+                rear_diameter,
+                fus_length + (nosecone_elem.get("length", 0.0) if nosecone_elem else 0.0)
+            )
+            subcomponents.append(bt_elem)
+        
+        # Add fins
+        fins_elem = self._create_finset_element()
+        if fins_elem is not None:
+            subcomponents.append(fins_elem)
+        
+        # Add motor mount
+        motor_elem = self._create_motor_mount_element()
+        if motor_elem is not None:
+            subcomponents.append(motor_elem)
+        
+        # Create XML tree
+        tree = ET.ElementTree(rocket)
+        xml_bytes = ET.tostring(rocket, encoding="utf-8", method="xml")
+        
+        # Create in-memory XML file
+        xml_filename = "design.xml"
+        
+        # Create ZIP archive
+        with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("design.xml", xml_bytes.decode("utf-8"))
+        
+        logger.info("OrkExporter: exported config to '%s'", output_path)

@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.3] - 2026-09-24
+
+### Added
+
+#### Documentation
+- **Rocket Configuration Presets README**: Created comprehensive `data/rockets/configs/README.md` documenting all 10 preset configurations with detailed specifications, use cases, file format, and usage instructions
+
+#### RocketSettingsWidget Enhancements
+- **Export to OpenRocket**: New `OrkExporter` class in `src/utils/ork_importer.py` enables bidirectional compatibility with OpenRocket
+  - Export current rocket configuration to .ork format
+  - Creates proper ZIP archive with XML design file
+  - Exports geometry, nosecone, body tubes, fins, and motor mount
+  - UI button: "📤 Export OpenRocket" in Rocket Selection section
+  
+- **Real-Time Stability Visualization**: New **Stability** tab with comprehensive CP/CoM visualization
+  - Side-view diagram showing rocket with Centre of Pressure (CP) and Centre of Mass markers
+  - Color-coded stability margin indicators (green = stable, orange = marginal, red = unstable)
+  - Numerical display of CP position, CoM positions (before/after), and stability margins
+  - Stability category classification (UNSTABLE, MARGINAL, STABLE, OVER-STABLE)
+  - Uses existing Barrowman stability calculator
+  - Requires matplotlib for graphical display (fallback to text if not available)
+  
+- **Auto-Calculate Inertia from Geometry**: Automatic inertia calculation based on rocket geometry
+  - Calculates moments of inertia (Ix, Iy, Iz) for nosecone, fuselage, rear section, and fins
+  - Calculates Centre of Mass position based on mass distribution
+  - Uses parallel axis theorem for proper inertia about rocket CoM
+  - Assumes uniform density (800 kg/m³ default for model rockets)
+  - UI button: "🔄 Auto-Calculate Inertia from Geometry" in Inertia & CoM tab
+  
+- **Bulk Import/Export Operations**: Manage multiple rocket configurations efficiently
+  - **Bulk Import**: Import all .json rocket configurations from a directory
+    - Handles name conflicts by appending `_1`, `_2`, etc.
+    - Shows summary with success/failure counts
+  - **Bulk Export**: Export all loaded rockets to a directory
+    - Sanitizes filenames (removes special characters, spaces → underscores)
+    - Shows summary with success/failure counts
+  - UI buttons: "📂 Bulk Import" and "📤 Bulk Export" in Rocket Selection section
+
+- **Enhanced Geometry Validation**: Comprehensive validation checks for physical coherence
+  - **New Error Checks**:
+    - Nosecone diameter must be > 0 if length is specified
+    - Rear section diameter must be > 0 if length is specified
+    - Fin root chord must be > 0 if fins are present
+  - **New Warning Checks**:
+    - Total length vs. sum of components (>10% difference)
+    - Nosecone diameter > fuselage diameter (unusual configuration)
+    - Rear section diameter > fuselage diameter (unusual configuration)
+    - Fin root chord > 2× fuselage diameter (very large fins)
+    - Fin span > 5× fuselage diameter (very large fins)
+    - Fin mid chord > max(root, tip) chords (inconsistent)
+    - Reference area differs significantly from fuselage cross-section (>50%)
+    - After-burn inertia > 1.5× before-burn inertia (unusual)
+
+### Changed
+- Updated version from 2.0.2 to 2.0.3
+
+### Fixed
+- **Rocket Configuration Presets**: Fixed unit consistency issues across all preset configurations
+  - Converted all geometry dimensions from millimeters to meters in: `test_rocket.json`, `Campanil 1-A.json`, `Campanil 1-A experimental.json`, `rayo.json`
+  - Standardized field names across all configs (removed duplicate fields with spaces: `length nosecone fins` → `length_nosecone_fins`, `total length` → `total_length`)
+  - Removed duplicate configuration file: `campanil_1-a_experimental.json` (kept `Campanil 1-A experimental.json`)
+  - Added missing `description` fields to presets for better documentation
+
+### Testing
+- Added comprehensive test suite for RocketSettingsWidget: 19 tests covering instantiation, tabs, UI elements, data loading, validation, and saving
+- All existing tests continue to pass
+
+---
+
 ## [2.0.2] - 2026-09-24
 
 ### Added

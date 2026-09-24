@@ -1,7 +1,9 @@
 {
     "name": "Campanil 1-A Experimental",
+    "description": "Campanil 1-A with experimental thrust curve from load cell data",
     "initial_mass": 7.8,
     "propellant_mass": 1.5,
+    "dry_mass_kg": 6.3,
     "reference_area": 0.033,
     "I_before_burn": {
         "x": 0.010523695,
@@ -33,36 +35,39 @@
         "mean_chamber_pressure": 3191000.0,
         "max_chamber_pressure": 9010000.0,
         "thrust_to_weight_ratio": 11.2,
+        "mass_flux": 0.538,
+        "gas_speed": 1042.3,
+        "exit_pressure": 80000.0,
         "thrust_curve_mode": "experimental",
         "thrust_curve_file": "data/thrust_curves/load_cell_1.csv",
         "thrust_curve_unit": "kgf"
     },
     "geometry": {
-        "length nosecone fins": 1039.452,
-        "total length": 1169.0
+        "length_nosecone_fins": 1.039452,
+        "total_length": 1.169
     },
     "fins": {
         "fin_type": "Tapered Swept",
-        "span": 138,
-        "chord_root": 127.0,
-        "chord_tip": 75,
-        "mid_chord": 86.96,
+        "span": 0.138,
+        "chord_root": 0.127,
+        "chord_tip": 0.075,
+        "mid_chord": 0.08696,
         "N_fins": 4,
         "sweep_angle": 15.0
     },
     "nosecone": {
         "type": "Elliptical",
-        "length": 200,
-        "diameter": 103,
+        "length": 0.2,
+        "diameter": 0.103,
         "parabolic_parameter": 0.5,
         "shape": "elliptical"
     },
     "fuselage": {
-        "length": 967.0,
-        "diameter": 103.0
+        "length": 0.967,
+        "diameter": 0.103
     },
     "rear_section": {
-        "length": 1.0,
-        "diameter": 103.0
+        "length": 0.001,
+        "diameter": 0.103
     }
 }

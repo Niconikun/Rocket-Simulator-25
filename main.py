@@ -223,7 +223,7 @@ def main():
     Creates and runs the PyQt6 application with MainWindow.
     """
     logger.info("="*60)
-    logger.info("Rocket Simulator Pro v2.0 - Starting Application")
+    logger.info("Rocket Simulator Pro v2.0.3 - Starting Application")
     logger.info("="*60)
     
     try:
@@ -232,7 +232,7 @@ def main():
         
         # Set application properties
         app.setApplicationName("Rocket Simulator Pro")
-        app.setApplicationVersion("2.0.0")
+        app.setApplicationVersion("2.0.3")
         app.setOrganizationName("Rocket Simulator Team")
         
         logger.info("PyQt6 Application initialized")

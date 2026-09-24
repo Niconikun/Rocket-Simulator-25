@@ -45,10 +45,8 @@
         "notes": "Standard H-class motor for spin-stabilized flight"
     },
     "geometry": {
-        "length nosecone fins": 1.20,
-        "total length": 1.50,
-        "total_length": 1.50,
         "length_nosecone_fins": 1.20,
+        "total_length": 1.50,
         "description": "3.25-inch diameter spin-stabilized test rocket"
     },
     "nosecone": {

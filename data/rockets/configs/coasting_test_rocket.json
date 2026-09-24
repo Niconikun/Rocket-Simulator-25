@@ -45,10 +45,8 @@
         "notes": "Minimal thrust - tests coasting and ballistic descent without strong propulsion effects"
     },
     "geometry": {
-        "length nosecone fins": 0.65,
-        "total length": 0.80,
-        "total_length": 0.80,
         "length_nosecone_fins": 0.65,
+        "total_length": 0.80,
         "description": "Minimal thrust rocket for coasting validation"
     },
     "nosecone": {

@@ -28,6 +28,14 @@ from PyQt6.QtCore import Qt, QSize, QPoint
 from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QLinearGradient, QBrush, QPen, QPolygon
 from PyQt6.QtCore import pyqtSignal, QObject
 import logging
+import sys
+from pathlib import Path
+from typing import Optional
+
+# Add project root to path for version import
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+from version import get_version_string
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +207,7 @@ class SplashScreen(QSplashScreen):
         painter.drawText(
             0, height - 45, width, 25,
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            "Version 2.0.0"
+            f"Version {get_version_string()}"
         )
     
     def move_to_center(self):

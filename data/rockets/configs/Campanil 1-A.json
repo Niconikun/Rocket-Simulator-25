@@ -1,7 +1,9 @@
 {
     "name": "Campanil 1-A",
+    "description": "Small high-power rocket with parabolic nosecone",
     "initial_mass": 7.8,
     "propellant_mass": 1.5,
+    "dry_mass_kg": 6.3,
     "reference_area": 0.033,
     "I_before_burn": {
         "x": 0.008879229,
@@ -38,32 +40,31 @@
         "exit_pressure": 80000.0
     },
     "geometry": {
-        "length nosecone fins": 1055.0,
-        "total length": 1190.0
+        "length_nosecone_fins": 1.055,
+        "total_length": 1.19
     },
     "fins": {
         "fin_type": "Tapered Swept",
-        "span": 139.119,
-        "chord_root": 130.0,
-        "chord_tip": 43.92,
-        "mid_chord": 86.96,
+        "span": 0.139119,
+        "chord_root": 0.13,
+        "chord_tip": 0.04392,
+        "mid_chord": 0.08696,
         "N_fins": 4,
         "sweep_angle": 10.0
     },
     "nosecone": {
         "type": "Parabolic",
-        "length": 200,
-        "diameter": 103,
+        "length": 0.2,
+        "diameter": 0.103,
         "parabolic_parameter": 0.5,
         "shape": "parabolic"
     },
     "fuselage": {
-        "length": 960.0,
-        "diameter": 103.0
+        "length": 0.96,
+        "diameter": 0.103
     },
     "rear_section": {
-        "length": 1.0,
-        "diameter": 103.0
-    },
-    "dry_mass_kg": 6.3
+        "length": 0.001,
+        "diameter": 0.103
+    }
 }

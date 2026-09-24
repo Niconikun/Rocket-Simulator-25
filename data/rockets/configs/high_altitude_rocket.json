@@ -47,10 +47,8 @@
         "notes": "High-performance solid motor with experimental thrust curve validation"
     },
     "geometry": {
-        "length nosecone fins": 2.20,
-        "total length": 2.65,
-        "total_length": 2.65,
         "length_nosecone_fins": 2.20,
+        "total_length": 2.65,
         "description": "5-inch diameter high-altitude rocket"
     },
     "nosecone": {

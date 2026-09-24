@@ -12,6 +12,7 @@ import json
 import os
 import logging
 from typing import Tuple, Optional
+import math
 import numpy as np
 
 # Try to import PyVista for 3D visualization
@@ -37,9 +38,9 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-# Try to import OrkImporter for OpenRocket .ork files
+# Try to import OrkImporter and OrkExporter for OpenRocket .ork files
 try:
-    from src.utils.ork_importer import OrkImporter
+    from src.utils.ork_importer import OrkImporter, OrkExporter
     HAS_ORK = True
 except ImportError:
     HAS_ORK = False
@@ -138,6 +139,23 @@ class RocketSettingsWidget(QWidget):
         )
         stl_button.clicked.connect(self.import_stl_file)
         selection_layout.addWidget(stl_button)
+
+        # Export buttons
+        export_ork_button = QPushButton("📤 Export OpenRocket")
+        export_ork_button.setToolTip("Export rocket configuration to OpenRocket .ork file")
+        export_ork_button.clicked.connect(self.export_ork_file)
+        selection_layout.addWidget(export_ork_button)
+        
+        # Bulk operations
+        bulk_import_button = QPushButton("📂 Bulk Import")
+        bulk_import_button.setToolTip("Import multiple rocket configurations from a directory")
+        bulk_import_button.clicked.connect(self.bulk_import_rockets)
+        selection_layout.addWidget(bulk_import_button)
+        
+        bulk_export_button = QPushButton("📤 Bulk Export")
+        bulk_export_button.setToolTip("Export all rocket configurations to a directory")
+        bulk_export_button.clicked.connect(self.bulk_export_rockets)
+        selection_layout.addWidget(bulk_export_button)
         
         selection_group.setLayout(selection_layout)
         main_layout.addWidget(selection_group)
@@ -169,7 +187,11 @@ class RocketSettingsWidget(QWidget):
         self.tab_fins = self._create_fins_tab()
         self.tabs.addTab(self.tab_fins, "Fins")
         
-        # Tab 7: Thrust Curves
+        # Tab 7: Stability Visualization
+        self.tab_stability = self._create_stability_tab()
+        self.tabs.addTab(self.tab_stability, "Stability")
+        
+        # Tab 8: Thrust Curves
         self.tab_thrust = self._create_thrust_curves_tab()
         self.tabs.addTab(self.tab_thrust, "Thrust Curves")
         
@@ -331,8 +353,16 @@ class RocketSettingsWidget(QWidget):
         content.setLayout(form_layout)
         scroll.setWidget(content)
         
+        # Auto-calculate button
+        calculate_button = QPushButton("🔄 Auto-Calculate Inertia from Geometry")
+        calculate_button.setToolTip(
+            "Calculate moments of inertia based on geometry and material density"
+        )
+        calculate_button.clicked.connect(self.auto_calculate_inertia)
+        
         main_layout = QVBoxLayout()
         main_layout.addWidget(scroll)
+        main_layout.addWidget(calculate_button)
         widget.setLayout(main_layout)
         return widget
     
@@ -635,6 +665,220 @@ class RocketSettingsWidget(QWidget):
         widget.setLayout(main_layout)
         return widget
     
+    def _create_stability_tab(self):
+        """Create Stability tab with visual CP/CoM representation.
+        
+        Features:
+            - Real-time visualization of rocket side view
+            - Shows Centre of Pressure (CP), CoM before/after burnout
+            - Stability margin indicators
+            - Automatic update when geometry changes
+        
+        Returns:
+            QWidget: Stability visualization interface
+        """
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # Canvas for matplotlib (if available)
+        if HAS_MATPLOTLIB:
+            self.figure_stability = Figure(figsize=(10, 4), dpi=100)
+            self.canvas_stability = FigureCanvas(self.figure_stability)
+            layout.addWidget(self.canvas_stability)
+        else:
+            self.stability_canvas_widget = QWidget()
+            self.stability_canvas_widget.setMinimumHeight(300)
+            self.stability_canvas_widget.setStyleSheet("background-color: #1e1e1e; border: 1px solid #444;")
+            layout.addWidget(self.stability_canvas_widget)
+        
+        # Control buttons
+        control_layout = QHBoxLayout()
+        
+        refresh_button = QPushButton("🔄 Refresh Visualization")
+        refresh_button.clicked.connect(self._refresh_stability_visualization)
+        control_layout.addWidget(refresh_button)
+        
+        # Stability info display
+        self.stability_info_label = QLabel("Calculate stability to see results")
+        self.stability_info_label.setStyleSheet("color: #ddd; font-size: 12px;")
+        self.stability_info_label.setWordWrap(True)
+        control_layout.addWidget(self.stability_info_label)
+        control_layout.addStretch()
+        
+        layout.addLayout(control_layout)
+        
+        # Stability details
+        details_group = QGroupBox("Stability Details")
+        details_layout = QFormLayout()
+        
+        self.cp_label = QLabel("CP: Not calculated")
+        self.com_before_label = QLabel("CoM Before: Not calculated")
+        self.com_after_label = QLabel("CoM After: Not calculated")
+        self.margin_before_label = QLabel("Margin Before: Not calculated")
+        self.margin_after_label = QLabel("Margin After: Not calculated")
+        self.stability_category_label = QLabel("Category: Not calculated")
+        
+        details_layout.addRow("Centre of Pressure:", self.cp_label)
+        details_layout.addRow("CoM (Before Burn):", self.com_before_label)
+        details_layout.addRow("CoM (After Burn):", self.com_after_label)
+        details_layout.addRow("Margin (Before):", self.margin_before_label)
+        details_layout.addRow("Margin (After):", self.margin_after_label)
+        details_layout.addRow("Category:", self.stability_category_label)
+        
+        details_group.setLayout(details_layout)
+        layout.addWidget(details_group)
+        
+        layout.addStretch()
+        widget.setLayout(layout)
+        return widget
+    
+    def _refresh_stability_visualization(self):
+        """Update the stability visualization based on current rocket parameters."""
+        if not HAS_STABILITY:
+            QMessageBox.warning(
+                self, "Stability Calculator Unavailable",
+                "Stability calculator could not be loaded. Check that src/utils/stability_calculator.py exists."
+            )
+            return
+        
+        # Collect current values
+        nose_len_m = self.nosecone_length.value() / 1000.0
+        nose_shape = self.nosecone_type.currentText().lower()
+        body_diam_m = self.fuselage_diameter.value() / 1000.0
+        fin_n = self.n_fins.value()
+        fin_span_m = self.fin_span.value() / 1000.0
+        fin_cr_m = self.fin_chord_root.value() / 1000.0
+        fin_ct_m = self.fin_chord_tip.value() / 1000.0
+        fin_mc_m = self.fin_mid_chord.value() / 1000.0
+        fin_pos_m = self.length_nosecone_fins.value() / 1000.0
+        com_before_m = self.com_before_x.value()
+        com_after_m = self.com_after_x.value()
+        
+        # Check for minimum required data
+        if nose_len_m <= 0 or body_diam_m <= 0:
+            self.stability_info_label.setText(
+                "Enter Nosecone Length and Fuselage Diameter to compute stability"
+            )
+            return
+        
+        try:
+            result = compute_stability(
+                nose_length_m=nose_len_m,
+                nose_shape=nose_shape,
+                body_diameter_m=body_diam_m,
+                fin_n=fin_n,
+                fin_span_m=fin_span_m,
+                fin_chord_root_m=fin_cr_m,
+                fin_chord_tip_m=fin_ct_m,
+                fin_mid_chord_m=fin_mc_m,
+                fin_position_from_nose_m=fin_pos_m,
+                com_before_m=com_before_m,
+                com_after_m=com_after_m,
+            )
+            
+            # Update labels with results
+            self.cp_label.setText(f"{result.xcp:.4f} m from nose")
+            self.com_before_label.setText(f"{com_before_m:.4f} m from nose")
+            self.com_after_label.setText(f"{com_after_m:.4f} m from nose")
+            self.margin_before_label.setText(f"{result.margin_calibers_before:.2f} calibers")
+            self.margin_after_label.setText(f"{result.margin_calibers_after:.2f} calibers")
+            self.stability_category_label.setText(result.category)
+            
+            # Update info label
+            margin_before_color = "green" if result.margin_calibers_before >= 1.0 else "red" if result.margin_calibers_before < 0 else "orange"
+            margin_after_color = "green" if result.margin_calibers_after >= 1.0 else "red" if result.margin_calibers_after < 0 else "orange"
+            
+            self.stability_info_label.setText(
+                f"<span style='color:{margin_before_color};'>Before: {result.margin_calibers_before:.2f} cal</span> | "
+                f"<span style='color:{margin_after_color};'>After: {result.margin_calibers_after:.2f} cal</span> | "
+                f"<b>{result.category}</b>"
+            )
+            
+            # Trigger repaint of visualization
+            self._draw_stability_diagram(result)
+            
+        except Exception as exc:
+            self.stability_info_label.setText(f"Error: {exc}")
+            logger.error(f"Stability calculation failed: {exc}")
+    
+    def _draw_stability_diagram(self, result):
+        """Draw the stability diagram showing CP, CoM positions."""
+        if not HAS_MATPLOTLIB:
+            # Fallback: just show text
+            self.stability_info_label.setText(
+                f"CP: {result.xcp:.4f}m, Category: {result.category} "
+                f"(Install matplotlib for visualization)"
+            )
+            return
+        
+        # Initialize figure if not exists (for direct calls)
+        if not hasattr(self, 'figure_stability'):
+            self.figure_stability = Figure(figsize=(10, 4), dpi=100)
+            self.canvas_stability = FigureCanvas(self.figure_stability)
+        
+        # Clear and redraw
+        self.figure_stability.clear()
+        ax = self.figure_stability.add_subplot(111)
+        
+        # Get total length for scaling
+        total_len = self.total_length.value() / 1000.0
+        if total_len <= 0:
+            total_len = (result.xcp + max(self.com_before_x.value(), self.com_after_x.value(), 1.0)) * 1.1
+        
+        # Draw rocket outline
+        body_diam = self.fuselage_diameter.value() / 1000.0
+        nose_len = self.nosecone_length.value() / 1000.0
+        
+        # Rocket body (simple representation)
+        ax.plot([0, total_len], [0, 0], 'k-', linewidth=10, label='Rocket Body')
+        
+        # Nosecone (triangle for visualization)
+        if nose_len > 0:
+            ax.plot([0, nose_len], [body_diam/2, 0], 'k-', linewidth=2)
+            ax.plot([0, nose_len], [-body_diam/2, 0], 'k-', linewidth=2)
+        
+        # CP position (red)
+        if result.xcp > 0:
+            ax.plot([result.xcp, result.xcp], [-body_diam/2, body_diam/2], 
+                   'r-', linewidth=2, label=f'CP ({result.xcp:.3f}m)')
+            ax.scatter([result.xcp], [0], color='red', s=100, zorder=5)
+        
+        # CoM before (green)
+        com_before = self.com_before_x.value()
+        if com_before > 0:
+            ax.plot([com_before, com_before], [-body_diam/2, body_diam/2], 
+                   'g--', linewidth=2, label=f'CoM Before ({com_before:.3f}m)')
+            ax.scatter([com_before], [0], color='green', s=100, zorder=5, marker='^')
+        
+        # CoM after (blue)
+        com_after = self.com_after_x.value()
+        if com_after > 0:
+            ax.plot([com_after, com_after], [-body_diam/2, body_diam/2], 
+                   'b:', linewidth=2, label=f'CoM After ({com_after:.3f}m)')
+            ax.scatter([com_after], [0], color='blue', s=100, zorder=5, marker='^')
+        
+        # Stability margin indicators
+        if result.margin_calibers_before > 0:
+            # Stable: CP is behind CoM
+            margin_line_x = [com_before, result.xcp]
+            margin_line_y = [0, 0]
+            color = 'green' if result.margin_calibers_before >= 1.0 else 'orange'
+            ax.plot(margin_line_x, margin_line_y, color=color, linewidth=3, 
+                   linestyle='-', alpha=0.5, label=f'Margin: {result.margin_calibers_before:.2f} cal')
+        
+        # Formatting
+        ax.set_xlim(0, total_len * 1.05)
+        ax.set_ylim(-body_diam/2 * 1.1, body_diam/2 * 1.1)
+        ax.set_xlabel('Distance from Nose (m)')
+        ax.set_ylabel('Radius (m)')
+        ax.set_title('Rocket Stability Diagram')
+        ax.legend(loc='upper right')
+        ax.grid(True, alpha=0.3)
+        ax.set_aspect('equal')
+        
+        self.figure_stability.tight_layout()
+        self.canvas_stability.draw()
+    
     def _create_thrust_curves_tab(self):
         """Create Thrust Curves tab for engine performance data.
         
@@ -856,9 +1100,93 @@ class RocketSettingsWidget(QWidget):
         if self.total_length.value() <= 0:
             warnings.append("⚠️  Total length is 0 or negative")
         
+        # Check if total length is consistent with components
+        component_lengths = 0.0
+        if self.nosecone_length.value() > 0:
+            component_lengths += self.nosecone_length.value()
+        if self.fuselage_length.value() > 0:
+            component_lengths += self.fuselage_length.value()
+        if self.rear_length.value() > 0:
+            component_lengths += self.rear_length.value()
+        
+        total_len = self.total_length.value()
+        if total_len > 0 and component_lengths > 0:
+            if abs(component_lengths - total_len) / total_len > 0.1:  # More than 10% difference
+                warnings.append(
+                    f"⚠️  Total length ({total_len:.1f}mm) differs from sum of "
+                    f"components ({component_lengths:.1f}mm) by more than 10%"
+                )
+        
+        # Nosecone validation
+        if self.nosecone_length.value() > 0 and self.nosecone_diameter.value() <= 0:
+            errors.append("❌ Nosecone diameter must be > 0 if length is specified")
+        
+        if self.nosecone_diameter.value() > self.fuselage_diameter.value() and self.fuselage_diameter.value() > 0:
+            warnings.append(
+                "⚠️  Nosecone diameter is larger than fuselage diameter (unusual configuration)"
+            )
+        
+        # Rear section validation
+        if self.rear_length.value() > 0 and self.rear_diameter.value() <= 0:
+            errors.append("❌ Rear section diameter must be > 0 if length is specified")
+        
+        if self.rear_diameter.value() > self.fuselage_diameter.value() and self.rear_length.value() > 0:
+            warnings.append(
+                "⚠️  Rear section diameter is larger than fuselage diameter (unusual configuration)"
+            )
+        
+        # Fin geometry validation
+        if self.n_fins.value() > 0:
+            if self.fin_span.value() <= 0:
+                errors.append("❌ Fin span must be > 0 if fins are present")
+            
+            if self.fin_chord_root.value() <= 0:
+                errors.append("❌ Fin root chord must be > 0 if fins are present")
+            
+            if self.fin_chord_tip.value() < 0:
+                errors.append("❌ Fin tip chord cannot be negative")
+            
+            # Check fin chord is reasonable compared to diameter
+            if self.fin_chord_root.value() > self.fuselage_diameter.value() * 2:
+                warnings.append(
+                    "⚠️  Fin root chord is more than twice the fuselage diameter (very large fins)"
+                )
+            
+            # Check fin span is reasonable
+            if self.fin_span.value() > self.fuselage_diameter.value() * 5:
+                warnings.append(
+                    "⚠️  Fin span is more than 5x the fuselage diameter (very large fins)"
+                )
+            
+            # Check mid chord is between root and tip
+            mid_chord = self.fin_mid_chord.value()
+            if mid_chord > max(self.fin_chord_root.value(), self.fin_chord_tip.value()):
+                warnings.append(
+                    "⚠️  Fin mid chord is larger than both root and tip chords"
+                )
+        
+        # Reference area validation
+        ref_area = self.reference_area_spinbox.value()
+        if ref_area > 0:
+            fus_diam = self.fuselage_diameter.value() / 1000.0
+            expected_area = math.pi * (fus_diam / 2.0) ** 2 if fus_diam > 0 else 0
+            if expected_area > 0 and abs(ref_area - expected_area) / expected_area > 0.5:
+                warnings.append(
+                    f"⚠️  Reference area ({ref_area:.6f} m²) differs significantly from "
+                    f"fuselage cross-section ({expected_area:.6f} m²)"
+                )
+        
         # Inertia validation  
         if self.i_before_x.value() < 0 or self.i_before_y.value() < 0 or self.i_before_z.value() < 0:
             errors.append("❌ Moment of inertia cannot be negative")
+        
+        # Check that after-burn inertia is not greater than before-burn (unlikely for most rockets)
+        if (self.i_after_x.value() > self.i_before_x.value() * 1.5 or
+            self.i_after_y.value() > self.i_before_y.value() * 1.5 or
+            self.i_after_z.value() > self.i_before_z.value() * 1.5):
+            warnings.append(
+                "⚠️  After-burn inertia is significantly greater than before-burn inertia (unusual)"
+            )
         
         # Fin validation
         if self.n_fins.value() > 0 and self.fin_span.value() <= 0:
@@ -1352,6 +1680,412 @@ class RocketSettingsWidget(QWidget):
         except Exception as exc:
             QMessageBox.critical(self, "STL Import Failed", f"Could not import STL:\n{exc}")
             logger.error(f"StlImporter error for '{filepath}': {exc}")
+    
+    def export_ork_file(self):
+        """Export rocket configuration to OpenRocket .ork file."""
+        if not HAS_ORK:
+            QMessageBox.warning(
+                self, "OrkExporter Unavailable",
+                "OrkExporter could not be loaded. Check that src/utils/ork_importer.py exists."
+            )
+            return
+        
+        # Get current rocket data
+        rocket_name = self.name_edit.text().strip()
+        if not rocket_name:
+            QMessageBox.warning(self, "No Rocket Name", "Please enter a rocket name before exporting.")
+            return
+        
+        # Build rocket data dict from UI
+        rocket_data = self._collect_rocket_data()
+        
+        # Get save path
+        default_name = f"{rocket_name.replace(' ', '_')}.ork"
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export OpenRocket File", default_name,
+            "OpenRocket Files (*.ork);;All Files (*.*)"
+        )
+        
+        if not filepath:
+            return
+        
+        # Ensure .ork extension
+        if not filepath.lower().endswith('.ork'):
+            filepath += '.ork'
+        
+        try:
+            exporter = OrkExporter(rocket_data)
+            exporter.export(filepath)
+            QMessageBox.information(
+                self, "Export Successful",
+                f"Rocket '{rocket_name}' exported to OpenRocket format:\n{filepath}"
+            )
+            logger.info(f"Exported OpenRocket file: {filepath}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Export Failed", f"Could not export .ork file:\n{exc}")
+            logger.error(f"OrkExporter error for '{filepath}': {exc}")
+    
+    def bulk_import_rockets(self):
+        """Import multiple rocket configurations from a directory."""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Directory with Rocket Configurations", ""
+        )
+        
+        if not directory:
+            return
+        
+        # Count JSON files in directory
+        json_files = [f for f in os.listdir(directory) if f.lower().endswith('.json')]
+        
+        if not json_files:
+            QMessageBox.information(
+                self, "No Rocket Files",
+                f"No .json files found in:\n{directory}"
+            )
+            return
+        
+        imported_count = 0
+        errors_count = 0
+        error_messages = []
+        
+        for filename in json_files:
+            filepath = os.path.join(directory, filename)
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    rocket_data = json.load(f)
+                    rocket_name = rocket_data.get('name', filename)
+                    
+                    # Check if name already exists
+                    if rocket_name in self.rockets:
+                        # Append suffix to make unique
+                        base_name = rocket_name
+                        counter = 1
+                        while f"{base_name}_{counter}" in self.rockets:
+                            counter += 1
+                        rocket_name = f"{base_name}_{counter}"
+                        rocket_data['name'] = rocket_name
+                    
+                    self.rockets[rocket_name] = rocket_data
+                    self.rocket_combo.addItem(rocket_name)
+                    imported_count += 1
+                    logger.info(f"Bulk imported: {filename}")
+            except Exception as e:
+                errors_count += 1
+                error_messages.append(f"{filename}: {str(e)}")
+                logger.error(f"Bulk import error for {filename}: {e}")
+        
+        # Show results
+        message = f"Imported {imported_count} rockets from:\n{directory}\n"
+        if errors_count > 0:
+            message += f"\nFailed to import {errors_count} files:\n"
+            message += "\n".join(error_messages[:5])  # Show first 5 errors
+            if errors_count > 5:
+                message += f"\n... and {errors_count - 5} more"
+            QMessageBox.warning(self, "Bulk Import Complete (with errors)", message)
+        else:
+            QMessageBox.information(self, "Bulk Import Complete", message)
+        
+        # Update current rocket selection
+        if imported_count > 0:
+            self.rocket_combo.setCurrentIndex(1)  # Skip "Manual"
+            self.on_rocket_selected(self.rocket_combo.currentText())
+    
+    def bulk_export_rockets(self):
+        """Export all rocket configurations to a directory."""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Directory to Export Rocket Configurations", ""
+        )
+        
+        if not directory:
+            return
+        
+        # Create directory if it doesn't exist
+        os.makedirs(directory, exist_ok=True)
+        
+        exported_count = 0
+        errors_count = 0
+        error_messages = []
+        
+        for rocket_name, rocket_data in self.rockets.items():
+            try:
+                # Sanitize filename
+                safe_name = rocket_name.lower().replace(" ", "_")
+                # Remove invalid characters
+                safe_name = "".join(c for c in safe_name if c.isalnum() or c in "_-.")
+                filepath = os.path.join(directory, f"{safe_name}.json")
+                
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(rocket_data, f, indent=4, ensure_ascii=False)
+                
+                exported_count += 1
+                logger.info(f"Bulk exported: {filepath}")
+            except Exception as e:
+                errors_count += 1
+                error_messages.append(f"{rocket_name}: {str(e)}")
+                logger.error(f"Bulk export error for {rocket_name}: {e}")
+        
+        # Show results
+        message = f"Exported {exported_count} rockets to:\n{directory}\n"
+        if errors_count > 0:
+            message += f"\nFailed to export {errors_count} rockets:\n"
+            message += "\n".join(error_messages[:5])  # Show first 5 errors
+            if errors_count > 5:
+                message += f"\n... and {errors_count - 5} more"
+            QMessageBox.warning(self, "Bulk Export Complete (with errors)", message)
+        else:
+            QMessageBox.information(self, "Bulk Export Complete", message)
+    
+    def _collect_rocket_data(self) -> dict:
+        """Collect all rocket data from UI fields into a dict.
+        
+        This is the same format used by load_rocket_data().
+        """
+        return {
+            'name': self.name_edit.text(),
+            'initial_mass': self.initial_mass_spinbox.value(),
+            'propellant_mass': self.propellant_mass.value(),
+            'dry_mass_kg': round(self.initial_mass_spinbox.value() - self.propellant_mass.value(), 6),
+            'reference_area': self.reference_area_spinbox.value(),
+            'I_before_burn': {
+                'x': self.i_before_x.value(),
+                'y': self.i_before_y.value(),
+                'z': self.i_before_z.value()
+            },
+            'CoM_before_burn': {
+                'x': self.com_before_x.value(),
+                'y': self.com_before_y.value(),
+                'z': self.com_before_z.value()
+            },
+            'I_after_burn': {
+                'x': self.i_after_x.value(),
+                'y': self.i_after_y.value(),
+                'z': self.i_after_z.value()
+            },
+            'CoM_after_burn': {
+                'x': self.com_after_x.value(),
+                'y': self.com_after_y.value(),
+                'z': self.com_after_z.value()
+            },
+            'engine': {
+                'burn_time': self.burn_time.value(),
+                'propellant_mass': self.propellant_mass.value(),
+                'specific_impulse': self.specific_impulse.value(),
+                'mean_thrust': self.mean_thrust.value(),
+                'max_thrust': self.max_thrust.value(),
+                'nozzle_exit_diameter': self.nozzle_diameter.value(),
+                'mass_flux': self.mass_flux.value(),
+                'gas_speed': self.gas_speed.value(),
+                'exit_pressure': self.exit_pressure.value(),
+                'mean_chamber_pressure': self.mean_chamber_pressure.value(),
+                'max_chamber_pressure': self.max_chamber_pressure.value(),
+                'thrust_to_weight_ratio': self.thrust_to_weight.value()
+            },
+            'geometry': {
+                'total length': self.total_length.value(),
+                'length nosecone fins': self.length_nosecone_fins.value(),
+                'total_length': self.total_length.value(),
+                'length_nosecone_fins': self.length_nosecone_fins.value()
+            },
+            'fuselage': {
+                'length': self.fuselage_length.value(),
+                'diameter': self.fuselage_diameter.value()
+            },
+            'rear_section': {
+                'length': self.rear_length.value(),
+                'diameter': self.rear_diameter.value()
+            },
+            'nosecone': {
+                'type': self.nosecone_type.currentText(),
+                'shape': self.nosecone_type.currentText().lower(),
+                'length': self.nosecone_length.value(),
+                'diameter': self.nosecone_diameter.value(),
+                'ogive_radius': self.ogive_radius.value(),
+                'parabolic_parameter': self.parabolic_parameter.value(),
+                'power_value': self.power_value.value(),
+                'haack_type': self.haack_type.currentText()
+            },
+            'fins': {
+                'fin_type': self.fin_type.currentText(),
+                'N_fins': self.n_fins.value(),
+                'span': self.fin_span.value(),
+                'chord_root': self.fin_chord_root.value(),
+                'chord_tip': self.fin_chord_tip.value(),
+                'mid_chord': self.fin_mid_chord.value(),
+                'sweep_angle': self.fin_sweep_angle.value()
+            }
+        }
+    
+    def auto_calculate_inertia(self):
+        """Calculate moments of inertia from geometry and mass.
+        
+        Uses simplified formulas for common shapes:
+        - Nosecone: Solid cone approximation
+        - Fuselage: Thin-walled cylinder
+        - Rear section: Thin-walled cylinder
+        - Fins: Rectangular plates
+        
+        Assumes uniform density throughout the rocket.
+        """
+        # Get mass
+        total_mass = self.initial_mass_spinbox.value()
+        if total_mass <= 0:
+            QMessageBox.warning(
+                self, "Invalid Mass",
+                "Please enter a valid initial mass (> 0) before calculating inertia."
+            )
+            return
+        
+        # Get geometry (all in mm, convert to m)
+        nose_len = self.nosecone_length.value() / 1000.0
+        nose_diam = self.nosecone_diameter.value() / 1000.0
+        fus_len = self.fuselage_length.value() / 1000.0
+        fus_diam = self.fuselage_diameter.value() / 1000.0
+        rear_len = self.rear_length.value() / 1000.0
+        rear_diam = self.rear_diameter.value() / 1000.0
+        
+        # Fin dimensions
+        fin_n = self.n_fins.value()
+        fin_span = self.fin_span.value() / 1000.0
+        fin_cr = self.fin_chord_root.value() / 1000.0
+        fin_ct = self.fin_chord_tip.value() / 1000.0
+        fin_pos = self.length_nosecone_fins.value() / 1000.0
+        
+        # Ask user for density if not already set
+        # For now, assume typical density for model rockets (lightweight materials)
+        # Common densities: cardboard ~600 kg/m³, plastic ~900 kg/m³, aluminum ~2700 kg/m³
+        # Use 800 kg/m³ as a reasonable default
+        density = 800.0  # kg/m³
+        
+        try:
+            # Calculate volumes
+            # Nosecone (solid cone: V = 1/3 * pi * r² * h)
+            nose_radius = nose_diam / 2.0
+            nose_volume = (1/3) * math.pi * (nose_radius ** 2) * nose_len if nose_len > 0 and nose_diam > 0 else 0
+            
+            # Fuselage (thin-walled cylinder: V ≈ pi * r * t * h, but we simplify to solid for now)
+            # Using outer radius
+            fus_radius = fus_diam / 2.0
+            fus_volume = math.pi * (fus_radius ** 2) * fus_len if fus_len > 0 and fus_diam > 0 else 0
+            
+            # Rear section
+            rear_radius = rear_diam / 2.0
+            rear_volume = math.pi * (rear_radius ** 2) * rear_len if rear_len > 0 and rear_diam > 0 else 0
+            
+            # Fins (simplified as rectangular plates)
+            # Use average chord
+            avg_chord = (fin_cr + fin_ct) / 2.0 if fin_cr > 0 else fin_cr
+            single_fin_volume = fin_span * avg_chord * 0.001  # Assume 1mm thickness
+            fins_volume = single_fin_volume * fin_n if fin_n > 0 and fin_span > 0 else 0
+            
+            total_volume = nose_volume + fus_volume + rear_volume + fins_volume
+            
+            if total_volume <= 0:
+                QMessageBox.warning(
+                    self, "Invalid Geometry",
+                    "Could not calculate volume from geometry. Please check all dimensions."
+                )
+                return
+            
+            # Calculate mass distribution (proportional to volume)
+            nose_mass = (nose_volume / total_volume) * total_mass
+            fus_mass = (fus_volume / total_volume) * total_mass
+            rear_mass = (rear_volume / total_volume) * total_mass
+            fins_mass = (fins_volume / total_volume) * total_mass
+            
+            # Calculate CoM positions (from nose)
+            nose_com = nose_len / 2.0  # CoM of cone is at 1/3 from base, but we use center for simplicity
+            fus_com = nose_len + fus_len / 2.0
+            rear_com = nose_len + fus_len + rear_len / 2.0
+            fins_com = fin_pos  # Fin position from nose
+            
+            # Overall CoM
+            total_moment = (
+                nose_mass * nose_com +
+                fus_mass * fus_com +
+                rear_mass * rear_com +
+                fins_mass * fins_com
+            )
+            com_x = total_moment / total_mass if total_mass > 0 else 0
+            
+            # Calculate moments of inertia using parallel axis theorem
+            # For simplicity, use basic formulas for each component
+            
+            # Nosecone (solid cone: Ix = 3/10 * m * r², Iy = Ix + m * (3/4 * h² + 3/10 * r²))
+            # Simplified: treat as point mass at CoM
+            i_nose_x = 0.3 * nose_mass * (nose_radius ** 2)
+            i_nose_y = 0.3 * nose_mass * (nose_radius ** 2) + nose_mass * (nose_len ** 2) / 12
+            i_nose_z = i_nose_y  # Symmetric
+            
+            # Fuselage (cylinder: Ix = 1/2 * m * r², Iy = Ix + m * (L² / 12 + r² / 4))
+            i_fus_x = 0.5 * fus_mass * (fus_radius ** 2)
+            i_fus_y = fus_mass * (fus_len ** 2) / 12
+            i_fus_z = i_fus_y
+            
+            # Rear section
+            i_rear_x = 0.5 * rear_mass * (rear_radius ** 2)
+            i_rear_y = rear_mass * (rear_len ** 2) / 12
+            i_rear_z = i_rear_y
+            
+            # Fins (rectangular plates: Ix = 1/12 * m * (span² + chord²), Iy = 1/12 * m * chord², Izz = 1/12 * m * span²)
+            avg_fin_mass = fins_mass / fin_n if fin_n > 0 else 0
+            i_fin_x = fin_n * (avg_fin_mass * ((fin_span ** 2) + (avg_chord ** 2)) / 12) if fin_n > 0 else 0
+            i_fin_y = fin_n * (avg_fin_mass * (avg_chord ** 2) / 12) if fin_n > 0 else 0
+            i_fin_z = fin_n * (avg_fin_mass * (fin_span ** 2) / 12) if fin_n > 0 else 0
+            
+            # Parallel axis theorem: add m * d² for each component
+            # CoM to rocket CoM distance
+            d_nose = com_x - nose_com
+            d_fus = com_x - fus_com
+            d_rear = com_x - rear_com
+            d_fins = com_x - fins_com
+            
+            # Total moments of inertia
+            i_total_x = i_nose_x + i_fus_x + i_rear_x + i_fin_x
+            i_total_y = (
+                i_nose_y + nose_mass * (d_nose ** 2) +
+                i_fus_y + fus_mass * (d_fus ** 2) +
+                i_rear_y + rear_mass * (d_rear ** 2) +
+                i_fin_y + fins_mass * (d_fins ** 2)
+            )
+            i_total_z = (
+                i_nose_z + nose_mass * (d_nose ** 2) +
+                i_fus_z + fus_mass * (d_fus ** 2) +
+                i_rear_z + rear_mass * (d_rear ** 2) +
+                i_fin_z + fins_mass * (d_fins ** 2)
+            )
+            
+            # Update UI
+            self.i_before_x.setValue(round(i_total_x, 6))
+            self.i_before_y.setValue(round(i_total_y, 6))
+            self.i_before_z.setValue(round(i_total_z, 6))
+            self.i_after_x.setValue(round(i_total_x, 6))
+            self.i_after_y.setValue(round(i_total_y, 6))
+            self.i_after_z.setValue(round(i_total_z, 6))
+            
+            self.com_before_x.setValue(round(com_x, 6))
+            self.com_before_y.setValue(0.0)
+            self.com_before_z.setValue(0.0)
+            self.com_after_x.setValue(round(com_x, 6))
+            self.com_after_y.setValue(0.0)
+            self.com_after_z.setValue(0.0)
+            
+            QMessageBox.information(
+                self, "Inertia Calculated",
+                f"Auto-calculated inertia from geometry:\n\n"
+                f"Total Volume: {total_volume:.6f} m³\n"
+                f"Estimated Density: {density:.1f} kg/m³\n"
+                f"Centre of Mass: {com_x:.4f} m from nose\n"
+                f"Ix: {i_total_x:.4f} kg·m²\n"
+                f"Iy: {i_total_y:.4f} kg·m²\n"
+                f"Iz: {i_total_z:.4f} kg·m²"
+            )
+            
+        except Exception as exc:
+            QMessageBox.critical(
+                self, "Calculation Error",
+                f"Failed to calculate inertia: {exc}"
+            )
+            logger.error(f"Auto-calculate inertia error: {exc}")
     
     def delete_rocket_config(self):
         """Delete selected rocket configuration."""

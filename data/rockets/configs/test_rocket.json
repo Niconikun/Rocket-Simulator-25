@@ -1,5 +1,6 @@
 {
-    "name": "Test_rocket",
+    "name": "Test_Rocket",
+    "description": "Large test rocket with heavy payload capability",
     "initial_mass": 80.0,
     "propellant_mass": 30.0,
     "dry_mass_kg": 50.0,
@@ -39,28 +40,28 @@
         "exit_pressure": 200000.0
     },
     "geometry": {
-        "length nosecone fins": 2600.0,
-        "total length": 3150.0
+        "length_nosecone_fins": 2.6,
+        "total_length": 3.15
     },
     "fins": {
-        "span": 80.0,
-        "chord_root": 80.0,
-        "chord_tip": 20.0,
-        "mid_chord": 50.0,
+        "span": 0.08,
+        "chord_root": 0.08,
+        "chord_tip": 0.02,
+        "mid_chord": 0.05,
         "N_fins": 4
     },
     "nosecone": {
         "type": "Conical",
-        "length": 500.0,
-        "diameter": 150.0,
+        "length": 0.5,
+        "diameter": 0.15,
         "shape": "conical"
     },
     "fuselage": {
-        "length": 2500.0,
-        "diameter": 150.0
+        "length": 2.5,
+        "diameter": 0.15
     },
     "rear_section": {
-        "length": 150.0,
-        "diameter": 120.0
+        "length": 0.15,
+        "diameter": 0.12
     }
 }

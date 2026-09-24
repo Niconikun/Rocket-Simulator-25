@@ -42,8 +42,6 @@
         "chamber_temperature": 3100.0
     },
     "geometry": {
-        "length nosecone fins": 11.2,
-        "total length": 14.701,
         "length_nosecone_fins": 11.2,
         "total_length": 14.701,
         "description": "Large ICBM with 1-meter diameter"

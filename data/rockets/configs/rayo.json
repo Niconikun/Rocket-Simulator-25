@@ -41,28 +41,28 @@
         "exit_pressure": 186037
     },
     "geometry": {
-        "length nosecone fins": 856,
-        "total length": 936
+        "length_nosecone_fins": 0.856,
+        "total_length": 0.936
     },
     "fins": {
-        "span": 41.65,
-        "chord_root": 76.32,
-        "chord_tip": 33.6722,
-        "mid_chord": 46.6440,
+        "span": 0.04165,
+        "chord_root": 0.07632,
+        "chord_tip": 0.0336722,
+        "mid_chord": 0.046644,
         "N_fins": 4
     },
     "nosecone": {
         "type": "Conical",
-        "length": 205.35,
-        "diameter": 88.9,
+        "length": 0.20535,
+        "diameter": 0.0889,
         "shape": "conical"
     },
     "fuselage": {
-        "length": 730,
-        "diameter": 88.9
+        "length": 0.73,
+        "diameter": 0.0889
     },
     "rear_section": {
-        "length": 62,
-        "diameter": 88.9
+        "length": 0.062,
+        "diameter": 0.0889
     }
 }

@@ -45,10 +45,8 @@
         "notes": "Typical F12-6 impulse motor characteristics"
     },
     "geometry": {
-        "length nosecone fins": 0.35,
-        "total length": 0.45,
-        "total_length": 0.45,
         "length_nosecone_fins": 0.35,
+        "total_length": 0.45,
         "description": "Standard 3-inch diameter model rocket"
     },
     "nosecone": {
