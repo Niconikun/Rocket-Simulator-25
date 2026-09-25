@@ -222,9 +222,9 @@ class SimulationWorker(QThread):
         # Initialize attitude (quaternions)
         q_pitch = np.array([
             0,
-            np.sin(-launch_elevation_angle * 0.5 * DEG_TO_RAD),
+            np.sin(launch_elevation_angle * 0.5 * DEG_TO_RAD),
             0,
-            np.cos(-launch_elevation_angle * 0.5 * DEG_TO_RAD)
+            np.cos(launch_elevation_angle * 0.5 * DEG_TO_RAD)
         ])
             
         q_yaw = np.array([

@@ -235,7 +235,7 @@ class RocketSettingsWidget(BaseWidget):
         Fields:
             - Rocket Name (string): User-defined rocket identifier
             - Initial Mass (0.1-100000 kg): Wet mass including propellant
-            - Reference Area (0.01-100M mm²): Rocket cross-section area for drag
+            - Reference Area (0.000001-1000 m²): Rocket cross-section area for drag
         
         Returns:
             QWidget: Configured form widget with input controls
@@ -267,8 +267,8 @@ class RocketSettingsWidget(BaseWidget):
         """Create Inertia tab with center of mass and moments of inertia.
         
         Fields:
-            - CoM Before Burnout (mm): Center of mass measured from nose tip
-            - CoM After Burnout (mm): CoM position after propellant depletion
+            - CoM Before Burnout (m): Center of mass measured from nose tip
+            - CoM After Burnout (m): CoM position after propellant depletion
             - Ixx, Iyy, Izz (kg*m²): Principal moments of inertia
             - Ixy, Ixz, Iyz (kg*m²): Product of inertia terms
         
@@ -288,32 +288,32 @@ class RocketSettingsWidget(BaseWidget):
         form_layout.addRow(QLabel("Moment of Inertia [kg·m²]"))
         self.i_before_x = QDoubleSpinBox()
         self.i_before_x.setRange(0, 1e10)
-        self.i_before_x.setSuffix(" x")
+        self.i_before_x.setSuffix(" kg·m²")
         form_layout.addRow("I_x:", self.i_before_x)
         
         self.i_before_y = QDoubleSpinBox()
         self.i_before_y.setRange(0, 1e10)
-        self.i_before_y.setSuffix(" y")
+        self.i_before_y.setSuffix(" kg·m²")
         form_layout.addRow("I_y:", self.i_before_y)
         
         self.i_before_z = QDoubleSpinBox()
         self.i_before_z.setRange(0, 1e10)
-        self.i_before_z.setSuffix(" z")
+        self.i_before_z.setSuffix(" kg·m²")
         form_layout.addRow("I_z:", self.i_before_z)
         
         form_layout.addRow(QLabel("Center of Mass [m]"))
         self.com_before_x = QDoubleSpinBox()
-        self.com_before_x.setRange(-100000, 100000)
+        self.com_before_x.setRange(-100, 100)
         self.com_before_x.setDecimals(3)
         form_layout.addRow("CoM_x:", self.com_before_x)
         
         self.com_before_y = QDoubleSpinBox()
-        self.com_before_y.setRange(-100000, 100000)
+        self.com_before_y.setRange(-100, 100)
         self.com_before_y.setDecimals(3)
         form_layout.addRow("CoM_y:", self.com_before_y)
         
         self.com_before_z = QDoubleSpinBox()
-        self.com_before_z.setRange(-100000, 100000)
+        self.com_before_z.setRange(-100, 100)
         self.com_before_z.setDecimals(3)
         form_layout.addRow("CoM_z:", self.com_before_z)
         
@@ -323,32 +323,32 @@ class RocketSettingsWidget(BaseWidget):
         form_layout.addRow(QLabel("Moment of Inertia [kg·m²]"))
         self.i_after_x = QDoubleSpinBox()
         self.i_after_x.setRange(0, 1e10)
-        self.i_after_x.setSuffix(" x")
+        self.i_after_x.setSuffix(" kg·m²")
         form_layout.addRow("I_x:", self.i_after_x)
         
         self.i_after_y = QDoubleSpinBox()
         self.i_after_y.setRange(0, 1e10)
-        self.i_after_y.setSuffix(" y")
+        self.i_after_y.setSuffix(" kg·m²")
         form_layout.addRow("I_y:", self.i_after_y)
         
         self.i_after_z = QDoubleSpinBox()
         self.i_after_z.setRange(0, 1e10)
-        self.i_after_z.setSuffix(" z")
+        self.i_after_z.setSuffix(" kg·m²")
         form_layout.addRow("I_z:", self.i_after_z)
         
         form_layout.addRow(QLabel("Center of Mass [m]"))
         self.com_after_x = QDoubleSpinBox()
-        self.com_after_x.setRange(-100000, 100000)
+        self.com_after_x.setRange(-100, 100)
         self.com_after_x.setDecimals(3)
         form_layout.addRow("CoM_x:", self.com_after_x)
         
         self.com_after_y = QDoubleSpinBox()
-        self.com_after_y.setRange(-100000, 100000)
+        self.com_after_y.setRange(-100, 100)
         self.com_after_y.setDecimals(3)
         form_layout.addRow("CoM_y:", self.com_after_y)
         
         self.com_after_z = QDoubleSpinBox()
-        self.com_after_z.setRange(-100000, 100000)
+        self.com_after_z.setRange(-100, 100)
         self.com_after_z.setDecimals(3)
         form_layout.addRow("CoM_z:", self.com_after_z)
         
@@ -473,11 +473,11 @@ class RocketSettingsWidget(BaseWidget):
         """Create Geometry tab for rocket structural dimensions.
         
         Fields:
-            - Total Length (mm): Nose tip to motor end
-            - Body Diameter (mm): Fuselage outer diameter
-            - Fin Root Chord (mm): Span from root to tip
-            - Fin Semi-Span (mm): Fin height at root
-            - Launch Lug Diameter (mm): Clearance for rail/rod
+            - Total Length (m): Nose tip to motor end
+            - Body Diameter (m): Fuselage outer diameter
+            - Fin Root Chord (m): Span from root to tip
+            - Fin Semi-Span (m): Fin height at root
+            - Launch Lug Diameter (m): Clearance for rail/rod
         
         Returns:
             QWidget: Geometric parameter input interface
@@ -492,37 +492,37 @@ class RocketSettingsWidget(BaseWidget):
         # Fuselage
         form_layout.addRow(QLabel("FUSELAGE"))
         self.fuselage_length = QDoubleSpinBox()
-        self.fuselage_length.setRange(0, 100000)
-        self.fuselage_length.setSuffix(" mm")
+        self.fuselage_length.setRange(0, 100)
+        self.fuselage_length.setSuffix(" m")
         form_layout.addRow("Length:", self.fuselage_length)
         
         self.fuselage_diameter = QDoubleSpinBox()
-        self.fuselage_diameter.setRange(1, 100000)
-        self.fuselage_diameter.setSuffix(" mm")
+        self.fuselage_diameter.setRange(0.001, 100)
+        self.fuselage_diameter.setSuffix(" m")
         form_layout.addRow("Diameter:", self.fuselage_diameter)
         
         # Rear Section
         form_layout.addRow(QLabel("REAR SECTION"))
         self.rear_length = QDoubleSpinBox()
-        self.rear_length.setRange(0, 100000)
-        self.rear_length.setSuffix(" mm")
+        self.rear_length.setRange(0, 100)
+        self.rear_length.setSuffix(" m")
         form_layout.addRow("Length:", self.rear_length)
         
         self.rear_diameter = QDoubleSpinBox()
-        self.rear_diameter.setRange(1, 100000)
-        self.rear_diameter.setSuffix(" mm")
+        self.rear_diameter.setRange(0.001, 100)
+        self.rear_diameter.setSuffix(" m")
         form_layout.addRow("Diameter:", self.rear_diameter)
         
         # Total Geometry
         form_layout.addRow(QLabel("TOTAL"))
         self.total_length = QDoubleSpinBox()
-        self.total_length.setRange(0, 100000)
-        self.total_length.setSuffix(" mm")
+        self.total_length.setRange(0, 100)
+        self.total_length.setSuffix(" m")
         form_layout.addRow("Total Length:", self.total_length)
         
         self.length_nosecone_fins = QDoubleSpinBox()
-        self.length_nosecone_fins.setRange(0, 100000)
-        self.length_nosecone_fins.setSuffix(" mm")
+        self.length_nosecone_fins.setRange(0, 100)
+        self.length_nosecone_fins.setSuffix(" m")
         form_layout.addRow("Length (Nosecone to Fins):", self.length_nosecone_fins)
         
         content.setLayout(form_layout)
@@ -538,10 +538,10 @@ class RocketSettingsWidget(BaseWidget):
         
         Fields:
             - Nosecone Type: Conical, Ogive, Parabolic, Power Law
-            - Nosecone Length (mm): Tip to base distance
-            - Nosecone Base Diameter (mm): Diameter at attachment point
+            - Nosecone Length (m): Tip to base distance
+            - Nosecone Base Diameter (m): Diameter at attachment point
             - Power Law Coeff: Exponent for power law shape (n=0.5,1.0,2.0)
-            - Shoulder Length (mm): Transition to body
+            - Shoulder Length (m): Transition to body
         
         Returns:
             QWidget: Aerodynamic design interface with shape preview
@@ -562,20 +562,20 @@ class RocketSettingsWidget(BaseWidget):
         # Dimensions
         form_layout.addRow(QLabel("DIMENSIONS"))
         self.nosecone_length = QDoubleSpinBox()
-        self.nosecone_length.setRange(0, 100000)
-        self.nosecone_length.setSuffix(" mm")
+        self.nosecone_length.setRange(0, 100)
+        self.nosecone_length.setSuffix(" m")
         form_layout.addRow("Length:", self.nosecone_length)
         
         self.nosecone_diameter = QDoubleSpinBox()
-        self.nosecone_diameter.setRange(1, 100000)
-        self.nosecone_diameter.setSuffix(" mm")
+        self.nosecone_diameter.setRange(0.001, 100)
+        self.nosecone_diameter.setSuffix(" m")
         form_layout.addRow("Base Diameter:", self.nosecone_diameter)
         
         # Type-specific parameters
         form_layout.addRow(QLabel("TYPE PARAMETERS"))
         self.ogive_radius = QDoubleSpinBox()
-        self.ogive_radius.setRange(0, 1e6)
-        self.ogive_radius.setSuffix(" mm")
+        self.ogive_radius.setRange(0, 1000)
+        self.ogive_radius.setSuffix(" m")
         form_layout.addRow("Ogive Radius:", self.ogive_radius)
         
         self.parabolic_parameter = QDoubleSpinBox()
@@ -605,11 +605,11 @@ class RocketSettingsWidget(BaseWidget):
         
         Fields:
             - Fin Quantity: Number of fins (typically 3-4)
-            - Root Chord (mm): Fin dimension at body attachment
-            - Tip Chord (mm): Fin dimension at trailing tip
-            - Semi-Span (mm): Fin height perpendicular to body
-            - Sweep Length (mm): Distance from leading to trailing edge
-            - Fin Midchord Thickness (mm): For drag calculation
+            - Root Chord (m): Fin dimension at body attachment
+            - Tip Chord (m): Fin dimension at trailing tip
+            - Semi-Span (m): Fin height perpendicular to body
+            - Sweep Length (m): Distance from leading to trailing edge
+            - Fin Midchord Thickness (m): For drag calculation
         
         Returns:
             QWidget: Fin geometry configuration interface
@@ -635,23 +635,23 @@ class RocketSettingsWidget(BaseWidget):
         # Fin dimensions
         form_layout.addRow(QLabel("DIMENSIONS"))
         self.fin_span = QDoubleSpinBox()
-        self.fin_span.setRange(0, 100000)
-        self.fin_span.setSuffix(" mm")
+        self.fin_span.setRange(0, 100)
+        self.fin_span.setSuffix(" m")
         form_layout.addRow("Span:", self.fin_span)
         
         self.fin_chord_root = QDoubleSpinBox()
-        self.fin_chord_root.setRange(0, 100000)
-        self.fin_chord_root.setSuffix(" mm")
+        self.fin_chord_root.setRange(0, 100)
+        self.fin_chord_root.setSuffix(" m")
         form_layout.addRow("Root Chord:", self.fin_chord_root)
         
         self.fin_chord_tip = QDoubleSpinBox()
-        self.fin_chord_tip.setRange(0, 100000)
-        self.fin_chord_tip.setSuffix(" mm")
+        self.fin_chord_tip.setRange(0, 100)
+        self.fin_chord_tip.setSuffix(" m")
         form_layout.addRow("Tip Chord:", self.fin_chord_tip)
         
         self.fin_mid_chord = QDoubleSpinBox()
-        self.fin_mid_chord.setRange(0, 100000)
-        self.fin_mid_chord.setSuffix(" mm")
+        self.fin_mid_chord.setRange(0, 100)
+        self.fin_mid_chord.setSuffix(" m")
         form_layout.addRow("Mid Chord:", self.fin_mid_chord)
         
         self.fin_sweep_angle = QDoubleSpinBox()
@@ -744,15 +744,15 @@ class RocketSettingsWidget(BaseWidget):
             return
         
         # Collect current values
-        nose_len_m = self.nosecone_length.value() / 1000.0
+        nose_len_m = self.nosecone_length.value()
         nose_shape = self.nosecone_type.currentText().lower()
-        body_diam_m = self.fuselage_diameter.value() / 1000.0
+        body_diam_m = self.fuselage_diameter.value()
         fin_n = self.n_fins.value()
-        fin_span_m = self.fin_span.value() / 1000.0
-        fin_cr_m = self.fin_chord_root.value() / 1000.0
-        fin_ct_m = self.fin_chord_tip.value() / 1000.0
-        fin_mc_m = self.fin_mid_chord.value() / 1000.0
-        fin_pos_m = self.length_nosecone_fins.value() / 1000.0
+        fin_span_m = self.fin_span.value()
+        fin_cr_m = self.fin_chord_root.value()
+        fin_ct_m = self.fin_chord_tip.value()
+        fin_mc_m = self.fin_mid_chord.value()
+        fin_pos_m = self.length_nosecone_fins.value()
         com_before_m = self.com_before_x.value()
         com_after_m = self.com_after_x.value()
         
@@ -823,13 +823,13 @@ class RocketSettingsWidget(BaseWidget):
         ax = self.figure_stability.add_subplot(111)
         
         # Get total length for scaling
-        total_len = self.total_length.value() / 1000.0
+        total_len = self.total_length.value()
         if total_len <= 0:
             total_len = (result.xcp + max(self.com_before_x.value(), self.com_after_x.value(), 1.0)) * 1.1
         
         # Draw rocket outline
-        body_diam = self.fuselage_diameter.value() / 1000.0
-        nose_len = self.nosecone_length.value() / 1000.0
+        body_diam = self.fuselage_diameter.value()
+        nose_len = self.nosecone_length.value()
         
         # Rocket body (simple representation)
         ax.plot([0, total_len], [0, 0], 'k-', linewidth=10, label='Rocket Body')
@@ -1080,8 +1080,8 @@ class RocketSettingsWidget(BaseWidget):
         if self.specific_impulse.value() <= 0 and self.mean_thrust.value() > 0:
             warnings.append("⚠️  Isp should be > 0 if motor is burning")
         
-        # CoM validation (axial axis is x, geometry total length is in mm)
-        total_len_m = self.total_length.value() / 1000
+        # CoM validation (axial axis is x, geometry total length is in m)
+        total_len_m = self.total_length.value()
         if total_len_m > 0 and self.com_before_x.value() > total_len_m:
             warnings.append("⚠️  CoM before burn is beyond rocket length")
 
@@ -1115,8 +1115,8 @@ class RocketSettingsWidget(BaseWidget):
         if total_len > 0 and component_lengths > 0:
             if abs(component_lengths - total_len) / total_len > 0.1:  # More than 10% difference
                 warnings.append(
-                    f"⚠️  Total length ({total_len:.1f}mm) differs from sum of "
-                    f"components ({component_lengths:.1f}mm) by more than 10%"
+                    f"⚠️  Total length ({total_len:.3f}m) differs from sum of "
+                    f"components ({component_lengths:.3f}m) by more than 10%"
                 )
         
         # Nosecone validation
@@ -1170,7 +1170,7 @@ class RocketSettingsWidget(BaseWidget):
         # Reference area validation
         ref_area = self.reference_area_spinbox.value()
         if ref_area > 0:
-            fus_diam = self.fuselage_diameter.value() / 1000.0
+            fus_diam = self.fuselage_diameter.value()
             expected_area = math.pi * (fus_diam / 2.0) ** 2 if fus_diam > 0 else 0
             if expected_area > 0 and abs(ref_area - expected_area) / expected_area > 0.5:
                 warnings.append(
@@ -1241,17 +1241,17 @@ class RocketSettingsWidget(BaseWidget):
             return
 
         # ----------------------------------------------------------------
-        # Collect widget values (geometry in mm → convert to m)
+        # Collect widget values (geometry in m)
         # ----------------------------------------------------------------
-        nose_len_m     = self.nosecone_length.value() / 1000.0
+        nose_len_m     = self.nosecone_length.value()
         nose_shape     = self.nosecone_type.currentText().lower()
-        body_diam_m    = self.fuselage_diameter.value() / 1000.0
+        body_diam_m    = self.fuselage_diameter.value()
         fin_n          = self.n_fins.value()
-        fin_span_m     = self.fin_span.value() / 1000.0
-        fin_cr_m       = self.fin_chord_root.value() / 1000.0
-        fin_ct_m       = self.fin_chord_tip.value() / 1000.0
-        fin_mc_m       = self.fin_mid_chord.value() / 1000.0
-        fin_pos_m      = self.length_nosecone_fins.value() / 1000.0
+        fin_span_m     = self.fin_span.value()
+        fin_cr_m       = self.fin_chord_root.value()
+        fin_ct_m       = self.fin_chord_tip.value()
+        fin_mc_m       = self.fin_mid_chord.value()
+        fin_pos_m      = self.length_nosecone_fins.value()
         com_before_m   = self.com_before_x.value()
         com_after_m    = self.com_after_x.value()
 
@@ -1548,10 +1548,10 @@ class RocketSettingsWidget(BaseWidget):
             plotter = pv.Plotter(title="Rocket 3D Model")
             
             # Get dimensions
-            nosecone_len = self.nosecone_length.value() / 1000  # Convert to m
-            nosecone_diam = self.nosecone_diameter.value() / 1000
-            fuselage_len = self.fuselage_length.value() / 1000
-            fuselage_diam = self.fuselage_diameter.value() / 1000
+            nosecone_len = self.nosecone_length.value()  # Already in m
+            nosecone_diam = self.nosecone_diameter.value()
+            fuselage_len = self.fuselage_length.value()
+            fuselage_diam = self.fuselage_diameter.value()
             
             # Nosecone (cone)
             if nosecone_len > 0 and nosecone_diam > 0:
@@ -1937,20 +1937,20 @@ class RocketSettingsWidget(BaseWidget):
             )
             return
         
-        # Get geometry (all in mm, convert to m)
-        nose_len = self.nosecone_length.value() / 1000.0
-        nose_diam = self.nosecone_diameter.value() / 1000.0
-        fus_len = self.fuselage_length.value() / 1000.0
-        fus_diam = self.fuselage_diameter.value() / 1000.0
-        rear_len = self.rear_length.value() / 1000.0
-        rear_diam = self.rear_diameter.value() / 1000.0
+        # Get geometry (all in m)
+        nose_len = self.nosecone_length.value()
+        nose_diam = self.nosecone_diameter.value()
+        fus_len = self.fuselage_length.value()
+        fus_diam = self.fuselage_diameter.value()
+        rear_len = self.rear_length.value()
+        rear_diam = self.rear_diameter.value()
         
         # Fin dimensions
         fin_n = self.n_fins.value()
-        fin_span = self.fin_span.value() / 1000.0
-        fin_cr = self.fin_chord_root.value() / 1000.0
-        fin_ct = self.fin_chord_tip.value() / 1000.0
-        fin_pos = self.length_nosecone_fins.value() / 1000.0
+        fin_span = self.fin_span.value()
+        fin_cr = self.fin_chord_root.value()
+        fin_ct = self.fin_chord_tip.value()
+        fin_pos = self.length_nosecone_fins.value()
         
         # Ask user for density if not already set
         # For now, assume typical density for model rockets (lightweight materials)
@@ -1976,7 +1976,7 @@ class RocketSettingsWidget(BaseWidget):
             # Fins (simplified as rectangular plates)
             # Use average chord
             avg_chord = (fin_cr + fin_ct) / 2.0 if fin_cr > 0 else fin_cr
-            single_fin_volume = fin_span * avg_chord * 0.001  # Assume 1mm thickness
+            single_fin_volume = fin_span * avg_chord * 0.001  # Assume 0.001m (1mm) thickness
             fins_volume = single_fin_volume * fin_n if fin_n > 0 and fin_span > 0 else 0
             
             total_volume = nose_volume + fus_volume + rear_volume + fins_volume
