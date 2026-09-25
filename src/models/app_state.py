@@ -12,31 +12,49 @@ Features:
 """
 import json
 import os
+import threading
 from datetime import datetime, date, time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 import logging
+
+from src.models.state import StateProvider
 
 logger = logging.getLogger(__name__)
 
 # Default session file name
 DEFAULT_SESSION_FILE = "last_session.json"
 
+# Valid types for state values
+_VALID_STATE_TYPES = (bool, int, float, str, type(None), date, datetime, time, dict, list)
 
-class ApplicationState:
+# Default session file name
+DEFAULT_SESSION_FILE = "last_session.json"
+
+# Valid types for state values
+_VALID_STATE_TYPES = (bool, int, float, str, type(None), date, datetime, time, dict, list)
+
+
+class ApplicationState(StateProvider):
     """
     Singleton pattern for managing application state.
     
     Replaces Streamlit's st.session_state with a centralized state container.
     All widgets access state through ApplicationState.get_instance()
+    
+    This class implements the StateProvider interface, enabling dependency
+    injection and better testability.
     """
     
     _instance: Optional['ApplicationState'] = None
+    _instance_lock = threading.Lock()  # Protect singleton creation
     
     def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(ApplicationState, cls).__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
+        # Thread-safe singleton creation
+        with cls._instance_lock:
+            if cls._instance is None:
+                cls._instance = super(ApplicationState, cls).__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
     
     def __init__(self):
         """Initialize state with default values only once."""
@@ -45,6 +63,7 @@ class ApplicationState:
         
         self._initialized = True
         self._state: Dict[str, Any] = {}
+        self._state_lock = threading.Lock()  # Thread-safe state access
         self._initialize_defaults()
     
     def _initialize_defaults(self):
@@ -138,30 +157,44 @@ class ApplicationState:
         return ApplicationState._instance
     
     def get(self, key: str, default: Any = None) -> Any:
-        """Get a state value by key."""
-        return self._state.get(key, default)
+        """Get a state value by key (thread-safe)."""
+        with self._state_lock:
+            return self._state.get(key, default)
     
     def set(self, key: str, value: Any) -> None:
-        """Set a state value by key."""
-        old_value = self._state.get(key)
-        self._state[key] = value
-        logger.debug(f"State changed: {key} = {value}")
+        """Set a state value by key (thread-safe with validation)."""
+        with self._state_lock:
+            # Validate the value type
+            if not isinstance(value, _VALID_STATE_TYPES):
+                logger.warning(f"Invalid type for state[{key}]: {type(value).__name__}. Value must be one of: {_VALID_STATE_TYPES}")
+                return
+            
+            old_value = self._state.get(key)
+            self._state[key] = value
+            logger.debug(f"State changed: {key} = {value}")
     
     def set_multiple(self, updates: Dict[str, Any]) -> None:
-        """Set multiple state values at once."""
-        for key, value in updates.items():
-            self._state[key] = value
-        logger.debug(f"Multiple state values updated: {list(updates.keys())}")
+        """Set multiple state values at once (thread-safe)."""
+        with self._state_lock:
+            for key, value in updates.items():
+                # Validate each value
+                if not isinstance(value, _VALID_STATE_TYPES):
+                    logger.warning(f"Invalid type for state[{key}]: {type(value).__name__}")
+                    continue
+                self._state[key] = value
+            logger.debug(f"Multiple state values updated: {list(updates.keys())}")
     
     def get_all(self) -> Dict[str, Any]:
-        """Get the entire state dictionary."""
-        return self._state.copy()
+        """Get the entire state dictionary (thread-safe)."""
+        with self._state_lock:
+            return self._state.copy()
     
     def reset(self) -> None:
-        """Reset all state to defaults."""
-        self._state.clear()
-        self._initialize_defaults()
-        logger.info("ApplicationState reset to defaults")
+        """Reset all state to defaults (thread-safe)."""
+        with self._state_lock:
+            self._state.clear()
+            self._initialize_defaults()
+            logger.info("ApplicationState reset to defaults")
     
     def hard_reset(self) -> None:
         """Completely reset the singleton instance.

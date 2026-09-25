@@ -51,6 +51,7 @@ from src.utils.simulation_errors import (
     InputValidationError, ConfigurationError
 )
 from src.utils.simulation_constants import SimulationConstants as SIM_CONST
+from src.utils.simulation_constants import RocketConstants as RK_CONST
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ class Rocket(object):
         w_enu (np.ndarray): Velocidad angular en ENU [rad/s]
         mass (float): Masa actual del cohete [kg]
     """
-    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass, propellant_mass=1.50):
+    def __init__(self,r_enu_0,v_enu_0,q_enu2b_0,w_enu_0, initial_mass, propellant_mass=RK_CONST.DEFAULT_PROPELLANT_MASS):
         """
         Initialize Rocket object with state vector and properties.
         
@@ -83,7 +84,7 @@ class Rocket(object):
             q_enu2b_0 (np.ndarray): Initial quaternion (normalized) [-]
             w_enu_0 (np.ndarray): Initial angular velocity in ENU frame [rad/s]
             initial_mass (float): Total initial mass [kg]
-            propellant_mass (float): Propellant mass [kg], default 1.50
+            propellant_mass (float): Propellant mass [kg], default DEFAULT_PROPELLANT_MASS
         
         Raises:
             InputValidationError: If any input is invalid
@@ -201,11 +202,11 @@ class Rocket(object):
         self._thrust_curve_validated = False
         
         # Environment state
-        self.density = 1.225  # kg/m³
-        self.press_amb = 101325  # Pa
-        self.v_sonic = 340.0  # m/s
+        self.density = RK_CONST.DEFAULT_DENSITY  # kg/m³
+        self.press_amb = RK_CONST.DEFAULT_PRESSURE  # Pa
+        self.v_sonic = RK_CONST.DEFAULT_SOUND_SPEED  # m/s
         self.coord = np.array([0.0, 0.0, 0.0])  # [lat, lon, alt]
-        self.reference_area = 0.01  # m²
+        self.reference_area = RK_CONST.DEFAULT_REFERENCE_AREA  # m²
         self.reference_length = 1.0  # m
         
         # Center of mass and pressure (not yet computed, will be set during update_aerodynamics)
@@ -214,7 +215,7 @@ class Rocket(object):
         # Preallocate historical arrays as numpy arrays for O(1) indexing
         self._initialize_history_arrays()
     
-    def _initialize_history_arrays(self, initial_capacity=100000):
+    def _initialize_history_arrays(self, initial_capacity=RK_CONST.HISTORY_INITIAL_CAPACITY):
         """
         Pre-allocates numpy arrays for history storage instead of using Python lists.
         
@@ -223,7 +224,7 @@ class Rocket(object):
         
         Args:
             initial_capacity (int): Pre-allocated size for history arrays.
-                Automatically grows if exceeded. Default: 100,000 steps (~100 sec at 1kHz)
+                Automatically grows if exceeded. Default: HISTORY_INITIAL_CAPACITY steps (~100 sec at 1kHz)
         """
         # Index counter for tracking current position in pre-allocated arrays
         self._history_index = 0
@@ -443,7 +444,7 @@ class Rocket(object):
             logger.warning(f"Negative pressure {press_amb}Pa, using zero")
             press_amb = 0.0
         
-        if v_sonic < 200:  # Less than 200 m/s is unreasonable
+        if v_sonic < RK_CONST.MIN_SOUND_SPEED:  # Less than minimum reasonable sound speed
             logger.warning(f"Unreasonable sound speed {v_sonic}m/s, likely calculation error")
         
         self.density = density           # [kg/m³] Atmospheric air density
@@ -603,9 +604,9 @@ class Rocket(object):
             logging.error(f"Aerodynamics calculation error: {str(e)}")
             logger.warning(f"Using fallback aerodynamics for '{rocket_name}'")
             # Safe fallback values when calculation fails
-            self.drag_coeff = 0.5
+            self.drag_coeff = RK_CONST.FALLBACK_DRAG_COEFFICIENT
             self.lift_coeff = 0.0
-            self.cp_b = np.array([0.5, 0, 0])
+            self.cp_b = np.array([RK_CONST.FALLBACK_CP_POSITION, 0, 0])
 
     def _resolve_engine_config(self, rocket_name=None, engine_data=None):
         """Resolve and cache engine configuration for persistent engine usage."""

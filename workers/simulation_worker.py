@@ -2,6 +2,7 @@
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from models.app_state import ApplicationState
+from src.models.state import StateProvider, StateProxy
 from src.models.rocket import Rocket
 from src.models.planet import Planet
 from src.models.atmosphere import Atmosphere
@@ -26,33 +27,9 @@ logger = logging.getLogger(__name__)
 DEG_TO_RAD = np.pi / 180.0
 
 
-class _StateProxy:
-    """Lightweight overlay that injects per-run parameter overrides on top of
-    an ApplicationState instance without mutating the global singleton.
-
-    Used exclusively by SimulationWorker.run_with_params() so that Monte Carlo
-    runs can sample different parameters each iteration.
-    """
-
-    def __init__(self, base_state, overrides: dict):
-        self._base = base_state
-        self._overrides = overrides
-
-    def get(self, key: str, default=None):
-        if key in self._overrides:
-            return self._overrides[key]
-        return self._base.get(key, default)
-
-    def set(self, key: str, value) -> None:
-        # Discard writes during Monte Carlo runs to avoid polluting global state.
-        pass
-
-    @property
-    def _state(self) -> dict:
-        """Merged dict (base + overrides) for legacy code that accesses _state directly."""
-        merged = dict(self._base._state)
-        merged.update(self._overrides)
-        return merged
+# Use StateProxy from src.models.state for new code
+# _StateProxy is kept as an alias for backward compatibility
+_StateProxy = StateProxy
 
 
 class SimulationWorker(QThread):
@@ -75,9 +52,13 @@ class SimulationWorker(QThread):
     finished = pyqtSignal(object)  # Emit results dictionary
     error = pyqtSignal(str)  # Emit error message
     
-    def __init__(self, state, use_cache: bool = True):
-        """``state`` is duck-typed: ApplicationState, _StateProxy, or any object
-        exposing .get(key, default) and a ._state dict (e.g. process-pool _FrozenState)."""
+    def __init__(self, state: StateProvider, use_cache: bool = True):
+        """Initialize simulation worker with a state provider.
+        
+        Args:
+            state: StateProvider instance (ApplicationState, StateProxy, or MockStateProvider)
+            use_cache: Whether to use simulation caching (default: True)
+        """
         super().__init__()
         self.state = state
         self.is_running = True
@@ -267,7 +248,7 @@ class SimulationWorker(QThread):
             
         # ===== WIND MODEL INITIALIZATION (Phase 2) =====
         # Use cached wind model if available (Monte Carlo optimization)
-        wind_config = self.state._state
+        wind_config = self.state.get_all()
         if self._cache is not None:
             wind = self._cache.get_wind_model(wind_config)
         else:

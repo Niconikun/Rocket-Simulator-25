@@ -42,6 +42,7 @@ from ui.splash import SplashScreen, SplashManager
 from ui.main_window import MainWindow
 from models.app_state import ApplicationState
 
+from src.models.state import StateProvider
 
 def apply_dark_theme(app):
     """Apply dark theme to the application."""
@@ -237,8 +238,9 @@ def main():
         
         logger.info("PyQt6 Application initialized")
 
-        # Initialize ApplicationState
-        state = ApplicationState.get_instance()
+        # Initialize ApplicationState explicitly (Phase 3: Dependency Injection)
+        # Create the singleton instance explicitly for dependency injection
+        state = ApplicationState()
         
         # Show splash screen with progress
         splash_manager = SplashManager(use_dark_theme=True)
@@ -263,7 +265,7 @@ def main():
         # Initialize main window
         splash_manager.begin_step("Creating main window...", 60)
         app.processEvents()
-        window = MainWindow()
+        window = MainWindow(state=state)
         
         # Connect state persistence to window using aboutToQuit signal
         app.aboutToQuit.connect(lambda: save_state(app, state))

@@ -6,7 +6,10 @@ from PyQt6.QtWidgets import (
     QSpinBox, QPlainTextEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
+from src.models.state import StateProvider
+from typing import Optional
 import logging
 import json
 import os
@@ -15,7 +18,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-class ParachuteSettingsWidget(QWidget):
+class ParachuteSettingsWidget(BaseWidget):
     """
     Parachute configuration widget.
     
@@ -29,9 +32,8 @@ class ParachuteSettingsWidget(QWidget):
     
     parachute_changed = pyqtSignal()
     
-    def __init__(self):
-        super().__init__()
-        self.state = ApplicationState.get_instance()
+    def __init__(self, state: Optional[StateProvider] = None):
+        super().__init__(state=state)
         self.parachute_configs = {}
         self.current_parachute = None
         self.init_ui()

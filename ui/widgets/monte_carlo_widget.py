@@ -21,7 +21,10 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.patches as mpatches
 from scipy.stats import chi2
+from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
+from src.models.state import StateProvider
+from typing import Optional
 from src.utils.simulation_manager import SimulationManager
 from src.utils.monte_carlo_aggregator import MonteCarloAggregator
 from workers.monte_carlo_runner import MonteCarloRunner
@@ -59,7 +62,7 @@ class _PlotCanvas(FigureCanvas):
         self.updateGeometry()
 
 
-class MonteCarloWidget(QWidget):
+class MonteCarloWidget(BaseWidget):
     """
     Monte Carlo landing zone prediction widget.
 
@@ -74,9 +77,8 @@ class MonteCarloWidget(QWidget):
     # km per degree of latitude, used for the local ENU <-> lat/lon approximation
     _KM_PER_DEG_LAT = 111.32
 
-    def __init__(self):
-        super().__init__()
-        self.state = ApplicationState.get_instance()
+    def __init__(self, state: Optional[StateProvider] = None):
+        super().__init__(state=state)
         self._thread: QThread | None = None
         self._runner: MonteCarloRunner | None = None
         self._accumulated_runs: list[dict] = []   # grows as runs complete

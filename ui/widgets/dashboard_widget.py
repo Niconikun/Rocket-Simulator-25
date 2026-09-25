@@ -8,7 +8,12 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPalette
+from ui.widgets import BaseWidget
+from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
+from src.models.state import StateProvider
+from src.models.state import StateProvider
+from typing import Optional
 from src.utils.simulation_manager import SimulationManager
 import logging
 logger = logging.getLogger(__name__)
@@ -52,7 +57,7 @@ except ImportError:
     HAS_CARTOPY = False
 
 
-class DashboardWidget(QWidget):
+class DashboardWidget(BaseWidget):
     """
     Dashboard for displaying simulation results and metrics.
     
@@ -65,9 +70,8 @@ class DashboardWidget(QWidget):
     - Comparison analysis
     """
     
-    def __init__(self):
-        super().__init__()
-        self.state = ApplicationState.get_instance()
+    def __init__(self, state: Optional[StateProvider] = None):
+        super().__init__(state=state)
         self.sim_manager = SimulationManager()
         self.current_sim_id = None
         self._active_figures = []  # matplotlib Figures tracked for explicit plt.close()

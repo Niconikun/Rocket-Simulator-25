@@ -13,7 +13,10 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QMessageBox, QTextEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
+from src.models.state import StateProvider
+from typing import Optional
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
 from typing import Tuple
 import logging
@@ -22,7 +25,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-class WindSettingsWidget(QWidget):
+class WindSettingsWidget(BaseWidget):
     """Wind configuration widget for rocket simulations."""
     
     # Signal to notify main window of wind changes
@@ -93,9 +96,8 @@ class WindSettingsWidget(QWidget):
         
         return True, ""
     
-    def __init__(self):
-        super().__init__()
-        self.state = ApplicationState.get_instance()
+    def __init__(self, state: Optional[StateProvider] = None):
+        super().__init__(state=state)
         self.wind_model = None
         self.init_ui()
         self.load_wind_settings()

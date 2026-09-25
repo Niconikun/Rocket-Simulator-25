@@ -42,6 +42,7 @@ import logging
 import os
 import uuid
 from datetime import datetime
+from src.models.state import StateProvider
 from typing import Optional
 
 import numpy as np
@@ -92,7 +93,7 @@ class MonteCarloRunner(QObject):
 
     def __init__(
         self,
-        state,
+        state: StateProvider,
         n_runs: int = 100,
         seed: Optional[int] = None,
         sampler_configs: Optional[dict] = None,
@@ -284,7 +285,7 @@ class MonteCarloRunner(QObject):
         from concurrent.futures import ProcessPoolExecutor, FIRST_COMPLETED, wait
         from workers.monte_carlo_process_worker import run_single_montecarlo
 
-        base_state_dict = dict(self._state._state)
+        base_state_dict = self._state.get_all()
         n_workers = min(self._n_workers, self._n_runs)
         completed = 0
         submitted = 0

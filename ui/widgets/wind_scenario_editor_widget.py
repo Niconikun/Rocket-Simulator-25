@@ -15,7 +15,7 @@ Features:
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 import matplotlib
@@ -36,7 +36,10 @@ from src.models.wind import (
     WindModel, ConstantWind, LogarithmicWind, PowerLawWind, 
     GustWind, WindShearWind, create_wind_model_from_state
 )
+from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
+from src.models.state import StateProvider
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +122,7 @@ WIND_SCENARIOS = {
 }
 
 
-class WindScenarioEditorWidget(QWidget):
+class WindScenarioEditorWidget(BaseWidget):
     """
     Widget for creating and managing wind scenarios.
     

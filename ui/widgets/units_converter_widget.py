@@ -5,7 +5,10 @@ from PyQt6.QtWidgets import (
     QGroupBox, QFormLayout, QPushButton, QTabWidget
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
+from src.models.state import StateProvider
+from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -87,7 +90,7 @@ CONVERSIONS = {
 }
 
 
-class UnitsConverterWidget(QWidget):
+class UnitsConverterWidget(BaseWidget):
     """
     Units conversion utility widget.
     
@@ -100,9 +103,8 @@ class UnitsConverterWidget(QWidget):
     - Pressure (Pa, atm, bar, mmHg, psi)
     """
     
-    def __init__(self):
-        super().__init__()
-        self.state = ApplicationState.get_instance()
+    def __init__(self, state: Optional[StateProvider] = None):
+        super().__init__(state=state)
         self.init_ui()
     
     def init_ui(self):

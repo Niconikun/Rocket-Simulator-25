@@ -31,13 +31,13 @@ import numpy as np
 import math
 import logging
 
+from src.utils.simulation_constants import AerodynamicsConstants as AC
+
 logger = logging.getLogger(__name__)
 
-# Constants for both classes
-MAX_ANGLE_OF_ATTACK = 10.0  # Maximum angle of attack in degrees [deg]
-SUTHERLAND_C1 = 1.458e-6  # Sutherland's constant for air [kg/(m·s·K^0.5)]
-SUTHERLAND_S = 110.4  # Sutherland's temperature constant for air [K]
-SPEED_OF_SOUND_SEA_LEVEL = 340.0  # Approximate speed of sound at sea level [m/s]
+# Use constants from AerodynamicsConstants
+# These are kept for backward compatibility but now reference AC
+MAX_ANGLE_OF_ATTACK = AC.MAX_ANGLE_OF_ATTACK  # Maximum angle of attack in degrees [deg]
 
 
 # =============================================================================
@@ -70,7 +70,7 @@ def _calculate_dynamic_viscosity(temperature: float) -> float:
         Dynamic viscosity [Pa·s]
     """
     T = temperature
-    return (SUTHERLAND_C1 * T**1.5) / (T + SUTHERLAND_S)
+    return (AC.SUTHERLAND_C1 * T**1.5) / (T + AC.SUTHERLAND_S)
 
 
 # =============================================================================
@@ -197,7 +197,7 @@ class EnhancedAerodynamics:
         Re_L = (self.rho * self.velocity * L_ref) / mu
         
         # Turbulent skin friction coefficient
-        Cf = 0.074 / (Re_L ** 0.2)
+        Cf = AC.TURBULENT_SKIN_FRICTION_K / (Re_L ** 0.2)
         
         # Calculate wetted areas
         A_wet_nose = self._calculate_nose_wetted_area()
@@ -470,7 +470,7 @@ class AerodynamicsWrapper:
         xcp: Center of pressure position [m]
     """
     
-    def __init__(self, mach, angle_attack, geometry, height=0, density=1.225, temperature=288.15):
+    def __init__(self, mach, angle_attack, geometry, height=0, density=AC.SEA_LEVEL_DENSITY, temperature=AC.SEA_LEVEL_TEMPERATURE):
         """
         Initialize aerodynamics wrapper with comprehensive error handling.
         
@@ -479,8 +479,8 @@ class AerodynamicsWrapper:
             angle_attack: Angle of attack [deg]
             geometry: Dictionary with rocket geometry parameters
             height: Altitude [m] (default: 0)
-            density: Air density [kg/m³] (default: 1.225)
-            temperature: Air temperature [K] (default: 288.15)
+            density: Air density [kg/m³] (default: SEA_LEVEL_DENSITY)
+            temperature: Air temperature [K] (default: SEA_LEVEL_TEMPERATURE)
         """
         self.mach = max(0.0, min(mach, 5.0))
         self.alpha = _validate_angle(angle_attack)
@@ -488,7 +488,7 @@ class AerodynamicsWrapper:
         self.height = height
         self.density = density
         self.temperature = temperature
-        self.v_norm = self.mach * SPEED_OF_SOUND_SEA_LEVEL
+        self.v_norm = self.mach * AC.SPEED_OF_SOUND_SEA_LEVEL
         
         # Calculate coefficients with error handling
         try:
@@ -568,7 +568,7 @@ class AerodynamicsWrapper:
             
             mu = 1.789e-5
             Re = (self.density * self.v_norm * L) / mu
-            Cf = 0.074 / (Re ** 0.2) if Re > 0 else 0.0
+            Cf = AC.TURBULENT_SKIN_FRICTION_K / (Re ** 0.2) if Re > 0 else 0.0
             wetted_area = np.pi * diameter * L
             ref_area = np.pi * (diameter/2)**2
             

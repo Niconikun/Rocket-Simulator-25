@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 class _FrozenState:
     """Minimal, picklable stand-in for ApplicationState inside a worker process.
 
-    Only implements the subset of the interface SimulationWorker/_StateProxy
-    actually use: ``.get()`` and a raw ``._state`` dict.
+    Implements the StateProvider interface for compatibility with StateProxy.
+    Used by SimulationWorker/StateProxy for Monte Carlo simulations.
     """
 
     def __init__(self, data: dict):
@@ -32,6 +32,10 @@ class _FrozenState:
     def set(self, key: str, value: Any) -> None:
         # Worker processes never write back to the GUI's ApplicationState.
         self._state[key] = value
+    
+    def get_all(self) -> dict:
+        """Get the entire state dictionary."""
+        return self._state.copy()
 
 
 def extract_impact_position(result: dict) -> tuple[float, float]:

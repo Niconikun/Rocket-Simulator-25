@@ -7,11 +7,14 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
+from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
+from src.models.state import StateProvider
+from typing import Optional
 import json
 import os
 import logging
-from typing import Tuple, Optional
+from typing import Tuple
 import math
 import numpy as np
 
@@ -62,7 +65,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-class RocketSettingsWidget(QWidget):
+class RocketSettingsWidget(BaseWidget):
     """
     Enhanced rocket configuration widget with comprehensive parameter editing and 3D preview.
     
@@ -101,9 +104,8 @@ class RocketSettingsWidget(QWidget):
         
         return True, ""
     
-    def __init__(self):
-        super().__init__()
-        self.state = ApplicationState.get_instance()
+    def __init__(self, state: Optional[StateProvider] = None):
+        super().__init__(state=state)
         self.rockets = {}
         self.current_rocket = None
         self.thrust_curve_data = None  # Store loaded thrust curve

@@ -6,9 +6,12 @@ from PyQt6.QtWidgets import (
     QSplitter
 )
 from PyQt6.QtCore import Qt
+from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
+from src.models.state import StateProvider
+from typing import Optional
 from src.utils.location_manager import LocationManager
-from typing import Tuple, Optional
+from typing import Tuple
 import json
 import os
 import logging
@@ -29,7 +32,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-class LocationSettingsWidget(QWidget):
+class LocationSettingsWidget(BaseWidget):
     """
     Location settings widget for managing launch sites.
     
@@ -85,9 +88,8 @@ class LocationSettingsWidget(QWidget):
         
         return True, ""
     
-    def __init__(self):
-        super().__init__()
-        self.state = ApplicationState.get_instance()
+    def __init__(self, state: Optional[StateProvider] = None):
+        super().__init__(state=state)
         self.locations = {}
         self.location_manager = LocationManager()
         self.init_ui()

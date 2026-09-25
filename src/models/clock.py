@@ -30,18 +30,9 @@ import numpy as np
 from typing import Optional, Union, Tuple
 import logging
 
+from src.utils.simulation_constants import ClockConstants as CC
+
 logger = logging.getLogger(__name__)
-
-
-# Constants for GMST calculation
-JD_REFERENCE = 2451545.0  # Reference Julian Date (J2000.0)
-GMST_COEFF_A = 67310.54841  # GMST coefficient
-GMST_COEFF_B = 876600 * 3600 + 8640184.812866  # GMST coefficient
-GMST_COEFF_C = 0.093104  # GMST coefficient
-GMST_COEFF_D = -6.2 / 1e6  # GMST coefficient
-SECONDS_PER_DAY = 86400.0  # Seconds in a day
-DEG2RAD = np.pi / 180.0  # Degrees to radians
-RAD2DEG = 180.0 / np.pi  # Radians to degrees
 
 
 class Clock:
@@ -127,12 +118,12 @@ class Clock:
         if rad_or_deg not in (1, 2):
             raise ValueError(f"rad_or_deg must be 1 (radians) or 2 (degrees), got {rad_or_deg}")
         
-        self.T_ut1 = (julian_day - JD_REFERENCE) / 36525
+        self.T_ut1 = (julian_day - CC.JD_REFERENCE) / 36525
         self.Theta_GMST = (
-            GMST_COEFF_A + GMST_COEFF_B * self.T_ut1 +
-            GMST_COEFF_C * (self.T_ut1 ** 2) + GMST_COEFF_D * (self.T_ut1 ** 3)
+            CC.GMST_COEFF_A + CC.GMST_COEFF_B * self.T_ut1 +
+            CC.GMST_COEFF_C * (self.T_ut1 ** 2) + CC.GMST_COEFF_D * (self.T_ut1 ** 3)
         )
-        self.GMST_leap = self.Theta_GMST - (int(self.Theta_GMST / SECONDS_PER_DAY) * SECONDS_PER_DAY)
+        self.GMST_leap = self.Theta_GMST - (int(self.Theta_GMST / CC.SECONDS_PER_DAY) * CC.SECONDS_PER_DAY)
         self.GMST_degrees = self.GMST_leap / 240
         
         # Correct angle for interval between 0° to 360°
@@ -145,7 +136,7 @@ class Clock:
         if rad_or_deg == 2:
             return float(self.GMST_degrees)
         else:
-            return float(self.GMST_degrees * DEG2RAD)
+            return float(self.GMST_degrees * CC.DEG2RAD)
     
     def _calculate_julian_day(self) -> float:
         """

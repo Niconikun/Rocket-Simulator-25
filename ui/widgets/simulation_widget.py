@@ -11,11 +11,14 @@ from models.app_state import ApplicationState
 from workers.simulation_worker import SimulationWorker
 from src.utils.simulation_manager import SimulationManager
 import logging
+from ui.widgets import BaseWidget
+from src.models.state import StateProvider
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-class SimulationWidget(QWidget):
+class SimulationWidget(BaseWidget):
     """
     Simulation control panel for running rocket flight simulations.
     
@@ -30,10 +33,14 @@ class SimulationWidget(QWidget):
     
     simulation_saved = pyqtSignal(str)  # Emits sim_id when a simulation is saved
     status_message = pyqtSignal(str)    # Emits short UI status updates
-    
-    def __init__(self):
-        super().__init__()
-        self.state = ApplicationState.get_instance()
+    def __init__(self, state: Optional[StateProvider] = None):
+        """
+        Initialize the simulation widget.
+        
+        Args:
+            state: Optional StateProvider instance. If None, uses ApplicationState singleton.
+        """
+        super().__init__(state=state)
         self.simulation_manager = SimulationManager()
         self.simulation_worker = None
         self.simulation_paused = False

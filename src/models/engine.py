@@ -31,6 +31,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 from src.utils.thrust_processor import ThrustCurveData, ThrustCurveError, ThrustCurveProcessor
+from src.utils.simulation_constants import EngineConstants as EC
 
 class EnhancedEngine:
     """
@@ -55,7 +56,9 @@ class EnhancedEngine:
                  mean_chamber_pressure, max_chamber_pressure, thrust_to_weight_ratio,
                  thrust_curve_file=None, thrust_curve_data=None,
                  thrust_curve_unit='N',
-                 chamber_temperature=3000.0, gas_constant=287.0, gamma=1.2):
+                 chamber_temperature=EC.DEFAULT_CHAMBER_TEMPERATURE, 
+                 gas_constant=EC.DEFAULT_GAS_CONSTANT, 
+                 gamma=EC.DEFAULT_GAMMA):
         """
         Enhanced rocket engine model with experimental thrust curve support.
 
@@ -75,9 +78,9 @@ class EnhancedEngine:
             thrust_curve_data (dict): Pre-loaded thrust curve data {'time': [], 'thrust': []}
             thrust_curve_unit (str): Unit of thrust column in CSV. Must be 'N' or 'kgf'.
                 Required when thrust_curve_file or thrust_curve_data is provided.
-            chamber_temperature (float): Chamber temperature [K], default 3000
-            gas_constant (float): Gas constant [J/(kg·K)], default 287
-            gamma (float): Specific heat ratio, default 1.2
+            chamber_temperature (float): Chamber temperature [K], default DEFAULT_CHAMBER_TEMPERATURE
+            gas_constant (float): Gas constant [J/(kg·K)], default DEFAULT_GAS_CONSTANT
+            gamma (float): Specific heat ratio, default DEFAULT_GAMMA
         """
         # Input validation
         self._validate_inputs(time, burn_time, ambient_pressure, nozzle_exit_diameter,
@@ -104,7 +107,7 @@ class EnhancedEngine:
         
         # Calculated parameters
         self.exit_area = np.pi * (self.nozzle_exit_diameter / 2) ** 2
-        self.throat_area = self.exit_area / 4.0  # Typical expansion ratio
+        self.throat_area = self.exit_area / EC.EXPANSION_RATIO_DEFAULT  # Typical expansion ratio
         
         # Performance state
         self._mass_flux = 0.0
@@ -363,7 +366,7 @@ class EnhancedEngine:
         self._cumul_impulse_arr = cumul
 
         measured  = float(cumul[-1])
-        expected  = self.propellant_mass * self.specific_impulse * 9.80665
+        expected  = self.propellant_mass * self.specific_impulse * EC.STANDARD_GRAVITY_G0
         error_pct = abs(measured - expected) / expected * 100.0 if expected > 0.0 else 0.0
         logger.info(
             "Cumulative impulse table ready: measured=%.1f N\u00b7s, "
@@ -421,7 +424,7 @@ class EnhancedEngine:
            both modes* so thrust and mass consumption are always consistent.
         """
         try:
-            g0 = 9.80665
+            g0 = EC.STANDARD_GRAVITY_G0
 
             # ── 1. Propellant accounting (B07) ──────────────────────────────
             t_query = float(np.clip(self.time, 0.0, self.burn_time))
@@ -481,7 +484,7 @@ class EnhancedEngine:
         attributes with linear interpolation so callers always see
         consistent state.
         """
-        g0 = 9.80665
+        g0 = EC.STANDARD_GRAVITY_G0
         active = 0.0 < self.time <= self.burn_time
         self._thrust    = self.mean_thrust if active else 0.0
         self._mass_flux = self.mean_thrust / (self.specific_impulse * g0) if active else 0.0
@@ -645,7 +648,7 @@ class EnhancedEngine:
         Returns:
             float: Specific impulse [s]
         """
-        g0 = 9.80665
+        g0 = EC.STANDARD_GRAVITY_G0
         p_amb = self.ambient_pressure if ambient_pressure is None else ambient_pressure
         
         momentum_thrust = self._mass_flux * self.gas_speed

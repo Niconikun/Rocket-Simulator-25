@@ -1,12 +1,26 @@
 # Author: Code Review Implementation
 #         Rocket Simulator Improvements
 #         Date: March 26, 2026
+#         Updated: September 25, 2026 (Day 2 - Extracted constants from remaining model files)
 
 """
 Simulation Configuration Constants
 
 Centralized configuration for simulation parameters, preventing magic numbers
 and enabling easy tuning for different rocket classes.
+
+Domain-specific constants classes:
+    - SimulationConstants: Global simulation limits and defaults
+    - RocketClassConstants: Configuration for different rocket classes
+    - AtmosphereConstants: Standard atmosphere model constants
+    - AerodynamicsConstants: Aerodynamics calculation constants
+    - EngineConstants: Engine/propulsion constants
+    - WindConstants: Wind model constants
+    - GravitationalConstants: Gravitational calculation constants
+    - ParachuteConstants: Parachute deployment constants
+    - ClockConstants: Time/clock calculation constants
+    - PlanetConstants: Earth/planet rotation constants
+    - RocketConstants: Rocket configuration defaults
 """
 
 
@@ -133,6 +147,22 @@ class AtmosphereConstants:
 class AerodynamicsConstants:
     """Constants for aerodynamic calculations."""
     
+    # Maximum angle of attack
+    MAX_ANGLE_OF_ATTACK = 10.0  # [deg] Maximum angle of attack in degrees
+    
+    # Sutherland's formula constants for air
+    SUTHERLAND_C1 = 1.458e-6  # [kg/(m·s·K^0.5)] Sutherland's constant for air
+    SUTHERLAND_S = 110.4      # [K] Sutherland's temperature constant for air
+    
+    # Standard atmospheric values at sea level
+    SPEED_OF_SOUND_SEA_LEVEL = 340.0  # [m/s] Approximate speed of sound at sea level
+    SEA_LEVEL_DENSITY = 1.225          # [kg/m³] Standard air density at sea level
+    SEA_LEVEL_PRESSURE = 101325.0     # [Pa] Standard atmospheric pressure at sea level
+    SEA_LEVEL_TEMPERATURE = 288.15    # [K] Standard temperature at sea level (15°C)
+    
+    # Skin friction coefficient for turbulent flow
+    TURBULENT_SKIN_FRICTION_K = 0.074   # [-] Empirical constant for turbulent boundary layer
+    
     # Drag model components
     SKIN_FRICTION_K1 = 0.0010          # Skin friction coefficient
     PRESSURE_DRAG_FACTOR = 0.5         # Pressure drag multiplier
@@ -159,11 +189,18 @@ class EngineConstants:
     
     # Nozzle flow
     THROAT_AREA_DEFAULT = 0.001           # [m²]
-    EXPANSION_RATIO_DEFAULT = 8.0         # Nozzle expansion ratio
+    EXPANSION_RATIO_DEFAULT = 4.0         # [-] Nozzle expansion ratio (exit_area / throat_area)
     
     # Propellant properties
     TYPICAL_EXIT_VELOCITY = 4500.0         # [m/s] Typical rocket exit velocity
     TYPICAL_SPECIFIC_IMPULSE = 450         # [s] Typical ISP
+    
+    # Gas properties
+    DEFAULT_GAS_CONSTANT = 287.0          # [J/(kg·K)] Default gas constant
+    DEFAULT_GAMMA = 1.2                    # [-] Default specific heat ratio
+    
+    # Gravitational constant
+    STANDARD_GRAVITY_G0 = 9.80665         # [m/s²] Standard gravity for ISP calculations
     
     # Thrust curve
     THRUST_CURVE_INTERPOLATION = 'cubic'   # Method for thrust curve interpolation
@@ -232,6 +269,31 @@ class GravitationalConstants:
     EARTH_MEAN_RADIUS = 6_371_000.0  # [m] Mean Earth radius (duplicate from AtmosphereConstants for convenience)
 
 
+class RocketConstants:
+    """Constants for rocket configuration and defaults."""
+    
+    # Default propellant mass
+    DEFAULT_PROPELLANT_MASS = 1.50  # [kg] Default propellant mass
+    
+    # Default atmospheric values at sea level (for initialization)
+    DEFAULT_DENSITY = 1.225          # [kg/m³] Default air density
+    DEFAULT_PRESSURE = 101325.0     # [Pa] Default atmospheric pressure
+    DEFAULT_SOUND_SPEED = 340.0    # [m/s] Default speed of sound
+    
+    # Default reference values
+    DEFAULT_REFERENCE_AREA = 0.01   # [m²] Default reference area
+    
+    # History array pre-allocation
+    HISTORY_INITIAL_CAPACITY = 100000  # [-] Initial pre-allocated history array size
+    
+    # Minimum reasonable sound speed
+    MIN_SOUND_SPEED = 200.0         # [m/s] Minimum reasonable speed of sound
+    
+    # Fallback aerodynamic values
+    FALLBACK_DRAG_COEFFICIENT = 0.5  # [-] Fallback drag coefficient
+    FALLBACK_CP_POSITION = 0.5       # [m] Fallback center of pressure position (fraction of length)
+
+
 class ParachuteConstants:
     """Constants for parachute deployment and descent calculations."""
     
@@ -255,6 +317,22 @@ class ParachuteConstants:
     
     # Physics constants
     STANDARD_GRAVITY = 9.81  # [m/s²] Standard gravitational acceleration (duplicate for convenience)
+
+
+class ClockConstants:
+    """Constants for clock/time calculations."""
+    
+    # GMST (Greenwich Mean Sidereal Time) calculation
+    JD_REFERENCE = 2451545.0  # Reference Julian Date (J2000.0)
+    GMST_COEFF_A = 67310.54841  # GMST coefficient A [rad/s]
+    GMST_COEFF_B = 876600 * 3600 + 8640184.812866  # GMST coefficient B [rad]
+    GMST_COEFF_C = 0.093104  # GMST coefficient C [rad/s²]
+    GMST_COEFF_D = -6.2 / 1e6  # GMST coefficient D [rad/s³]
+    
+    # Time conversion
+    SECONDS_PER_DAY = 86400.0  # [s] Seconds in a day
+    DEG2RAD = 0.017453292519943295  # [rad/deg] Degrees to radians (π/180)
+    RAD2DEG = 57.29577951308232  # [deg/rad] Radians to degrees (180/π)
 
 
 class PlanetConstants:

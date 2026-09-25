@@ -12,6 +12,8 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QAction, QPalette, QColor
 from models.app_state import ApplicationState
 import logging
+from src.models.state import StateProvider, StateProxy
+from typing import Optional
 import sys
 
 logger = logging.getLogger(__name__)
@@ -24,9 +26,16 @@ class MainWindow(QMainWindow):
     Uses a PyQt6 QTabWidget to present the application pages.
     """
     
-    def __init__(self):
+    def __init__(self, state: Optional[StateProvider] = None):
+        """
+        Initialize the main application window.
+        
+        Args:
+            state: Optional StateProvider instance. If None, uses ApplicationState singleton.
+        """
         super().__init__()
-        self.state = ApplicationState.get_instance()
+        # Use provided state or fall back to singleton (Phase 3: Dependency Injection)
+        self.state = state if state is not None else ApplicationState.get_instance()
         self._app = QApplication.instance()  # Store reference to application
         self.init_ui()
         self.setup_menu_bar()
@@ -73,16 +82,17 @@ class MainWindow(QMainWindow):
         from ui.widgets.wind_settings_widget import WindSettingsWidget
         from ui.widgets.wind_scenario_editor_widget import WindScenarioEditorWidget
         
-        # Create widget instances
-        self.simulation_widget = SimulationWidget()
-        self.rocket_widget = RocketSettingsWidget()
-        self.location_widget = LocationSettingsWidget()
-        self.monte_carlo_widget = MonteCarloWidget()
-        self.dashboard_widget = DashboardWidget()
-        self.units_widget = UnitsConverterWidget()
-        self.parachute_widget = ParachuteSettingsWidget()
-        self.wind_widget = WindSettingsWidget()
-        self.wind_scenario_editor_widget = WindScenarioEditorWidget()
+        # Create widget instances (Phase 3: Dependency Injection)
+        # Pass state to all widgets for better testability and decoupling
+        self.simulation_widget = SimulationWidget(state=self.state)
+        self.rocket_widget = RocketSettingsWidget(state=self.state)
+        self.location_widget = LocationSettingsWidget(state=self.state)
+        self.monte_carlo_widget = MonteCarloWidget(state=self.state)
+        self.dashboard_widget = DashboardWidget(state=self.state)
+        self.units_widget = UnitsConverterWidget(state=self.state)
+        self.parachute_widget = ParachuteSettingsWidget(state=self.state)
+        self.wind_widget = WindSettingsWidget(state=self.state)
+        self.wind_scenario_editor_widget = WindScenarioEditorWidget(state=self.state)
         
         # Add tabs in order matching the application workflow
         self.tabs.addTab(self.simulation_widget, "🚀 Simulation")

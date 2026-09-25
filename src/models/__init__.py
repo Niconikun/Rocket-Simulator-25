@@ -27,6 +27,7 @@ Factory functions:
 
 from .app_state import ApplicationState
 from .atmosphere import Atmosphere
+from .state import StateProvider, StateProxy, MockStateProvider, ReadOnlyStateProvider
 from .clock import Clock
 from .aerodynamics import EnhancedAerodynamics, AerodynamicsWrapper
 from .engine import EnhancedEngine
@@ -48,6 +49,10 @@ from .wind import (
 __all__ = [
     # State management
     'ApplicationState',
+    'StateProvider',
+    'StateProxy',
+    'MockStateProvider',
+    'ReadOnlyStateProvider',
     # Atmosphere
     'Atmosphere',
     # Time
