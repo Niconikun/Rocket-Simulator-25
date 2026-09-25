@@ -26,6 +26,10 @@ class MockEngine:
     
     def get_mass_flux(self):
         return self.mass_flux
+    
+    def update(self, time, ambient_pressure=None):
+        """Update engine state - required by IEngine interface"""
+        pass
 
 
 class MockAerodynamics:
@@ -37,6 +41,8 @@ class MockAerodynamics:
         self.dynamic_pressure = 100.0
         self.mach = 0.8
         self.reference_area = 0.01
+        self._xcp = np.array([0.5, 0.0, 0.0])
+        self._stability_margin = 1.0
     
     def calculate_forces(self, velocity, density, mach, alpha=0.0):
         drag_magnitude = 0.5 * density * velocity**2 * self.cd * self.reference_area
@@ -45,6 +51,36 @@ class MockAerodynamics:
     
     def calculate_torques(self, cp, cm, velocity, density, mach, alpha=0.0):
         return np.array([0.0, 0.0, 0.0])
+    
+    def update(self, mach, angle_attack, height, density):
+        """Update aerodynamics - required by IAerodynamics interface"""
+        self.mach = mach
+        self.alpha = angle_attack
+        self.height = height
+        self.rho = density
+    
+    def get_coefficients(self):
+        """Get coefficients - required by IAerodynamics interface"""
+        return self.cd, self.cl
+    
+    def get_center_of_pressure(self):
+        """Get center of pressure - required by IAerodynamics interface"""
+        return self._xcp.copy()
+    
+    def get_stability_margin(self):
+        """Get stability margin - required by IAerodynamics interface"""
+        return self._stability_margin
+    
+    def get_aerodynamic_forces(self, dynamic_pressure):
+        """Get aerodynamic forces - required by IAerodynamics interface"""
+        return {
+            'drag': self.cd * dynamic_pressure * self.reference_area,
+            'lift': self.cl * dynamic_pressure * self.reference_area,
+            'cd': self.cd,
+            'cl': self.cl,
+            'cp_position': self._xcp.copy(),
+            'stability_margin': self._stability_margin
+        }
 
 
 class MockAtmosphere:
@@ -62,6 +98,22 @@ class MockAtmosphere:
             'temperature': self.temperature,
             'speed_of_sound': self.speed_of_sound
         }
+    
+    def give_dens(self, altitude):
+        """Get density - required by IAtmosphere interface"""
+        return self.density
+    
+    def give_pressure(self, altitude):
+        """Get pressure - required by IAtmosphere interface"""
+        return self.pressure
+    
+    def give_temp(self, altitude):
+        """Get temperature - required by IAtmosphere interface"""
+        return self.temperature
+    
+    def give_v_sonic(self, altitude):
+        """Get speed of sound - required by IAtmosphere interface"""
+        return self.speed_of_sound
 
 
 class TestRocketDynamics(unittest.TestCase):
@@ -69,15 +121,17 @@ class TestRocketDynamics(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
-        # Create a mock state
-        self.state = MagicMock(spec=RocketState)
-        self.state.position = np.array([0.0, 0.0, 0.0])
-        self.state.velocity = np.array([100.0, 0.0, 0.0])
-        self.state.attitude = np.array([0.0, 0.0, 0.0, 1.0])  # Identity quaternion
-        self.state.angular_velocity = np.array([0.0, 0.0, 0.0])
-        self.state.mass = 10.0
-        self.state.cm = np.array([0.0, 0.0, 0.0])
-        self.state.cp = np.array([0.5, 0.0, 0.0])
+        # Create a real RocketState object with proper attributes
+        self.state = RocketState(
+            r_enu=np.array([0.0, 0.0, 0.0]),  # Position in ENU frame
+            v_enu=np.array([100.0, 0.0, 0.0]),  # Velocity in ENU frame
+            q_enu2b=np.array([0.0, 0.0, 0.0, 1.0]),  # Identity quaternion
+            w_enu=np.array([0.0, 0.0, 0.0]),  # Angular velocity in ENU frame
+            mass=10.0
+        )
+        # Add additional attributes that may be accessed
+        self.state.cm = np.array([0.0, 0.0, 0.0])  # Center of mass
+        self.state.cp = np.array([0.5, 0.0, 0.0])  # Center of pressure
         self.state.alpha = 0.0
         self.state.beta = 0.0
         

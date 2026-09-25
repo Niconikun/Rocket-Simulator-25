@@ -280,6 +280,53 @@ class Aerodynamics(IAerodynamics):
     # -------------------------------------------------------------------------
     # IAerodynamics Interface Methods
     # -------------------------------------------------------------------------
+
+    @classmethod
+    def from_rocket_config(cls, rocket_config: Dict[str, Any]) -> "Aerodynamics":
+        """
+        Create Aerodynamics instance from rocket configuration.
+        
+        Args:
+            rocket_config: Dictionary containing rocket configuration with aerodynamics section
+            
+        Returns:
+            Aerodynamics: Instance initialized from configuration
+        """
+        aero_config = rocket_config.get("aerodynamics", {})
+        cd = aero_config.get("cd", 0.5)
+        cl = aero_config.get("cl", 0.0)
+        center_of_pressure_x = aero_config.get("center_of_pressure_x", 0.5)
+        stability_margin = aero_config.get("stability_margin", 1.0)
+        reference_area = rocket_config.get("reference_area", 0.01)
+        
+        return cls(
+            cd=cd,
+            cl=cl,
+            center_of_pressure_x=center_of_pressure_x,
+            stability_margin=stability_margin,
+            reference_area=reference_area
+        )
+
+    def set_coefficients(self, cd: float, cl: float) -> None:
+        """Set drag and lift coefficients."""
+        self._cd = float(cd)
+        self._cl = float(cl)
+
+    def set_stability_margin(self, stability_margin: float) -> None:
+        """Set stability margin."""
+        self._stability_margin = float(stability_margin)
+
+    def set_reference_area(self, reference_area: float) -> None:
+        """Set reference area."""
+        if self._use_geometry:
+            self.ref_area = float(reference_area)
+        else:
+            self._reference_area = float(reference_area)
+
+    def set_center_of_pressure(self, x: float, y: float = 0.0, z: float = 0.0) -> None:
+        """Set center of pressure position."""
+        self._xcp = np.array([x, y, z])
+        self._center_of_pressure_x = float(x)
     
     def update(self, mach: float, angle_attack: float, height: float, 
                density: float) -> None:
