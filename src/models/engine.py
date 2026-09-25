@@ -268,28 +268,28 @@ class EnhancedEngine(IEngine):
         float
             Dimensionless shape factor ≥ 0.
         """
-        if t_norm <= 0.0 or t_norm >= 1.0:
+        if t_norm < 0.0 or t_norm >= 1.0:
             return 0.0
 
-        if t_norm < 0.02:           # ignition ramp-up
-            ramp_up = t_norm / 0.02
-            return 0.1 * ramp_up
-        elif t_norm < 0.08:         # fast ramp-up (smoothstep)
-            rp = (t_norm - 0.02) / 0.06
-            return 0.1 + 0.4 * (3 * rp ** 2 - 2 * rp ** 3)
-        elif t_norm < 0.15:         # approach to peak
-            rp = (t_norm - 0.08) / 0.07
-            return 0.5 + 0.5 * rp
-        elif t_norm < 0.85:         # sustained phase
-            oscillation = 0.05 * np.sin(2 * np.pi * t_norm * 4)
-            decay = (0.85 - t_norm) / 0.70
-            return 0.95 + 0.05 * decay + oscillation
-        elif t_norm < 0.92:         # initial ramp-down
-            return 0.7 * (1.0 - (t_norm - 0.85) / 0.07)
-        elif t_norm < 0.97:         # fast ramp-down
-            return 0.3 * (1.0 - (t_norm - 0.92) / 0.05)
+        if t_norm < 0.002:          # ignition ramp-up (very fast: 0.1s for 49s burn)
+            ramp_up = t_norm / 0.002
+            return 0.9 * ramp_up
+        elif t_norm < 0.01:          # fast ramp-up to peak
+            rp = (t_norm - 0.002) / 0.008
+            return 0.9 + 0.1 * rp ** 2
+        elif t_norm < 0.1:           # approach to sustained phase
+            rp = (t_norm - 0.01) / 0.09
+            return 0.98 + 0.02 * rp ** 2
+        elif t_norm < 0.9:          # sustained phase
+            oscillation = 0.02 * np.sin(2 * np.pi * t_norm * 4)
+            decay = (0.9 - t_norm) / 0.80
+            return 0.98 + 0.02 * decay + oscillation
+        elif t_norm < 0.95:         # initial ramp-down
+            return 0.8 * (1.0 - (t_norm - 0.9) / 0.05)
+        elif t_norm < 0.98:         # fast ramp-down
+            return 0.3 * (1.0 - (t_norm - 0.95) / 0.03)
         else:                       # tail-off
-            tail_off = 1.0 - (t_norm - 0.97) / 0.03
+            tail_off = 1.0 - (t_norm - 0.98) / 0.02
             return 0.05 * np.exp(-4.0 * (1.0 - tail_off))
 
     def _compute_analytical_shape_integral(self) -> float:
@@ -326,7 +326,7 @@ class EnhancedEngine(IEngine):
         float
             Thrust in Newtons (≥ 0).
         """
-        if t <= 0.0 or t > self.burn_time:
+        if t < 0.0 or t > self.burn_time:
             return 0.0
 
         if self.use_experimental_thrust:
@@ -344,7 +344,7 @@ class EnhancedEngine(IEngine):
                 thrust = shape * correction * self.max_thrust
             else:
                 thrust = shape * self.mean_thrust
-            return float(max(0.0, min(thrust, self.max_thrust)))
+            return float(max(0.0, thrust))
         except Exception as exc:
             logger.error("_thrust_at_time analytical fallback: %s", exc)
             return self._fallback_thrust_value(t_norm)

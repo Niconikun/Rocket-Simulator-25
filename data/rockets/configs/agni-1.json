@@ -2,13 +2,13 @@
     "name": "Agni-1",
     "description": "Large tactical ballistic missile - ICBM class vehicle",
     "category": "tactical_missile",
-    "initial_mass": 12000.0,
-    "propellant_mass": 9342.0,
+    "initial_mass": 9200.0,
+    "propellant_mass": 7160.6,
     "reference_area": 0.785,
     "I_before_burn": {
-        "x": 3200000.0,
-        "y": 214290.0,
-        "z": 3200000.0
+        "x": 2453386.2,
+        "y": 164292.5,
+        "z": 2453386.2
     },
     "CoM_before_burn": {
         "x": 0.0,
@@ -16,9 +16,9 @@
         "z": 0.0
     },
     "I_after_burn": {
-        "x": 2800000.0,
-        "y": 195000.0,
-        "z": 2800000.0
+        "x": 2146713.0,
+        "y": 149503.3,
+        "z": 2146713.0
     },
     "CoM_after_burn": {
         "x": 0.0,
@@ -29,14 +29,14 @@
         "type": "Solid_Rocket_Motor",
         "burn_time": 49.0,
         "nozzle_exit_diameter": 1.0,
-        "propellant_mass": 9342.0,
+        "propellant_mass": 7160.6,
         "specific_impulse": 232.0,
         "mean_thrust": 454930.5,
-        "max_thrust": 454930.5,
+        "max_thrust": 480000.0,
         "mean_chamber_pressure": 4410000.0,
-        "max_chamber_pressure": 4410000.0,
-        "thrust_to_weight_ratio": 3.9,
-        "mass_flux": 190.65,
+        "max_chamber_pressure": 4600000.0,
+        "thrust_to_weight_ratio": 5.04,
+        "mass_flux": 146.13,
         "gas_speed": 2270.0,
         "exit_pressure": 500000.0,
         "chamber_temperature": 3100.0
