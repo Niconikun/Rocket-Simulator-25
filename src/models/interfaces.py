@@ -159,8 +159,7 @@ class IAerodynamics(ABC):
     allowing the Rocket class to work with any aerodynamics model.
     
     Implementations:
-        - EnhancedAerodynamics: Component-based model with Barrowman stability
-        - SimpleAerodynamics: Basic drag/lift model (for testing)
+        - Aerodynamics: Unified model (SimpleAerodynamics is an alias)
         - CFDAerodynamics: CFD data-driven model
     
     Example:

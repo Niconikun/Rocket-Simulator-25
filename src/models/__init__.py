@@ -7,8 +7,7 @@ Available classes:
     - ApplicationState: Singleton for managing application state
     - Atmosphere: US Standard Atmosphere 1976 model
     - Clock: Time and date calculations with GMST
-    - EnhancedAerodynamics: Enhanced aerodynamics with Barrowman method
-    - AerodynamicsWrapper: Robust aerodynamics wrapper
+    - Aerodynamics: Unified aerodynamics model (SimpleAerodynamics is an alias)
     - EnhancedEngine: Rocket engine simulation
     - Parachute: Parachute deployment and descent simulation
     - Planet: Earth rotation tracking (GMST)
@@ -23,13 +22,16 @@ Available classes:
 Factory functions:
     - create_wind_model: Create wind models by name
     - create_wind_model_from_state: Create wind models from scenario dict
+
+Note: EnhancedAerodynamics and AerodynamicsWrapper have been replaced
+with the unified Aerodynamics class for simplicity and maintainability.
 """
 
 from .app_state import ApplicationState
 from .atmosphere import Atmosphere
 from .state import StateProvider, StateProxy, MockStateProvider, ReadOnlyStateProvider
 from .clock import Clock
-from .aerodynamics import EnhancedAerodynamics, AerodynamicsWrapper
+from .aerodynamics import Aerodynamics, SimpleAerodynamics
 from .engine import EnhancedEngine
 from .gravitational import g_accel, g_torque
 from .parachute import Parachute
@@ -58,8 +60,8 @@ __all__ = [
     # Time
     'Clock',
     # Aerodynamics
-    'EnhancedAerodynamics',
-    'AerodynamicsWrapper',
+    'Aerodynamics',
+    'SimpleAerodynamics',
     # Engine
     'EnhancedEngine',
     # Gravity

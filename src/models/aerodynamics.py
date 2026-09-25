@@ -1,26 +1,28 @@
-# Author: Jorge Orozco
-#         Universidad de Concepción, Facultad de Ingeniería
-#         E-mail: joorozco@udec.cl
+# Author: Nicolas Sturm (refactored from Jorge Orozco's original)
+#         Rocket Simulator - Clean Architecture Refactoring
+#         Phase 4: Unified Aerodynamics Module with Barrowman Method
 
 """
 Aerodynamics Module
 
-Unified aerodynamics module combining:
-- EnhancedAerodynamics: Component-based drag modeling with Barrowman stability
-- AerodynamicsWrapper: Robust wrapper with geometry validation
+Unified aerodynamics module with realistic calculations for rocket flight simulations.
 
-Both classes provide drag (Cd), lift (Cl), and center of pressure (xcp) calculations
-for rocket flight simulations.
+This module provides a single implementation of IAerodynamics that uses:
+- Barrowman method for normal force coefficients and center of pressure
+- Component-based drag modeling (skin friction, pressure, base, interference, wave)
+- Mach number corrections for transonic and supersonic regimes
+- Geometry-based calculations from actual rocket dimensions
+
+All calculations are performed in consistent SI units (meters, kg, seconds).
+
+Design Principles:
+    - Realistic physics-based calculations
+    - Single source of truth for all aerodynamic properties
+    - Clean, maintainable code without duplication
+    - Proper unit handling (all inputs expected in SI units)
 
 External dependencies:
     numpy - Numpy Python extension. http://numpy.org/
-    scipy - Scipy Python extension. https://www.scipy.org
-    fluids - For atmospheric properties (via Atmosphere class)
-
-Changelog:
-    Date          Name              Change
-    15/08/2022    Jorge Orozco      Initial EnhancedAerodynamics release
-    [Current]     Unified            Merged AerodynamicsWrapper into single module
 
 References:
     [Barro67] Barrowman (1967) - The Practical Calculation of the Aerodynamic 
@@ -30,19 +32,24 @@ References:
 import numpy as np
 import math
 import logging
+from typing import Optional, Dict, Any
 
-from src.utils.simulation_constants import AerodynamicsConstants as AC
 from src.models.interfaces import IAerodynamics
 
 logger = logging.getLogger(__name__)
 
-# Use constants from AerodynamicsConstants
-# These are kept for backward compatibility but now reference AC
-MAX_ANGLE_OF_ATTACK = AC.MAX_ANGLE_OF_ATTACK  # Maximum angle of attack in degrees [deg]
+# Constants
+MAX_ANGLE_OF_ATTACK = 20.0  # Maximum angle of attack in degrees [deg]
+SEA_LEVEL_DENSITY = 1.225  # kg/m³
+SEA_LEVEL_TEMPERATURE = 288.15  # K
+SPEED_OF_SOUND_SEA_LEVEL = 340.294  # m/s at sea level, 15°C
+SUTHERLAND_C1 = 1.458e-6  # Sutherland's constant for air
+SUTHERLAND_S = 110.4  # Sutherland's constant for air [K]
+TURBULENT_SKIN_FRICTION_K = 0.074  # Skin friction constant for turbulent flow
 
 
 # =============================================================================
-# Shared Helper Functions
+# Helper Functions
 # =============================================================================
 
 def _validate_angle(angle: float) -> float:
@@ -71,25 +78,27 @@ def _calculate_dynamic_viscosity(temperature: float) -> float:
         Dynamic viscosity [Pa·s]
     """
     T = temperature
-    return (AC.SUTHERLAND_C1 * T**1.5) / (T + AC.SUTHERLAND_S)
+    return (SUTHERLAND_C1 * T**1.5) / (T + SUTHERLAND_S)
 
 
 # =============================================================================
-# EnhancedAerodynamics Class
+# Aerodynamics Class (Primary Implementation with Barrowman Method)
 # =============================================================================
 
-class EnhancedAerodynamics(IAerodynamics):
+class Aerodynamics(IAerodynamics):
     """
-    Enhanced aerodynamics module with component-based drag modeling
-    and Barrowman stability calculations.
+    Aerodynamics model for rocket flight simulations using Barrowman method.
     
-    Implements IAerodynamics interface for dependency injection and loose coupling.
-    
-    This class provides comprehensive aerodynamic coefficient calculations
-    for rocket flight simulations, including:
+    This implementation provides realistic aerodynamic coefficient calculations
+    based on actual rocket geometry, including:
     - Component-based drag (skin friction, pressure, base, interference, wave)
-    - Lift coefficient calculations
-    - Center of pressure and stability margin
+    - Lift coefficient calculations using Barrowman method
+    - Center of pressure and stability margin calculations
+    - Mach number corrections for transonic and supersonic regimes
+    
+    The class can be initialized in two ways:
+    1. With rocket configuration data (recommended for realistic simulations)
+    2. With constant coefficients (for testing or when geometry data unavailable)
     
     Attributes:
         mach: Mach number [-]
@@ -97,35 +106,94 @@ class EnhancedAerodynamics(IAerodynamics):
         height: Altitude [m]
         cd: Drag coefficient [-]
         cl: Lift coefficient [-]
-        xcp: Center of pressure position [m]
-        stability_margin: Stability margin [calibers]
+        xcp: Center of pressure position in body frame [x, y, z] [m]
+        stability_margin: Stability margin in calibers (positive = stable)
+    
+    Usage:
+        # Recommended: Initialize with rocket configuration
+        aero = Aerodynamics(
+            mach=0.0,
+            angle_attack=0.0,
+            height=0.0,
+            atmosphere=atmosphere_instance,
+            rocket_data=rocket_config_dict,
+            mass_props=mass_properties_dict
+        )
+        
+        # For testing: Initialize with constant coefficients
+        aero = Aerodynamics(cd=0.5, cl=0.0)
+        
+        # Use in simulation
+        cd, cl = aero.get_coefficients()
+        forces = aero.get_aerodynamic_forces(dynamic_pressure=1000.0)
     """
     
     def __init__(
         self,
+        # Mode 1: Full configuration with geometry (for realistic simulations)
+        mach: Optional[float] = None,
+        angle_attack: Optional[float] = None,
+        height: Optional[float] = None,
+        atmosphere: Optional[Any] = None,
+        rocket_data: Optional[Dict[str, Any]] = None,
+        mass_props: Optional[Dict[str, Any]] = None,
+        # Mode 2: Simple constant coefficients (for testing/fallback)
+        cd: Optional[float] = None,
+        cl: Optional[float] = None,
+        center_of_pressure_x: Optional[float] = None,
+        stability_margin: Optional[float] = None,
+        reference_area: Optional[float] = None
+    ) -> None:
+        """
+        Initialize aerodynamics with either geometry data or constant coefficients.
+        
+        Args:
+            mach: Initial Mach number [-]
+            angle_attack: Initial angle of attack [deg]
+            height: Initial altitude [m]
+            atmosphere: Atmosphere object with give_dens, give_temp, give_v_sonic methods
+            rocket_data: Dictionary containing rocket geometry configuration
+            mass_props: Dictionary containing mass properties (CoM, inertia)
+            cd: Drag coefficient [-] (for simple mode)
+            cl: Lift coefficient [-] (for simple mode)
+            center_of_pressure_x: X position of center of pressure [m] (for simple mode)
+            stability_margin: Stability margin [calibers] (for simple mode)
+            reference_area: Reference area [m²] (for simple mode)
+        """
+        # Determine if we're using enhanced mode (geometry-based) or simple mode
+        self._use_geometry = (rocket_data is not None)
+        
+        if self._use_geometry:
+            # Enhanced mode: Initialize with geometry data
+            self._initialize_from_geometry(
+                mach=mach or 0.0,
+                angle_attack=angle_attack or 0.0,
+                height=height or 0.0,
+                atmosphere=atmosphere,
+                rocket_data=rocket_data,
+                mass_props=mass_props or {}
+            )
+        else:
+            # Simple mode: Use constant coefficients
+            self._initialize_simple(
+                cd=cd or 0.5,
+                cl=cl or 0.0,
+                center_of_pressure_x=center_of_pressure_x or 0.5,
+                stability_margin=stability_margin or 1.0,
+                reference_area=reference_area or 0.01
+            )
+    
+    def _initialize_from_geometry(
+        self,
         mach: float,
         angle_attack: float,
         height: float,
-        atmosphere: any,
-        rocket_data: dict,
-        current_mass_props: dict
+        atmosphere: Optional[Any],
+        rocket_data: Dict[str, Any],
+        mass_props: Dict[str, Any]
     ) -> None:
-        """
-        Initialize aerodynamics calculations.
-        
-        Args:
-            mach: Mach number [-]
-            angle_attack: Angle of attack [deg]
-            height: Altitude [m]
-            atmosphere: Atmosphere object with give_dens, give_temp, give_v_sonic methods
-            rocket_data: Dictionary containing rocket configuration
-            current_mass_props: Dictionary containing mass properties
-            
-        Raises:
-            KeyError: If required rocket_data keys are missing
-            ValueError: If input values are invalid
-        """
-        logging.debug(f"Initializing aerodynamics: Mach={mach:.2f}, α={angle_attack:.1f}°, h={height:.1f}m")
+        """Initialize aerodynamics using rocket geometry and Barrowman method."""
+        logging.debug(f"Initializing aerodynamics from geometry: Mach={mach:.2f}, α={angle_attack:.1f}°, h={height:.1f}m")
         
         try:
             # Validate inputs
@@ -134,80 +202,116 @@ class EnhancedAerodynamics(IAerodynamics):
             if height < 0:
                 raise ValueError(f"Height must be non-negative, got {height}")
             
+            # Store basic state
             self.mach = float(mach)
             self.alpha = _validate_angle(angle_attack)
             self.height = float(height)
             self.atmosphere = atmosphere
             self.rocket_data = rocket_data
-            self.mass_props = current_mass_props
+            self.mass_props = mass_props
             
-            # Atmospheric properties
-            self.rho = atmosphere.give_dens(height)  # [kg/m³]
-            self.temp = atmosphere.give_temp(height)  # [K]
-            self.speed_of_sound = atmosphere.give_v_sonic(height)  # [m/s]
-            self.velocity = mach * self.speed_of_sound  # [m/s]
+            # Extract atmospheric properties
+            if atmosphere is not None:
+                self.rho = atmosphere.give_dens(height)  # [kg/m³]
+                self.temp = atmosphere.give_temp(height)  # [K]
+                self.speed_of_sound = atmosphere.give_v_sonic(height)  # [m/s]
+                self.velocity = mach * self.speed_of_sound  # [m/s]
+            else:
+                # Fallback values
+                self.rho = SEA_LEVEL_DENSITY
+                self.temp = SEA_LEVEL_TEMPERATURE
+                self.speed_of_sound = SPEED_OF_SOUND_SEA_LEVEL
+                self.velocity = mach * SPEED_OF_SOUND_SEA_LEVEL
             
             # Reference parameters
-            self.ref_area = rocket_data['reference_area']  # [m²]
-            self.ref_diameter = rocket_data['fuselage']['diameter'] / 1000.0  # [m]
+            self.ref_area = rocket_data.get('reference_area', 0.01)  # [m²]
             
-            # Calculate and store coefficients in internal attributes
-            # Use underscores to avoid shadowing the IAerodynamics properties
+            # Get fuselage diameter for reference
+            fuselage = rocket_data.get('fuselage', {})
+            self.ref_diameter = fuselage.get('diameter', 0.1)  # [m]
+            
+            # Calculate and store coefficients using geometry
             self._cd = self._calculate_drag_coefficient()
             self._cl = self._calculate_lift_coefficient()
             self._xcp = self._calculate_pressure_center()
             self._stability_margin = self._calculate_stability_margin()
             
-            logging.debug(f"Coefficients calculated: CD={self.cd:.3f}, CL={self.cl:.3f}, Stability={self.stability_margin:.2f} calibers")
+            logging.debug(f"Coefficients calculated: CD={self._cd:.4f}, CL={self._cl:.4f}, "
+                        f"Stability={self._stability_margin:.2f} calibers")
             
         except KeyError as e:
             logging.error(f"Missing required rocket_data key: {str(e)}")
             raise
         except Exception as e:
-            logging.error(f"Error in aerodynamics: {str(e)}")
+            logging.error(f"Error in aerodynamics initialization: {str(e)}")
             raise
-
-    # IAerodynamics interface methods
+    
+    def _initialize_simple(
+        self,
+        cd: float,
+        cl: float,
+        center_of_pressure_x: float,
+        stability_margin: float,
+        reference_area: float
+    ) -> None:
+        """Initialize aerodynamics with constant coefficients."""
+        self._cd = float(cd)
+        self._cl = float(cl)
+        self._reference_area = float(reference_area)
+        self._center_of_pressure_x = float(center_of_pressure_x)
+        self._xcp = np.array([center_of_pressure_x, 0.0, 0.0])
+        self._stability_margin = float(stability_margin)
+        
+        # Initialize state variables
+        self.mach = 0.0
+        self.alpha = 0.0
+        self.height = 0.0
+        self.rocket_data = {}
+        self.mass_props = {}
+        
+        logging.debug(f"Aerodynamics initialized with constants: CD={cd}, CL={cl}")
+    
+    # -------------------------------------------------------------------------
+    # IAerodynamics Interface Methods
+    # -------------------------------------------------------------------------
+    
     def update(self, mach: float, angle_attack: float, height: float, 
                density: float) -> None:
         """
         Update aerodynamic coefficients based on flight conditions.
         
-        This method recalculates all aerodynamic coefficients (drag, lift, etc.)
-        based on the current flight conditions.
+        This method recalculates all aerodynamic coefficients based on the current
+        flight conditions using Barrowman method and component-based calculations.
         
         Args:
-            mach: Mach number [-] (dimensionless)
-            angle_attack: Angle of attack in degrees [deg]
-            height: Altitude above sea level in meters [m]
-            density: Air density in kg/m³ [kg/m³]
-        
-        Returns:
-            None. Updates internal state (cd, cl, xcp, stability_margin).
+            mach: Mach number [-]
+            angle_attack: Angle of attack [deg]
+            height: Altitude [m]
+            density: Air density [kg/m³]
         """
         self.mach = float(mach)
         self.alpha = _validate_angle(angle_attack)
         self.height = float(height)
         self.rho = density
         
-        # Update atmospheric properties from stored atmosphere object
+        # Update atmospheric properties if atmosphere object is available
         if hasattr(self, 'atmosphere') and self.atmosphere is not None:
             self.temp = self.atmosphere.give_temp(height)
             self.speed_of_sound = self.atmosphere.give_v_sonic(height)
             self.velocity = mach * self.speed_of_sound
         else:
-            # Fallback: calculate velocity from mach and a default speed of sound
-            # This allows the interface to work even without atmosphere object
-            self.velocity = mach * AC.SPEED_OF_SOUND_SEA_LEVEL
+            # Fallback: calculate velocity from mach and default speed of sound
+            self.velocity = mach * SPEED_OF_SOUND_SEA_LEVEL
         
-        # Recalculate coefficients (store in internal attributes)
-        self._cd = self._calculate_drag_coefficient()
-        self._cl = self._calculate_lift_coefficient()
-        self._xcp = self._calculate_pressure_center()
-        self._stability_margin = self._calculate_stability_margin()
+        # Recalculate coefficients if using geometry-based mode
+        if self._use_geometry and self.rocket_data:
+            self._cd = self._calculate_drag_coefficient()
+            self._cl = self._calculate_lift_coefficient()
+            self._xcp = self._calculate_pressure_center()
+            self._stability_margin = self._calculate_stability_margin()
         
-        logging.debug(f"Aerodynamics updated: CD={self.cd:.3f}, CL={self.cl:.3f}, "
-                     f"Stability={self.stability_margin:.2f} calibers")
+        logging.debug(f"Aerodynamics updated: CD={self._cd:.4f}, CL={self._cl:.4f}, "
+                     f"Mach={mach:.2f}, α={angle_attack:.1f}°, h={height:.1f}m")
     
     def get_coefficients(self) -> tuple[float, float]:
         """
@@ -216,7 +320,7 @@ class EnhancedAerodynamics(IAerodynamics):
         Returns:
             tuple[float, float]: (drag_coefficient, lift_coefficient)
         """
-        return float(self.cd), float(self.cl)
+        return float(self._cd), float(self._cl)
     
     def get_center_of_pressure(self) -> np.ndarray:
         """
@@ -225,17 +329,75 @@ class EnhancedAerodynamics(IAerodynamics):
         Returns:
             np.ndarray: Center of pressure position as [x, y, z] in body frame [m]
         """
-        return self.xcp.copy() if hasattr(self, 'xcp') else np.array([0.0, 0.0, 0.0])
+        return self._xcp.copy() if hasattr(self, '_xcp') else np.array([0.0, 0.0, 0.0])
     
     def get_stability_margin(self) -> float:
         """
         Get static stability margin.
         
         Returns:
-            float: Stability margin in calibers (positive = stable) [calibers]
+            float: Stability margin in calibers (positive = stable)
         """
-        return float(self.stability_margin) if hasattr(self, 'stability_margin') else 0.0
-
+        return float(self._stability_margin) if hasattr(self, '_stability_margin') else 0.0
+    
+    # -------------------------------------------------------------------------
+    # Backward Compatibility Properties
+    # -------------------------------------------------------------------------
+    
+    @property
+    def cd(self) -> float:
+        """Drag coefficient (backward compatibility)."""
+        return float(self._cd)
+    
+    @property
+    def cl(self) -> float:
+        """Lift coefficient (backward compatibility)."""
+        return float(self._cl)
+    
+    @property
+    def xcp(self) -> np.ndarray:
+        """Center of pressure (backward compatibility)."""
+        return self._xcp.copy()
+    
+    # -------------------------------------------------------------------------
+    # Force Calculations
+    # -------------------------------------------------------------------------
+    
+    def get_aerodynamic_forces(self, dynamic_pressure: float, 
+                               reference_area: Optional[float] = None) -> dict:
+        """
+        Calculate aerodynamic forces in rocket frame.
+        
+        Args:
+            dynamic_pressure: Dynamic pressure [Pa]
+            reference_area: Reference area [m²] (optional, uses rocket ref_area if not provided)
+        
+        Returns:
+            dict: Aerodynamic forces and coefficients
+                - drag: Drag force [N]
+                - lift: Lift force [N]
+                - cd: Drag coefficient [-]
+                - cl: Lift coefficient [-]
+                - cp_position: Center of pressure [x, y, z] [m]
+                - stability_margin: Stability margin [calibers]
+        """
+        ref_area = reference_area if reference_area is not None else self.ref_area
+        drag_force = self._cd * dynamic_pressure * ref_area
+        lift_force = self._cl * dynamic_pressure * ref_area
+        
+        return {
+            'drag': float(drag_force),
+            'lift': float(lift_force),
+            'cd': float(self._cd),
+            'cl': float(self._cl),
+            'cp_position': self._xcp.copy(),
+            'stability_margin': float(self._stability_margin)
+        }
+    
+    # -------------------------------------------------------------------------
+    # Drag Coefficient Calculations
+    # -------------------------------------------------------------------------
+    
     def _calculate_drag_coefficient(self) -> float:
         """Calculate total drag coefficient using component-based model."""
         try:
@@ -253,24 +415,25 @@ class EnhancedAerodynamics(IAerodynamics):
             total_cd *= self._transonic_drag_correction()
             
             logging.debug(f"Drag components - Skin: {cd_skin_friction:.4f}, Pressure: {cd_pressure:.4f}, "
-                         f"Base: {cd_base:.4f}, Interference: {cd_interference:.4f}, Wave: {cd_wave:.4f}")
+                        f"Base: {cd_base:.4f}, Interference: {cd_interference:.4f}, Wave: {cd_wave:.4f}")
             
             return float(total_cd)
             
         except Exception as e:
             logging.error(f"Error in drag calculation: {str(e)}")
             return self._simple_drag_estimate()
-
-    def _calculate_skin_friction_drag(self):
-        """Calculate skin friction drag for all components using Prandtl-Schlichting"""
+    
+    def _calculate_skin_friction_drag(self) -> float:
+        """Calculate skin friction drag for all components using Prandtl-Schlichting."""
         # Calculate Reynolds number based on rocket length
-        L_ref = self.rocket_data['geometry']['total length'] / 1000.0  # [m]
+        geometry = self.rocket_data.get('geometry', {})
+        L_ref = geometry.get('total_length', geometry.get('total length', 1.0))  # [m]
         mu = _calculate_dynamic_viscosity(self.temp)
         
-        Re_L = (self.rho * self.velocity * L_ref) / mu
+        Re_L = (self.rho * self.velocity * L_ref) / mu if self.velocity > 0 else 0.0
         
         # Turbulent skin friction coefficient
-        Cf = AC.TURBULENT_SKIN_FRICTION_K / (Re_L ** 0.2)
+        Cf = TURBULENT_SKIN_FRICTION_K / (Re_L ** 0.2) if Re_L > 0 else 0.0
         
         # Calculate wetted areas
         A_wet_nose = self._calculate_nose_wetted_area()
@@ -289,22 +452,22 @@ class EnhancedAerodynamics(IAerodynamics):
         
         cd_skin = Cf * roughness_factor * compressibility_factor * (total_A_wet / self.ref_area)
         return cd_skin
-
-    def _calculate_pressure_drag(self):
-        """Calculate pressure (form) drag for nose cone and fins"""
+    
+    def _calculate_pressure_drag(self) -> float:
+        """Calculate pressure (form) drag for nose cone and fins."""
         cd_nose = self._calculate_nose_pressure_drag()
         cd_fins = self._calculate_fins_pressure_drag()
         return cd_nose + cd_fins
-
-    def _calculate_nose_pressure_drag(self):
-        """Calculate pressure drag for nose cone based on shape"""
-        nose_data = self.rocket_data['nosecone']
-        shape = nose_data.get('shape', 'conical')
-        fineness_ratio = nose_data['length'] / nose_data['diameter']
+    
+    def _calculate_nose_pressure_drag(self) -> float:
+        """Calculate pressure drag for nose cone based on shape."""
+        nose_data = self.rocket_data.get('nosecone', {})
+        shape = nose_data.get('shape', nose_data.get('type', 'conical')).lower()
+        fineness_ratio = nose_data.get('length', 0.1) / max(nose_data.get('diameter', 0.1), 0.001)
         
         if shape == 'parabolic':
             cd_nose = 0.08 / (fineness_ratio ** 0.5)
-        elif shape == 'ogive':
+        elif shape == 'ogive' or shape == 'ogival':
             cd_nose = 0.06 / (fineness_ratio ** 0.5)
         else:  # conical
             cd_nose = 0.10 / (fineness_ratio ** 0.5)
@@ -312,21 +475,24 @@ class EnhancedAerodynamics(IAerodynamics):
         if self.mach > 0.8:
             cd_nose *= (1 + 0.2 * (self.mach - 0.8))
         
+        # Scale by area ratio
         return cd_nose * (self.ref_area / self._calculate_nose_frontal_area())
-
-    def _calculate_fins_pressure_drag(self):
-        """Calculate pressure drag for fins"""
-        fins_data = self.rocket_data['fins']
-        thickness = 3.0  # [mm]
-        chord_avg = (fins_data['chord_root'] + fins_data['chord_tip']) / 2
+    
+    def _calculate_fins_pressure_drag(self) -> float:
+        """Calculate pressure drag for fins."""
+        fins_data = self.rocket_data.get('fins', {})
+        thickness = 0.003  # [m] - typical fin thickness
+        chord_avg = (fins_data.get('chord_root', 0.1) + fins_data.get('chord_tip', 0.05)) / 2
+        if chord_avg <= 0:
+            return 0.0
         thickness_ratio = thickness / chord_avg
         cd_fins_form = 2.0 * thickness_ratio * (self._calculate_fins_planform_area() / self.ref_area)
         return cd_fins_form
-
-    def _calculate_base_drag(self):
-        """Calculate base drag based on rear section geometry"""
-        rear_data = self.rocket_data['rear_section']
-        base_diameter = rear_data['diameter'] / 1000.0
+    
+    def _calculate_base_drag(self) -> float:
+        """Calculate base drag based on rear section geometry."""
+        rear_data = self.rocket_data.get('rear_section', {})
+        base_diameter = rear_data.get('diameter', self.ref_diameter)  # [m]
         base_area = math.pi * (base_diameter / 2) ** 2
         
         if self.mach < 0.8:
@@ -335,85 +501,66 @@ class EnhancedAerodynamics(IAerodynamics):
             cd_base = 0.25 / (1 + 0.5 * (self.mach - 0.8))
         
         return cd_base * (base_area / self.ref_area)
-
-    def _calculate_interference_drag(self):
-        """Calculate interference drag at fin-body junctions"""
-        fins_data = self.rocket_data['fins']
+    
+    def _calculate_interference_drag(self) -> float:
+        """Calculate interference drag at fin-body junctions."""
+        fins_data = self.rocket_data.get('fins', {})
         K_int = 0.1
         fin_planform_area = self._calculate_fins_planform_area()
         cd_fins_basic = 0.05 * (fin_planform_area / self.ref_area)
-        cd_interference = K_int * cd_fins_basic * fins_data['N_fins']
+        cd_interference = K_int * cd_fins_basic * fins_data.get('N_fins', 4)
         return cd_interference
-
-    def _calculate_wave_drag(self):
-        """Calculate wave drag for transonic/supersonic regimes"""
+    
+    def _calculate_wave_drag(self) -> float:
+        """Calculate wave drag for transonic/supersonic regimes."""
         if self.mach < 0.8:
             return 0.0
         if self.mach <= 1.2:
             return 0.2 * (self.mach - 0.8) ** 2
         else:
             return 0.4 / (self.mach ** 1.5)
-
-    def _transonic_drag_correction(self):
-        """Apply transonic drag divergence correction"""
+    
+    def _transonic_drag_correction(self) -> float:
+        """Apply transonic drag divergence correction."""
         if self.mach < 0.8:
             return 1.0
         elif self.mach <= 1.2:
             return 1.0 + 0.5 * ((self.mach - 0.8) / 0.4) ** 2
         else:
             return 1.2
-
-    def _get_surface_roughness_factor(self):
-        """Return surface roughness multiplier (1.0 = smooth, >1.0 = rough)"""
+    
+    def _get_surface_roughness_factor(self) -> float:
+        """Return surface roughness multiplier (1.0 = smooth, >1.0 = rough)."""
         return 1.1
-
-    def _calculate_nose_wetted_area(self):
-        """Calculate wetted area of nose cone"""
-        nose = self.rocket_data['nosecone']
-        L = nose['length'] / 1000.0
-        R = nose['diameter'] / 2000.0
-        return math.pi * R * math.sqrt(R**2 + L**2)
-
-    def _calculate_body_wetted_area(self):
-        """Calculate wetted area of body tube"""
-        body = self.rocket_data['fuselage']
-        L = body['length'] / 1000.0
-        D = body['diameter'] / 1000.0
-        return math.pi * D * L
-
-    def _calculate_fins_wetted_area(self):
-        """Calculate wetted area of fins (both sides)"""
-        fins = self.rocket_data['fins']
-        span = fins['span'] / 1000.0
-        root_chord = fins['chord_root'] / 1000.0
-        tip_chord = fins['chord_tip'] / 1000.0
-        area_one_side = 0.5 * (root_chord + tip_chord) * span
-        return 2 * area_one_side * fins['N_fins']
-
-    def _calculate_fins_planform_area(self):
-        """Calculate planform area of fins (one side only)"""
-        fins = self.rocket_data['fins']
-        span = fins['span'] / 1000.0
-        root_chord = fins['chord_root'] / 1000.0
-        tip_chord = fins['chord_tip'] / 1000.0
-        area_one_fin = 0.5 * (root_chord + tip_chord) * span
-        return area_one_fin * fins['N_fins']
-
-    def _calculate_nose_frontal_area(self):
-        """Calculate frontal area of nose cone"""
-        nose = self.rocket_data['nosecone']
-        D = nose['diameter'] / 1000.0
-        return math.pi * (D/2) ** 2
-
-    def _simple_drag_estimate(self):
-        """Fallback simple drag estimation"""
+    
+    def _simple_drag_estimate(self) -> float:
+        """Fallback simple drag estimation when geometry data is incomplete."""
         base_cd = 0.3
         mach_factor = 1.0 + 0.2 * abs(self.mach - 0.8) if self.mach > 0.8 else 1.0
         alpha_factor = 1.0 + 0.1 * abs(self.alpha)
         return base_cd * mach_factor * alpha_factor
-
-    def _calculate_normal_force_coefficients(self):
-        """Calculate normal force coefficients for each component using Barrowman"""
+    
+    # -------------------------------------------------------------------------
+    # Lift Coefficient Calculations (Barrowman Method)
+    # -------------------------------------------------------------------------
+    
+    def _calculate_lift_coefficient(self) -> float:
+        """Calculate lift coefficient based on normal force using Barrowman method."""
+        Cn_coeffs = self._calculate_normal_force_coefficients()
+        Cn_alpha_total = sum(Cn_coeffs.values())
+        Cn = Cn_alpha_total * np.radians(self.alpha)
+        Cl = Cn * np.cos(np.radians(self.alpha))
+        
+        # Mach correction
+        if self.mach < 0.8:
+            Cl /= max(0.3, math.sqrt(1 - self.mach**2))
+        elif self.mach > 1.2:
+            Cl /= math.sqrt(self.mach**2 - 1)
+        
+        return Cl
+    
+    def _calculate_normal_force_coefficients(self) -> Dict[str, float]:
+        """Calculate normal force coefficients for each component using Barrowman method."""
         g = self.rocket_data
         alpha_rad = np.radians(self.alpha)
         
@@ -424,58 +571,29 @@ class EnhancedAerodynamics(IAerodynamics):
         Cn_alpha_body = 0.0
         
         # Fins
-        fins = g['fins']
-        s = fins['span'] / 1000.0
+        fins = g.get('fins', {})
+        s = fins.get('span', 0.1)  # [m]
         d = self.ref_diameter
-        cr = fins['chord_root'] / 1000.0
-        ct = fins['chord_tip'] / 1000.0
-        n = fins['N_fins']
+        cr = fins.get('chord_root', 0.1)  # [m]
+        ct = fins.get('chord_tip', 0.05)  # [m]
+        n = fins.get('N_fins', 4)
+        
+        # Avoid division by zero
+        if s <= 0 or d <= 0:
+            return {'nose': Cn_alpha_nose, 'body': Cn_alpha_body, 'fins': 0.0}
         
         K_fin = 1.0 + (d / (2 * s))
-        AR = (2 * s) / (cr + ct)
+        AR = (2 * s) / (cr + ct) if (cr + ct) > 0 else 1.0
         Cn_alpha_fins = (K_fin * 4 * n * (s / d)**2) / (1 + math.sqrt(1 + (2 * AR)**2))
         
         return {'nose': Cn_alpha_nose, 'body': Cn_alpha_body, 'fins': Cn_alpha_fins}
-
-    def _calculate_pressure_centers(self):
-        """Calculate center of pressure position for each component"""
-        g = self.rocket_data
-        nose_length = g['nosecone']['length'] / 1000.0
-        body_length = g['fuselage']['length'] / 1000.0
-        
-        # Nose cone CP
-        cp_nose = 0.466 * nose_length
-        
-        # Body tube CP
-        cp_body = nose_length + 0.5 * body_length
-        
-        # Fins CP
-        fins = g['fins']
-        root_chord = fins['chord_root'] / 1000.0
-        mid_chord = fins['mid_chord'] / 1000.0
-        x_fin_cp = (mid_chord / 3) * ((root_chord + 2 * ct) / (root_chord + ct)) if 'ct' in dir() else 0.6 * root_chord
-        fin_position = g['geometry'].get('length_nosecone_fins', g['geometry'].get('length nosecone fins', 0)) / 1000.0
-        cp_fins = fin_position + x_fin_cp
-        
-        return {'nose': cp_nose, 'body': cp_body, 'fins': cp_fins}
-
-    def _calculate_lift_coefficient(self):
-        """Calculate lift coefficient based on normal force"""
-        Cn_coeffs = self._calculate_normal_force_coefficients()
-        Cn_alpha_total = sum(Cn_coeffs.values())
-        Cn = Cn_alpha_total * np.radians(self.alpha)
-        Cl = Cn * np.cos(np.radians(self.alpha))
-        
-        # Mach correction
-        if self.mach < 0.8:
-            Cl /= math.sqrt(1 - self.mach**2)
-        elif self.mach > 1.2:
-            Cl /= math.sqrt(self.mach**2 - 1)
-        
-        return Cl
-
-    def _calculate_pressure_center(self):
-        """Calculate total center of pressure position"""
+    
+    # -------------------------------------------------------------------------
+    # Center of Pressure Calculations
+    # -------------------------------------------------------------------------
+    
+    def _calculate_pressure_center(self) -> np.ndarray:
+        """Calculate total center of pressure position using Barrowman method."""
         Cn_coeffs = self._calculate_normal_force_coefficients()
         cp_positions = self._calculate_pressure_centers()
         total_Cn_alpha = sum(Cn_coeffs.values())
@@ -485,481 +603,132 @@ class EnhancedAerodynamics(IAerodynamics):
         
         xcp = sum(Cn_coeffs[k] * cp_positions[k] for k in Cn_coeffs.keys()) / total_Cn_alpha
         return np.array([xcp, 0, 0])
-
-    def _calculate_stability_margin(self):
-        """Calculate static stability margin in calibers"""
-        x_cp = self.xcp[0]
-        x_cg_before = self.mass_props['CoM_before_burn']['x']
-        x_cg_after = self.mass_props['CoM_after_burn']['x']
+    
+    def _calculate_pressure_centers(self) -> Dict[str, float]:
+        """Calculate center of pressure position for each component."""
+        g = self.rocket_data
+        
+        # Get lengths from geometry
+        nose_length = g.get('nosecone', {}).get('length', 0.1)  # [m]
+        body_length = g.get('fuselage', {}).get('length', 0.5)  # [m]
+        
+        # Nose cone CP (from Barrowman)
+        cp_nose = 0.466 * nose_length
+        
+        # Body tube CP
+        cp_body = nose_length + 0.5 * body_length
+        
+        # Fins CP
+        fins = g.get('fins', {})
+        root_chord = fins.get('chord_root', 0.1)  # [m]
+        mid_chord = fins.get('mid_chord', (root_chord + fins.get('chord_tip', 0.05)) / 2)  # [m]
+        
+        # Position where fins are attached
+        fin_position = g.get('geometry', {}).get('length_nosecone_fins', nose_length + 0.1)  # [m]
+        
+        # Fin CP from leading edge
+        if mid_chord > 0 and (root_chord + fins.get('chord_tip', 0.05)) > 0:
+            ct = fins.get('chord_tip', 0.05)
+            x_fin_cp = (mid_chord / 3) * ((root_chord + 2 * ct) / (root_chord + ct))
+        else:
+            x_fin_cp = 0.6 * root_chord
+        
+        cp_fins = fin_position + x_fin_cp
+        
+        return {'nose': cp_nose, 'body': cp_body, 'fins': cp_fins}
+    
+    # -------------------------------------------------------------------------
+    # Stability Margin Calculation
+    # -------------------------------------------------------------------------
+    
+    def _calculate_stability_margin(self) -> float:
+        """Calculate static stability margin in calibers."""
+        x_cp = self._xcp[0] if hasattr(self, '_xcp') else 0.0
+        
+        # Get center of gravity from mass properties
+        com_before = self.mass_props.get('CoM_before_burn', {})
+        com_after = self.mass_props.get('CoM_after_burn', {})
+        
+        x_cg_before = com_before.get('x', 0.0) if com_before else 0.0
+        x_cg_after = com_after.get('x', 0.0) if com_after else 0.0
+        
+        # Average CoG position
         x_cg = (x_cg_before + x_cg_after) / 2
-        stability_calibers = (x_cp - x_cg) / self.ref_diameter
+        
+        # Calculate stability margin in calibers
+        # Note: x_cp and x_cg should be in the same units (meters)
+        if self.ref_diameter > 0:
+            stability_calibers = (x_cp - x_cg) / self.ref_diameter
+        else:
+            stability_calibers = 0.0
+        
         return stability_calibers
-
-    def get_aerodynamic_forces(self, dynamic_pressure: float) -> dict:
-        """Return aerodynamic forces in rocket frame.
-        
-        Args:
-            dynamic_pressure: Dynamic pressure [Pa]
-        
-        Returns:
-            Dictionary with drag, lift, coefficients, and stability info
-        """
-        drag_force = self.cd * dynamic_pressure * self.ref_area
-        lift_force = self.cl * dynamic_pressure * self.ref_area
-        
-        return {
-            'drag': float(drag_force),
-            'lift': float(lift_force),
-            'cd': float(self.cd),
-            'cl': float(self.cl),
-            'cp_position': self.xcp,
-            'stability_margin': float(self.stability_margin)
-        }
+    
+    # -------------------------------------------------------------------------
+    # Geometry Helper Methods
+    # -------------------------------------------------------------------------
+    
+    def _calculate_nose_wetted_area(self) -> float:
+        """Calculate wetted area of nose cone."""
+        nose = self.rocket_data.get('nosecone', {})
+        L = nose.get('length', 0.1)  # [m]
+        R = nose.get('diameter', 0.1) / 2  # [m] - radius
+        return math.pi * R * math.sqrt(R**2 + L**2)
+    
+    def _calculate_body_wetted_area(self) -> float:
+        """Calculate wetted area of body tube."""
+        body = self.rocket_data.get('fuselage', {})
+        L = body.get('length', 0.5)  # [m]
+        D = body.get('diameter', 0.1)  # [m]
+        return math.pi * D * L
+    
+    def _calculate_fins_wetted_area(self) -> float:
+        """Calculate wetted area of fins (both sides)."""
+        fins = self.rocket_data.get('fins', {})
+        span = fins.get('span', 0.1)  # [m]
+        root_chord = fins.get('chord_root', 0.1)  # [m]
+        tip_chord = fins.get('chord_tip', 0.05)  # [m]
+        area_one_side = 0.5 * (root_chord + tip_chord) * span
+        return 2 * area_one_side * fins.get('N_fins', 4)
+    
+    def _calculate_fins_planform_area(self) -> float:
+        """Calculate planform area of fins (one side only)."""
+        fins = self.rocket_data.get('fins', {})
+        span = fins.get('span', 0.1)  # [m]
+        root_chord = fins.get('chord_root', 0.1)  # [m]
+        tip_chord = fins.get('chord_tip', 0.05)  # [m]
+        area_one_fin = 0.5 * (root_chord + tip_chord) * span
+        return area_one_fin * fins.get('N_fins', 4)
+    
+    def _calculate_nose_frontal_area(self) -> float:
+        """Calculate frontal area of nose cone."""
+        nose = self.rocket_data.get('nosecone', {})
+        D = nose.get('diameter', 0.1)  # [m]
+        return math.pi * (D/2) ** 2
 
 
 # =============================================================================
-# AerodynamicsWrapper Class (Compatibility Layer)
+# Backward Compatibility
 # =============================================================================
 
-class AerodynamicsWrapper:
-    """
-    Robust aerodynamics wrapper with comprehensive error handling.
-    
-    This class provides a simpler interface for aerodynamics calculations,
-    with geometry validation and fallback values. It uses similar calculation
-    methods to EnhancedAerodynamics but with a different parameter structure.
-    
-    For new code, prefer using EnhancedAerodynamics directly.
-    
-    Attributes:
-        mach: Mach number [-]
-        alpha: Angle of attack [deg]
-        geometry: Geometry dictionary
-        height: Altitude [m]
-        density: Air density [kg/m³]
-        temperature: Air temperature [K]
-        cd: Drag coefficient [-]
-        cl: Lift coefficient [-]
-        xcp: Center of pressure position [m]
-    """
-    
-    def __init__(self, mach, angle_attack, geometry, height=0, density=AC.SEA_LEVEL_DENSITY, temperature=AC.SEA_LEVEL_TEMPERATURE):
-        """
-        Initialize aerodynamics wrapper with comprehensive error handling.
-        
-        Args:
-            mach: Mach number
-            angle_attack: Angle of attack [deg]
-            geometry: Dictionary with rocket geometry parameters
-            height: Altitude [m] (default: 0)
-            density: Air density [kg/m³] (default: SEA_LEVEL_DENSITY)
-            temperature: Air temperature [K] (default: SEA_LEVEL_TEMPERATURE)
-        """
-        self.mach = max(0.0, min(mach, 5.0))
-        self.alpha = _validate_angle(angle_attack)
-        self.geometry = self._validate_geometry(geometry)
-        self.height = height
-        self.density = density
-        self.temperature = temperature
-        self.v_norm = self.mach * AC.SPEED_OF_SOUND_SEA_LEVEL
-        
-        # Calculate coefficients with error handling
-        try:
-            self.cd = self._calculate_drag_coefficient()
-            self.cl = self._calculate_lift_coefficient()
-            self.xcp = self._calculate_pressure_center()
-        except Exception as e:
-            logging.warning(f"Aerodynamics calculation failed, using defaults: {e}")
-            self.cd = 0.5
-            self.cl = 0.0
-            self.xcp = np.array([0.5, 0, 0])
+# Keep SimpleAerodynamics as an alias for backward compatibility
+SimpleAerodynamics = Aerodynamics
 
-    def _validate_geometry(self, geometry):
-        """Validate geometry dictionary and provide defaults for missing keys."""
-        required_keys = {
-            'len_warhead': 200.0,
-            'diameter_warhead_base': 103.0,
-            'len_nosecone_fins': 1000.0,
-            'len_nosecone_rear': 1199.47,
-            'len_bodytube_wo_rear': 930.0,
-            'diameter_bodytube': 103.0,
-            'len_rear': 69.334,
-            'end_diam_rear': 71.7,
-            'diameter_rear_bodytube': 71.7,
-            'diameter_bodytube_fins': 103.0,
-            'fins_chord_root': 130.0,
-            'fins_chord_tip': 43.92,
-            'fins_mid_chord': 86.96,
-            'fins_span': 139.119,
-            'N_fins': 4
-        }
-        
-        validated_geometry = geometry.copy()
-        for key, default_value in required_keys.items():
-            if key not in validated_geometry:
-                logging.warning(f"Missing geometry parameter '{key}', using default: {default_value}")
-                validated_geometry[key] = default_value
-            elif validated_geometry[key] <= 0:
-                logging.warning(f"Invalid geometry parameter '{key}': {validated_geometry[key]}, using default: {default_value}")
-                validated_geometry[key] = default_value
-        
-        return validated_geometry
+# Legacy aliases
+AerodynamicsClass = Aerodynamics
 
-    def _calculate_drag_coefficient(self):
-        """Robust drag coefficient calculation with component breakdown."""
-        try:
-            ref_diameter = self.geometry['diameter_bodytube'] / 1000.0
-            ref_area = np.pi * (ref_diameter/2)**2
-            
-            if ref_area <= 0:
-                return 0.5
-            
-            skin_friction = self._calculate_skin_friction()
-            pressure_drag = self._calculate_pressure_drag()
-            fin_drag = self._calculate_fin_drag()
-            base_drag = self._calculate_base_drag()
-            
-            total_cd = skin_friction + pressure_drag + fin_drag + base_drag
-            
-            mach_factor = self._mach_correction()
-            alpha_factor = self._alpha_correction()
-            
-            total_cd *= mach_factor * alpha_factor
-            return max(0.1, min(2.0, total_cd))
-        except Exception as e:
-            logging.error(f"Drag calculation error: {e}")
-            return 0.5
 
-    def _calculate_skin_friction(self):
-        """Calculate skin friction drag with proper Reynolds number."""
-        try:
-            L = self.geometry['len_nosecone_rear'] / 1000.0
-            diameter = self.geometry['diameter_bodytube'] / 1000.0
-            
-            if L <= 0 or self.v_norm <= 0:
-                return 0.01
-            
-            mu = 1.789e-5
-            Re = (self.density * self.v_norm * L) / mu
-            Cf = AC.TURBULENT_SKIN_FRICTION_K / (Re ** 0.2) if Re > 0 else 0.0
-            wetted_area = np.pi * diameter * L
-            ref_area = np.pi * (diameter/2)**2
-            
-            if ref_area > 0:
-                skin_friction_cd = Cf * (wetted_area / ref_area)
-            else:
-                skin_friction_cd = 0.01
-            
-            return max(0.001, min(0.1, skin_friction_cd))
-        except Exception as e:
-            logging.error(f"Skin friction calculation error: {e}")
-            return 0.01
-
-    def _calculate_fin_parameters(self):
-        """Calculate fin parameters based on fin type."""
-        try:
-            g = self.geometry
-            fin_type = g.get('fin_type', 'Trapezoidal')
-            span = g['fins_span'] / 1000.0
-            root_chord = g['fins_chord_root'] / 1000.0
-            tip_chord = g['fins_chord_tip'] / 1000.0
-            n_fins = g['N_fins']
-            
-            if fin_type == "Trapezoidal":
-                fin_area = 0.5 * (root_chord + tip_chord) * span
-                aspect_ratio = (span ** 2) / fin_area
-                mean_chord = (root_chord + tip_chord) / 2
-            elif fin_type == "Delta":
-                fin_area = 0.5 * root_chord * span
-                aspect_ratio = (span ** 2) / fin_area
-                mean_chord = root_chord * 2/3
-            elif fin_type == "Tapered Swept":
-                fin_area = 0.5 * (root_chord + tip_chord) * span
-                aspect_ratio = (span ** 2) / fin_area
-                sweep_angle = g.get('sweep_angle', 30.0)
-                mean_chord = (root_chord + tip_chord) / 2
-            elif fin_type == "Elliptical":
-                fin_area = (np.pi * root_chord * span) / 4
-                aspect_ratio = (span ** 2) / fin_area
-                mean_chord = root_chord * 0.848
-            else:
-                fin_area = 0.5 * (root_chord + tip_chord) * span
-                aspect_ratio = (span ** 2) / fin_area
-                mean_chord = g.get('fins_mid_chord', (root_chord + tip_chord) / 2) / 1000.0
-            
-            return {
-                'fin_area': fin_area,
-                'total_fin_area': fin_area * n_fins,
-                'aspect_ratio': aspect_ratio,
-                'mean_chord': mean_chord,
-                'fin_type': fin_type
-            }
-        except Exception as e:
-            logging.warning(f"Fin parameter calculation issue: {e}")
-            return {
-                'fin_area': 0.01,
-                'total_fin_area': 0.01 * g.get('N_fins', 4),
-                'aspect_ratio': 5.0,
-                'mean_chord': 0.05,
-                'fin_type': 'Trapezoidal'
-            }
-
-    def _calculate_fin_drag(self):
-        """Calculate drag contribution from fins."""
-        try:
-            fin_params = self._calculate_fin_parameters()
-            ref_diameter = self.geometry['diameter_bodytube'] / 1000.0
-            ref_area = np.pi * (ref_diameter/2)**2
-            
-            if ref_area <= 0:
-                return 0.02
-            
-            fin_drag_area_ratio = fin_params['total_fin_area'] / ref_area
-            base_cd_fin = {
-                "Trapezoidal": 0.008,
-                "Delta": 0.006,
-                "Tapered Swept": 0.007,
-                "Elliptical": 0.005,
-                "Custom": 0.008
-            }.get(fin_params['fin_type'], 0.008)
-            
-            ar = fin_params['aspect_ratio']
-            ar_correction = 1.0 / np.sqrt(1.0 + ar)
-            mach_correction = self._fin_mach_correction()
-            interference_factor = 1.1
-            
-            total_fin_cd = base_cd_fin * fin_drag_area_ratio * ar_correction * mach_correction * interference_factor
-            return max(0.001, min(0.1, total_fin_cd))
-        except Exception as e:
-            logging.warning(f"Fin drag calculation issue: {e}")
-            return 0.02
-
-    def _fin_mach_correction(self):
-        """Mach correction specific to fin drag."""
-        if self.mach < 0.8:
-            return 1.0
-        elif self.mach <= 1.2:
-            return 1.0 + 0.5 * ((self.mach - 0.8) / 0.4)
-        else:
-            return 1.2
-
-    def _calculate_base_drag(self):
-        """Calculate base drag component."""
-        if self.mach < 0.8:
-            return 0.12 + 0.1 * self.mach
-        else:
-            return 0.08
-
-    def _mach_correction(self):
-        """Apply Mach number correction to drag."""
-        if self.mach < 0.8:
-            return 1.0
-        elif self.mach <= 1.0:
-            return 1.0 + 1.2 * ((self.mach - 0.8) / 0.2)
-        elif self.mach <= 1.2:
-            return 2.2 - 0.5 * ((self.mach - 1.0) / 0.2)
-        else:
-            return 1.7 / (1.0 + 0.2 * self.mach)
-
-    def _alpha_correction(self):
-        """Apply angle of attack correction."""
-        alpha_rad = np.radians(abs(self.alpha))
-        return 1.0 + 0.5 * alpha_rad**2
-
-    def _calculate_lift_coefficient(self):
-        """Enhanced lift coefficient calculation."""
-        if abs(self.alpha) < 0.1:
-            return 0.0
-        
-        try:
-            alpha_rad = np.radians(self.alpha)
-            fin_params = self._calculate_fin_parameters()
-            
-            fin_cl_alpha = (2 * np.pi * fin_params['aspect_ratio']) / (
-                2 + np.sqrt(4 + (fin_params['aspect_ratio'] * 0.95)**2 * (1 + np.tan(0)**2))
-            )
-            
-            n_fins = self.geometry['N_fins']
-            fin_effectiveness = min(1.0, n_fins / 4.0)
-            cl_fins = fin_cl_alpha * alpha_rad * fin_effectiveness
-            cl_body = 0.1 * alpha_rad
-            total_cl = cl_fins + cl_body
-            
-            if self.mach < 0.8:
-                total_cl /= max(0.3, math.sqrt(1 - self.mach**2))
-            elif self.mach > 1.2:
-                total_cl /= math.sqrt(self.mach**2 - 1)
-            
-            return total_cl
-        except Exception as e:
-            logging.error(f"Lift calculation error: {e}")
-            return 0.0
-
-    def _calculate_pressure_drag(self):
-        """Enhanced pressure drag calculation with nosecone type consideration."""
-        try:
-            nosecone_drag = self._calculate_nosecone_drag()
-            body_drag = self._calculate_body_pressure_drag()
-            return nosecone_drag + body_drag
-        except Exception as e:
-            logging.error(f"Pressure drag calculation error: {e}")
-            return 0.3
-
-    def _calculate_nosecone_drag(self):
-        """Calculate nosecone drag coefficient based on nosecone type."""
-        try:
-            g = self.geometry
-            nosecone_type = g.get('nosecone_type', 'Conical')
-            length = g['len_warhead'] / 1000.0
-            base_diameter = g['diameter_warhead_base'] / 1000.0
-            
-            if base_diameter <= 0 or length <= 0:
-                return 0.1
-            
-            fineness_ratio = length / base_diameter
-            
-            base_drag_coefficients = {
-                "Conical": 0.50,
-                "Ogival": 0.40,
-                "Elliptical": 0.30,
-                "Parabolic": 0.35,
-                "Power Series": 0.38,
-                "Von Karman": 0.28,
-                "Haack Series": 0.25
-            }
-            
-            cd_base = base_drag_coefficients.get(nosecone_type, 0.40)
-            
-            if fineness_ratio > 5:
-                fineness_factor = 0.7
-            elif fineness_ratio > 3:
-                fineness_factor = 0.8
-            elif fineness_ratio > 2:
-                fineness_factor = 0.9
-            else:
-                fineness_factor = 1.0
-            
-            type_factor = 1.0
-            if nosecone_type == "Ogival":
-                ogive_radius = g.get('ogive_radius', base_diameter * 2) / 1000.0
-                if ogive_radius > base_diameter * 1.5:
-                    type_factor = 0.9
-                else:
-                    type_factor = 1.0
-            elif nosecone_type == "Elliptical":
-                type_factor = 0.85
-            elif nosecone_type == "Parabolic":
-                type_factor = 0.95
-            elif nosecone_type == "Von Karman":
-                type_factor = 0.8
-            elif nosecone_type == "Haack Series":
-                type_factor = 0.85
-            
-            mach_factor = self._nosecone_mach_correction()
-            cd_nose = cd_base * fineness_factor * type_factor * mach_factor
-            return max(0.1, min(1.0, cd_nose))
-        except Exception as e:
-            logging.error(f"Nosecone drag calculation error: {e}")
-            return 0.4
-
-    def _nosecone_mach_correction(self):
-        """Apply Mach number correction specific to nosecone drag."""
-        if self.mach < 0.8:
-            return 1.0
-        elif self.mach <= 1.2:
-            return 1.0 + 1.5 * ((self.mach - 0.8) / 0.4) ** 2
-        else:
-            return 1.2 / (1.0 + 0.15 * self.mach)
-
-    def _calculate_body_pressure_drag(self):
-        """Calculate pressure drag from the rocket body tube."""
-        try:
-            g = self.geometry
-            body_length = g['len_bodytube_wo_rear'] / 1000.0
-            diameter = g['diameter_bodytube'] / 1000.0
-            
-            if body_length <= 0 or diameter <= 0:
-                return 0.05
-            
-            l_d_ratio = body_length / diameter
-            base_body_cd = 0.08
-            
-            if l_d_ratio > 20:
-                length_factor = 1.3
-            elif l_d_ratio > 10:
-                length_factor = 1.1
-            elif l_d_ratio > 5:
-                length_factor = 1.0
-            else:
-                length_factor = 0.9
-            
-            if self.mach < 0.8:
-                mach_factor = 1.0
-            elif self.mach <= 1.2:
-                mach_factor = 1.0 + 0.5 * ((self.mach - 0.8) / 0.4)
-            else:
-                mach_factor = 1.1
-            
-            return base_body_cd * length_factor * mach_factor
-        except Exception as e:
-            logging.error(f"Body pressure drag calculation error: {e}")
-            return 0.05
-
-    def _calculate_pressure_center(self):
-        """Calculate center of pressure with nosecone consideration."""
-        try:
-            g = self.geometry
-            nose_length = g['len_warhead'] / 1000.0
-            body_length = g['len_bodytube_wo_rear'] / 1000.0
-            fin_position = g['len_nosecone_fins'] / 1000.0
-            
-            cp_nose = self._calculate_center_of_pressure_nosecone()
-            cp_body = nose_length + 0.5 * body_length
-            root_chord = g['fins_chord_root'] / 1000.0
-            x_fin_cp = fin_position + 0.6 * root_chord
-            
-            ref_diameter = g['diameter_bodytube'] / 1000.0
-            ref_area = np.pi * (ref_diameter/2)**2
-            
-            nosecone_weight = 0.15
-            body_weight = 0.10
-            fins_weight = 0.75
-            
-            xcp_total = (nosecone_weight * cp_nose +
-                        body_weight * cp_body +
-                        fins_weight * x_fin_cp)
-            
-            return np.array([xcp_total, 0, 0])
-        except Exception as e:
-            logging.error(f"CP calculation error: {e}")
-            total_length = g.get('len_nosecone_rear', 1199.47) / 1000.0
-            return np.array([total_length * 0.5, 0, 0])
-
-    def _calculate_center_of_pressure_nosecone(self):
-        """Calculate nosecone contribution to center of pressure."""
-        try:
-            g = self.geometry
-            nosecone_type = g.get('nosecone_type', 'Conical')
-            nose_length = g['len_warhead'] / 1000.0
-            
-            if nosecone_type == "Conical":
-                cp_fraction = 0.666
-            elif nosecone_type == "Ogival":
-                cp_fraction = 0.466
-            elif nosecone_type == "Elliptical":
-                cp_fraction = 0.500
-            elif nosecone_type == "Parabolic":
-                cp_fraction = 0.500 + 0.1 * g.get('parabolic_parameter', 0.5)
-            elif nosecone_type == "Power Series":
-                cp_fraction = 0.466 + 0.1 * g.get('power_value', 0.5)
-            elif nosecone_type == "Von Karman":
-                cp_fraction = 0.450
-            elif nosecone_type == "Haack Series":
-                cp_fraction = 0.455
-            else:
-                cp_fraction = 0.500
-            
-            return cp_fraction * nose_length
-        except Exception as e:
-            logging.error(f"Nosecone CP calculation error: {e}")
-            return 0.0
+__all__ = [
+    'Aerodynamics',
+    'SimpleAerodynamics',
+    'AerodynamicsClass',
+    'MAX_ANGLE_OF_ATTACK',
+    'SEA_LEVEL_DENSITY',
+    'SEA_LEVEL_TEMPERATURE',
+    'SPEED_OF_SOUND_SEA_LEVEL',
+    'SUTHERLAND_C1',
+    'SUTHERLAND_S',
+    'TURBULENT_SKIN_FRICTION_K',
+    '_validate_angle',
+    '_calculate_dynamic_viscosity',
+]

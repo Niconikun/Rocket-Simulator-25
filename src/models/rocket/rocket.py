@@ -29,7 +29,7 @@ Design Principles:
 Usage:
     from src.models.rocket import Rocket
     from src.models.engine import EnhancedEngine
-    from src.models.aerodynamics import EnhancedAerodynamics
+    from src.models.aerodynamics import Aerodynamics
     from src.models.atmosphere import Atmosphere
     from src.models.mass_properties import MassProperties
     
@@ -162,17 +162,16 @@ class Rocket:
         self.reference_area = reference_area
         self.wind_vector_enu = np.zeros(3) if wind_vector_enu is None else np.array(wind_vector_enu)
         
-        # Create dynamics (requires engine and aerodynamics)
+        # Create dynamics (requires engine, aerodynamics is optional)
         if engine is None:
             raise ValueError("Engine is required. Provide an IEngine implementation.")
         
+        # If aerodynamics is None, create a simple placeholder
+        # This will be updated later via set_aerodynamics()
         if aerodynamics is None:
-            # Create default aerodynamics if not provided
-            # This is a fallback; ideally aerodynamics should be provided
-            from src.models.aerodynamics import EnhancedAerodynamics
-            # For now, we need rocket_data and mass_props which we don't have
-            # So we'll defer creation until update_aerodynamics is called
-            pass
+            from src.models.aerodynamics import Aerodynamics
+            aerodynamics = Aerodynamics()
+            self.aerodynamics = aerodynamics
         
         # Create dynamics calculator
         self.dynamics = RocketDynamics(
@@ -206,15 +205,20 @@ class Rocket:
         self.dynamics.update_environment(wind_vector_enu=self.wind_vector_enu)
         self.dynamics.update_atmosphere(self.state.r_enu[2])
         
-        # Perform integration step
-        self.simulation.step(dt)
-        
-        # Update engine state
+        # Update engine state BEFORE integration to get current thrust/mass flow
         if self.engine is not None:
             self.engine.update(
                 time=self.state.time,
                 ambient_pressure=self.atmosphere.give_pressure(self.state.r_enu[2])
             )
+        
+        # Update mass based on engine mass flow
+        if self.engine is not None:
+            mass_flow = self.engine.get_mass_flow()
+            self.state.mass -= mass_flow * dt
+        
+        # Perform integration step
+        self.simulation.step(dt)
     
     def run(self, duration: float, dt: float) -> None:
         """

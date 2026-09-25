@@ -47,7 +47,7 @@ from src.models.rocket.rocket import Rocket as NewRocket
 from src.models.rocket.state import RocketState
 from src.models.atmosphere import Atmosphere
 from src.models.engine import EnhancedEngine
-from src.models.aerodynamics import EnhancedAerodynamics
+from src.models.aerodynamics import Aerodynamics, SimpleAerodynamics
 from src.models.mass_properties import MassProperties
 from src.models.interfaces import IEngine, IAerodynamics, IAtmosphere, IMassProperties
 
@@ -154,7 +154,7 @@ def create_aerodynamics(
     rear_section = rocket_config.get('rear_section', {})
     fins = rocket_config.get('fins', {})
     
-    # Build mass properties dict (expected by EnhancedAerodynamics)
+    # Build mass properties dict (for aerodynamics calculations)
     mass_props = {
         'CoM_before_burn': mass_props_before,
         'CoM_after_burn': mass_props_after,
@@ -162,7 +162,7 @@ def create_aerodynamics(
         'I_after_burn': mass_props_after,
     }
     
-    # Build rocket data dict (expected by EnhancedAerodynamics)
+    # Build rocket data dict (for aerodynamics calculations)
     rocket_data = {
         'reference_area': rocket_config.get('reference_area', 0.01),
         'geometry': geometry,
@@ -172,13 +172,14 @@ def create_aerodynamics(
         'fins': fins,
     }
     
-    aero = EnhancedAerodynamics(
+    # Create aerodynamics with geometry-based calculations (Barrowman method)
+    aero = Aerodynamics(
         mach=mach,
         angle_attack=angle_attack,
         height=height,
         atmosphere=atmosphere,
         rocket_data=rocket_data,
-        current_mass_props=mass_props
+        mass_props=mass_props
     )
     
     return aero

@@ -143,8 +143,8 @@ class RocketSimulation:
         self._quaternion_norm_min = 1e-6
         self._mass_min = 0.1  # Minimum mass to prevent division by zero
         
-        # Initial history entry
-        self._save_to_history()
+        # Defer initial history entry until first step to ensure all dependencies are set
+        # self._save_to_history()  # Removed: defer until first step
     
     # ------------------------------------------------------------------
     # Simulation Stepping
@@ -261,15 +261,13 @@ class RocketSimulation:
             forces_b, mass, inertia_b, torques_b
         )
         
-        # Convert acceleration to ENU frame
-        from src.utils.mattools import MatTools as Mat
-        accel_enu = Mat.q_rot(accel_b, q_enu2b, 1)
-        
         # Calculate derivatives
         # Position: dr/dt = v
         r_dot = v_enu
         
         # Velocity: dv/dt = F/m + g
+        # Convert forces to ENU frame and divide by mass, then add gravity
+        from src.utils.mattools import MatTools as Mat
         total_force_enu = Mat.q_rot(forces_b, q_enu2b, 1)
         v_dot = total_force_enu / mass + g_enu
         
