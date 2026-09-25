@@ -44,7 +44,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.models.rocket.state import RocketState
-    from src.models.interfaces import IEngine, IAerodynamics, IAtmosphere, IMassProperties
+    from src.models.interfaces import IEngine, IAerodynamics, IAtmosphere, IMassProperties, IParachute
 
 
 class RocketDynamics:
@@ -76,7 +76,8 @@ class RocketDynamics:
         atmosphere: 'IAtmosphere',
         reference_area: float,
         mass_properties: Optional['IMassProperties'] = None,
-        wind_vector_enu: Optional[np.ndarray] = None
+        wind_vector_enu: Optional[np.ndarray] = None,
+        parachute: Optional['IParachute'] = None
     ) -> None:
         """
         Initialize rocket dynamics calculator.
@@ -89,6 +90,7 @@ class RocketDynamics:
             reference_area: Reference area for aerodynamic calculations [m²]
             mass_properties: Optional mass properties calculator
             wind_vector_enu: Optional wind vector in ENU frame [m/s]
+            parachute: Optional parachute system for recovery
         """
         self.state = state
         self.engine = engine
@@ -97,6 +99,7 @@ class RocketDynamics:
         self.reference_area = float(reference_area)
         self.mass_properties = mass_properties
         self.wind_vector_enu = np.zeros(3) if wind_vector_enu is None else np.array(wind_vector_enu)
+        self.parachute = parachute
         
         # Initialize derived values
         self._dynamic_pressure: Optional[float] = None
@@ -110,6 +113,8 @@ class RocketDynamics:
         self._torques_aero_b: Optional[np.ndarray] = None
         self._forces_engine_b: Optional[np.ndarray] = None
         self._torques_engine_b: Optional[np.ndarray] = None
+        self._forces_parachute_b: Optional[np.ndarray] = None
+        self._torques_parachute_b: Optional[np.ndarray] = None
         self._forces_total_b: Optional[np.ndarray] = None
         self._torques_total_b: Optional[np.ndarray] = None
         
@@ -246,6 +251,58 @@ class RocketDynamics:
         return forces_engine_b.copy(), torques_engine_b.copy()
     
     # ------------------------------------------------------------------
+    # Parachute Calculations
+    # ------------------------------------------------------------------
+    
+    def calculate_parachute_forces(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate parachute forces and torques.
+        
+        Returns:
+            tuple: (forces_parachute_b, torques_parachute_b) in body frame [N], [N·m]
+        """
+        if self.parachute is None:
+            self._forces_parachute_b = np.zeros(3)
+            self._torques_parachute_b = np.zeros(3)
+            return self._forces_parachute_b.copy(), self._torques_parachute_b.copy()
+        
+        if self._forces_parachute_b is not None and self._torques_parachute_b is not None:
+            return self._forces_parachute_b.copy(), self._torques_parachute_b.copy()
+        
+        # Get parachute force vector in ENU frame (opposite to velocity)
+        from src.utils.mattools import MatTools as Mat
+        
+        # Calculate relative velocity for parachute
+        v_rel_enu = self.state.v_enu - self.wind_vector_enu
+        parachute_force_enu = self.parachute.get_force_vector(v_rel_enu)
+        
+        # Convert parachute force from ENU to body frame
+        # Parachute force is opposite to velocity direction
+        forces_parachute_b = Mat.q_rot(parachute_force_enu, self.state.q_enu2b, 0)
+        
+        # Parachute typically acts at the nose or a specific attachment point
+        # For simplicity, assume it acts at the center of pressure (nose)
+        # This creates a small torque if not aligned with CoM
+        if self.mass_properties is not None:
+            burn_fraction = self.mass_properties.get_burn_fraction(self.state.mass)
+            cm_b = self.mass_properties.get_center_of_mass(burn_fraction)
+        else:
+            cm_b = np.array([0.5, 0.0, 0.0])
+        
+        # Assume parachute attachment at nose (front of rocket, negative X direction)
+        parachute_attachment_b = np.array([-0.5, 0.0, 0.0])
+        
+        # Calculate torque: (attachment - cm) x force
+        lever_arm_b = parachute_attachment_b - cm_b
+        torques_parachute_b = np.cross(lever_arm_b, forces_parachute_b)
+        
+        # Cache results
+        self._forces_parachute_b = forces_parachute_b
+        self._torques_parachute_b = torques_parachute_b
+        
+        return forces_parachute_b.copy(), torques_parachute_b.copy()
+    
+    # ------------------------------------------------------------------
     # Total Force/Torque Calculations
     # ------------------------------------------------------------------
     
@@ -259,10 +316,11 @@ class RocketDynamics:
         # Calculate individual contributions
         forces_aero_b, torques_aero_b = self.calculate_aerodynamics()
         forces_engine_b, torques_engine_b = self.calculate_engine_forces()
+        forces_parachute_b, torques_parachute_b = self.calculate_parachute_forces()
         
         # Sum forces and torques
-        forces_total_b = forces_aero_b + forces_engine_b
-        torques_total_b = torques_aero_b + torques_engine_b
+        forces_total_b = forces_aero_b + forces_engine_b + forces_parachute_b
+        torques_total_b = torques_aero_b + torques_engine_b + torques_parachute_b
         
         # Cache results
         self._forces_total_b = forces_total_b
@@ -281,8 +339,10 @@ class RocketDynamics:
         Returns:
             np.ndarray: Gravity vector in ENU frame [m/s²]
         """
-        # Standard gravity
-        g0 = 9.80665  # m/s²
+        from src.utils.simulation_constants import EngineConstants as EC
+        
+        # Standard gravity for ISP calculations
+        g0 = EC.STANDARD_GRAVITY_G0  # m/s²
         
         # Gravity acts downward (negative Z in ENU)
         return np.array([0.0, 0.0, -g0])

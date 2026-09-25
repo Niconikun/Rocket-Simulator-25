@@ -26,7 +26,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('rocket_simulator.log'),
+        logging.FileHandler('rocket_simulator.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )

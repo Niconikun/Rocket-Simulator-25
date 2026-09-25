@@ -8,6 +8,13 @@ Rocket Module - Composition Root
 This is the main Rocket class that composes all the individual components
 using dependency injection. It serves as the public interface for rocket simulation.
 
+Type Aliases:
+    IEngine: Interface for propulsion systems
+    IAerodynamics: Interface for aerodynamic calculations
+    IAtmosphere: Interface for atmospheric models
+    IMassProperties: Interface for mass property calculations
+""
+
 Architecture:
     Rocket (this class)
     ├── RocketState: Pure state management
@@ -66,14 +73,15 @@ Usage:
 import numpy as np
 from typing import Optional, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from src.models.interfaces import IEngine, IAerodynamics, IAtmosphere, IMassProperties
-    from src.models.mass_properties import MassProperties
-
 from src.models.rocket.state import RocketState
 from src.models.rocket.dynamics import RocketDynamics
 from src.models.rocket.simulation import RocketSimulation
 from src.models.atmosphere import Atmosphere
+
+if TYPE_CHECKING:
+    from src.models.interfaces import IEngine, IAerodynamics, IAtmosphere, IMassProperties
+    from src.models.wind import WindModel
+    from src.models.parachute import Parachute
 
 
 class Rocket:
@@ -114,7 +122,9 @@ class Rocket:
         mass_properties: Optional['IMassProperties'] = None,
         reference_area: float = 0.01,
         propellant_mass: float = 0.0,
-        wind_vector_enu: Optional[np.ndarray] = None
+        wind_vector_enu: Optional[np.ndarray] = None,
+        wind_model: Optional['WindModel'] = None,
+        parachute: Optional['Parachute'] = None
     ) -> None:
         """
         Initialize rocket with state and dependencies.
@@ -132,9 +142,11 @@ class Rocket:
             reference_area: Reference area for aerodynamics [m²]
             propellant_mass: Initial propellant mass [kg]
             wind_vector_enu: Initial wind vector in ENU frame [m/s]
+            wind_model: Wind model instance for atmospheric wind (optional)
+            parachute: Parachute system for recovery (optional)
         
         Raises:
-            ValueError: If required dependencies are not provided
+            InputValidationError: If required dependencies are not provided
         """
         # Create or use provided state
         self._initial_mass = initial_mass
@@ -161,6 +173,20 @@ class Rocket:
         self.mass_properties = mass_properties
         self.reference_area = reference_area
         self.wind_vector_enu = np.zeros(3) if wind_vector_enu is None else np.array(wind_vector_enu)
+        self.wind_model = wind_model
+        self.parachute = parachute
+        
+        # Validate mass_properties consistency if provided
+        if mass_properties is not None:
+            # Check that initial mass is consistent with mass_properties
+            mass_before = mass_properties.mass_before
+            if abs(initial_mass - mass_before) > 0.001:  # Allow small floating point tolerance
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Initial mass ({initial_mass} kg) differs from mass_properties.mass_before "
+                    f"({mass_before} kg). Using initial_mass from constructor."
+                )
         
         # Create dynamics (requires engine, aerodynamics is optional)
         if engine is None:
@@ -181,7 +207,8 @@ class Rocket:
             atmosphere=self.atmosphere,
             reference_area=self.reference_area,
             mass_properties=self.mass_properties,
-            wind_vector_enu=self.wind_vector_enu
+            wind_vector_enu=self.wind_vector_enu,
+            parachute=self.parachute
         )
         
         # Create simulation manager
@@ -201,6 +228,20 @@ class Rocket:
         Args:
             dt: Time step size [s]
         """
+        # Update wind from wind model if available
+        if self.wind_model is not None:
+            # Get wind vector at current altitude
+            altitude = self.state.r_enu[2]
+            self.wind_vector_enu = self.wind_model.get_wind_vector(altitude)
+            # Update wind model time
+            self.wind_model.update(dt)
+        
+        # Update parachute if available
+        if self.parachute is not None:
+            velocity_magnitude = np.linalg.norm(self.state.v_enu)
+            density = self.atmosphere.give_dens(self.state.r_enu[2])
+            self.parachute.update(velocity_magnitude, self.state.r_enu[2], density)
+        
         # Update environment
         self.dynamics.update_environment(wind_vector_enu=self.wind_vector_enu)
         self.dynamics.update_atmosphere(self.state.r_enu[2])
@@ -289,13 +330,32 @@ class Rocket:
     
     def set_wind(self, wind_vector_enu: np.ndarray) -> None:
         """
-        Set the wind vector.
+        Set the wind vector directly.
         
         Args:
             wind_vector_enu: Wind vector in ENU frame [m/s]
         """
         self.wind_vector_enu = np.array(wind_vector_enu)
         self.dynamics.update_environment(wind_vector_enu=wind_vector_enu)
+    
+    def set_wind_model(self, wind_model: 'WindModel') -> None:
+        """
+        Set the wind model for dynamic wind calculations.
+        
+        Args:
+            wind_model: WindModel instance for atmospheric wind
+        """
+        self.wind_model = wind_model
+    
+    def set_parachute(self, parachute: 'Parachute') -> None:
+        """
+        Set the parachute system for recovery.
+        
+        Args:
+            parachute: Parachute instance for recovery system
+        """
+        self.parachute = parachute
+        self.dynamics.parachute = parachute
     
     # ------------------------------------------------------------------
     # Convenience Getters

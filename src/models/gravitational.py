@@ -28,11 +28,13 @@ ___ _       _________ _                     ___ _
 
 """
 
+
 # Imports
 import numpy as np
 import logging
 from src.utils.mattools import MatTools as Mat
 from src.utils.simulation_constants import GravitationalConstants as GC
+from src.utils.simulation_errors import InputValidationError, PhysicsCalculationError
 
 # Use constants from GravitationalConstants
 MU_EARTH = GC.MU_EARTH
@@ -41,7 +43,7 @@ EARTH_MIN_RADIUS = GC.EARTH_MIN_RADIUS
 logger = logging.getLogger(__name__)
 
 
-def g_accel(r_eci):
+def g_accel(r_eci: np.ndarray) -> np.ndarray:
     """
     Calculate gravitational acceleration.
     
@@ -52,17 +54,17 @@ def g_accel(r_eci):
         np.ndarray: Gravitational acceleration vector [m/s²]
         
     Raises:
-        ValueError: If r_eci is not a 3-element array or has invalid values
+        InputValidationError: If r_eci is not a 3-element array or has invalid values
     """
     # Validate input
     if not isinstance(r_eci, np.ndarray):
-        raise ValueError(f"r_eci must be a numpy array, got {type(r_eci).__name__}")
+        raise InputValidationError(f"r_eci must be a numpy array, got {type(r_eci).__name__}")
     
     if r_eci.shape != (3,):
-        raise ValueError(f"r_eci must be a 3-element array, got shape {r_eci.shape}")
+        raise InputValidationError(f"r_eci must be a 3-element array, got shape {r_eci.shape}")
     
     if not np.all(np.isfinite(r_eci)):
-        raise ValueError(f"r_eci contains non-finite values: {r_eci}")
+        raise InputValidationError(f"r_eci contains non-finite values: {r_eci}")
     
     r_mag = np.linalg.norm(r_eci)
     
@@ -78,7 +80,7 @@ def g_accel(r_eci):
     return -MU_EARTH * r_eci / (r_mag**3)
 
 
-def g_torque(r_ecef, inertia, q_ecef_body):
+def g_torque(r_ecef: np.ndarray, inertia: np.ndarray, q_ecef_body: np.ndarray) -> np.ndarray:
     """
     Calculate gravitational gradient torque.
     
@@ -91,40 +93,40 @@ def g_torque(r_ecef, inertia, q_ecef_body):
         np.ndarray: Gravitational torque vector [N·m]
         
     Raises:
-        ValueError: If inputs are invalid (wrong shape, non-finite values, etc.)
+        InputValidationError: If inputs are invalid (wrong shape, non-finite values, etc.)
     """
     # Validate r_ecef
     if not isinstance(r_ecef, np.ndarray):
-        raise ValueError(f"r_ecef must be a numpy array, got {type(r_ecef).__name__}")
+        raise InputValidationError(f"r_ecef must be a numpy array, got {type(r_ecef).__name__}")
     
     if r_ecef.shape != (3,):
-        raise ValueError(f"r_ecef must be a 3-element array, got shape {r_ecef.shape}")
+        raise InputValidationError(f"r_ecef must be a 3-element array, got shape {r_ecef.shape}")
     
     if not np.all(np.isfinite(r_ecef)):
-        raise ValueError(f"r_ecef contains non-finite values: {r_ecef}")
+        raise InputValidationError(f"r_ecef contains non-finite values: {r_ecef}")
     
     # Validate inertia
     if not isinstance(inertia, np.ndarray):
-        raise ValueError(f"inertia must be a numpy array, got {type(inertia).__name__}")
+        raise InputValidationError(f"inertia must be a numpy array, got {type(inertia).__name__}")
     
     if inertia.shape != (3,):
-        raise ValueError(f"inertia must be a 3-element array, got shape {inertia.shape}")
+        raise InputValidationError(f"inertia must be a 3-element array, got shape {inertia.shape}")
     
     if not np.all(np.isfinite(inertia)):
-        raise ValueError(f"inertia contains non-finite values: {inertia}")
+        raise InputValidationError(f"inertia contains non-finite values: {inertia}")
     
     if np.any(inertia < 0):
-        raise ValueError(f"inertia values must be non-negative, got {inertia}")
+        raise InputValidationError(f"inertia values must be non-negative, got {inertia}")
     
     # Validate quaternion
     if not isinstance(q_ecef_body, np.ndarray):
-        raise ValueError(f"q_ecef_body must be a numpy array, got {type(q_ecef_body).__name__}")
+        raise InputValidationError(f"q_ecef_body must be a numpy array, got {type(q_ecef_body).__name__}")
     
     if q_ecef_body.shape != (4,):
-        raise ValueError(f"q_ecef_body must be a 4-element array (quaternion), got shape {q_ecef_body.shape}")
+        raise InputValidationError(f"q_ecef_body must be a 4-element array (quaternion), got shape {q_ecef_body.shape}")
     
     if not np.all(np.isfinite(q_ecef_body)):
-        raise ValueError(f"q_ecef_body contains non-finite values: {q_ecef_body}")
+        raise InputValidationError(f"q_ecef_body contains non-finite values: {q_ecef_body}")
     
     r_mag = np.linalg.norm(r_ecef)
     

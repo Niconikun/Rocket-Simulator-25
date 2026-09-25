@@ -35,17 +35,23 @@ import logging
 from typing import Optional, Dict, Any
 
 from src.models.interfaces import IAerodynamics
+from src.utils.simulation_errors import InputValidationError
 
 logger = logging.getLogger(__name__)
 
 # Constants
+from src.utils.simulation_constants import (
+    AtmosphereConstants as AC,
+    AerodynamicsConstants as ADC
+)
+
 MAX_ANGLE_OF_ATTACK = 20.0  # Maximum angle of attack in degrees [deg]
-SEA_LEVEL_DENSITY = 1.225  # kg/m³
-SEA_LEVEL_TEMPERATURE = 288.15  # K
-SPEED_OF_SOUND_SEA_LEVEL = 340.294  # m/s at sea level, 15°C
-SUTHERLAND_C1 = 1.458e-6  # Sutherland's constant for air
-SUTHERLAND_S = 110.4  # Sutherland's constant for air [K]
-TURBULENT_SKIN_FRICTION_K = 0.074  # Skin friction constant for turbulent flow
+SEA_LEVEL_DENSITY = AC.SEA_LEVEL_DENSITY  # kg/m³
+SEA_LEVEL_TEMPERATURE = AC.SEA_LEVEL_TEMPERATURE  # K
+SPEED_OF_SOUND_SEA_LEVEL = ADC.SPEED_OF_SOUND_SEA_LEVEL  # m/s at sea level, 15°C
+SUTHERLAND_C1 = ADC.SUTHERLAND_C1  # Sutherland's constant for air
+SUTHERLAND_S = ADC.SUTHERLAND_S  # Sutherland's constant for air [K]
+TURBULENT_SKIN_FRICTION_K = ADC.TURBULENT_SKIN_FRICTION_K  # Skin friction constant for turbulent flow
 
 
 # =============================================================================
@@ -198,9 +204,9 @@ class Aerodynamics(IAerodynamics):
         try:
             # Validate inputs
             if mach < 0:
-                raise ValueError(f"Mach number must be non-negative, got {mach}")
+                raise InputValidationError(f"Mach number must be non-negative, got {mach}")
             if height < 0:
-                raise ValueError(f"Height must be non-negative, got {height}")
+                raise InputValidationError(f"Height must be non-negative, got {height}")
             
             # Store basic state
             self.mach = float(mach)

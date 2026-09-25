@@ -134,15 +134,16 @@ class WindScenarioEditorWidget(BaseWidget):
     scenario_selected = pyqtSignal(dict)
     scenario_saved = pyqtSignal(str)
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, state=None):
         """
         Initialize wind scenario editor.
         
         Args:
+            state: ApplicationState instance (optional, for dependency injection)
             parent: Parent widget
         """
         super().__init__(parent)
-        self.state = ApplicationState()
+        self.state = state if state is not None else ApplicationState()
         self.current_scenario = None
         self.scenarios_dir = Path("data/scenarios")
         self.scenarios_dir.mkdir(exist_ok=True)

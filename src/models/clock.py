@@ -31,6 +31,7 @@ from typing import Optional, Union, Tuple
 import logging
 
 from src.utils.simulation_constants import ClockConstants as CC
+from src.utils.simulation_errors import InputValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +53,9 @@ class Clock:
         """
         Initialize Clock with current time.
         """
-        self.Delta_UT1 = 0.0  # [s]
-        self.time_vector = self._get_current_time()
-        self.j_day = self.julian_day(self.time_vector)
+        self.Delta_UT1: float = 0.0  # [s]
+        self.time_vector: np.ndarray = self._get_current_time()
+        self.j_day: float = self.julian_day(self.time_vector)
         
         logger.debug(f"Clock initialized: JD={self.j_day:.2f}, UTC={self.time_vector}")
     
@@ -65,7 +66,7 @@ class Clock:
         Returns:
             numpy array: [year, month, day, hour, minute, second] with Delta_UT1 applied
         """
-        time_vec = self._get_current_time()
+        time_vec: np.ndarray = self._get_current_time()
         
         # Apply Delta_UT1 only to seconds
         time_vec[5] = time_vec[5] + self.Delta_UT1
@@ -88,18 +89,18 @@ class Clock:
             Julian Day number
             
         Raises:
-            ValueError: If time_vector is not a 6-element array
+            InputValidationError: If time_vector is not a 6-element array
         """
         if not isinstance(time_vector, np.ndarray) or time_vector.shape != (6,):
-            raise ValueError("time_vector must be a 6-element numpy array [year, month, day, hour, minute, second]")
+            raise InputValidationError("time_vector must be a 6-element numpy array [year, month, day, hour, minute, second]")
         
-        j_day = (
+        j_day: float = (
             367 * time_vector[0] - int((7 * (time_vector[0] + int((time_vector[1] + 9) / 12))) / 4) +
             int((275 * time_vector[1]) / 9) + time_vector[2] + 1721013.5 +
             (((time_vector[5] / 60) + time_vector[4]) / 60 + time_vector[3]) / 24
         )
         
-        return float(j_day)
+        return j_day
     
     def gmst(self, julian_day: float, rad_or_deg: int = 1) -> float:
         """
@@ -113,18 +114,18 @@ class Clock:
             GMST in requested units [rad or deg]
             
         Raises:
-            ValueError: If rad_or_deg is not 1 or 2
+            InputValidationError: If rad_or_deg is not 1 or 2
         """
         if rad_or_deg not in (1, 2):
-            raise ValueError(f"rad_or_deg must be 1 (radians) or 2 (degrees), got {rad_or_deg}")
+            raise InputValidationError(f"rad_or_deg must be 1 (radians) or 2 (degrees), got {rad_or_deg}")
         
-        self.T_ut1 = (julian_day - CC.JD_REFERENCE) / 36525
-        self.Theta_GMST = (
+        self.T_ut1: float = (julian_day - CC.JD_REFERENCE) / 36525
+        self.Theta_GMST: float = (
             CC.GMST_COEFF_A + CC.GMST_COEFF_B * self.T_ut1 +
             CC.GMST_COEFF_C * (self.T_ut1 ** 2) + CC.GMST_COEFF_D * (self.T_ut1 ** 3)
         )
-        self.GMST_leap = self.Theta_GMST - (int(self.Theta_GMST / CC.SECONDS_PER_DAY) * CC.SECONDS_PER_DAY)
-        self.GMST_degrees = self.GMST_leap / 240
+        self.GMST_leap: float = self.Theta_GMST - (int(self.Theta_GMST / CC.SECONDS_PER_DAY) * CC.SECONDS_PER_DAY)
+        self.GMST_degrees: float = self.GMST_leap / 240
         
         # Correct angle for interval between 0° to 360°
         if self.GMST_degrees < 0:
@@ -134,9 +135,9 @@ class Clock:
         
         # Return in requested units
         if rad_or_deg == 2:
-            return float(self.GMST_degrees)
+            return self.GMST_degrees
         else:
-            return float(self.GMST_degrees * CC.DEG2RAD)
+            return self.GMST_degrees * CC.DEG2RAD
     
     def _calculate_julian_day(self) -> float:
         """
@@ -160,7 +161,7 @@ class Clock:
         Returns:
             numpy array: [year, month, day, hour, minute, second.fraction]
         """
-        current = datetime.now(timezone.utc)
+        current: datetime = datetime.now(timezone.utc)
         return np.array([
             current.year,
             current.month,

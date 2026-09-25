@@ -22,11 +22,13 @@ References:
     [Regan93]   Regan/Anandakrishnan,1993   Dynamics of Atmospheric Re-Entry
 """
 
+
 # Imports
 import math
 from typing import List, Optional
 import logging
 from src.utils.simulation_constants import PlanetConstants as PC
+from src.utils.simulation_errors import InputValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -57,13 +59,13 @@ class Planet:
             gmst_0: Initial Greenwich Mean Sidereal Time [rad]
             
         Raises:
-            ValueError: If gmst_0 is negative
+            InputValidationError: If gmst_0 is negative
         """
         if gmst_0 < 0:
-            raise ValueError(f"Initial GMST must be non-negative, got {gmst_0}")
+            raise InputValidationError(f"Initial GMST must be non-negative, got {gmst_0}")
         
-        self.gmst = float(gmst_0)  # [rad]
-        self.rotation_speed = EARTH_ROTATION_SPEED  # [rad/s]
+        self.gmst: float = float(gmst_0)  # [rad]
+        self.rotation_speed: float = EARTH_ROTATION_SPEED  # [rad/s]
         self.hist_gmst: List[float] = []
         
         logger.debug(f"Planet initialized with GMST={self.gmst:.4f} rad")
@@ -76,10 +78,10 @@ class Planet:
             dt: Time step [s]
             
         Raises:
-            ValueError: If dt is negative
+            InputValidationError: If dt is negative
         """
         if dt < 0:
-            raise ValueError(f"Time step must be non-negative, got {dt}")
+            raise InputValidationError(f"Time step must be non-negative, got {dt}")
         
         self.gmst += self.rotation_speed * dt  # [rad]
         

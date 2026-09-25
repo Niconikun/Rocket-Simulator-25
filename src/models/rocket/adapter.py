@@ -33,6 +33,7 @@ from src.models.rocket.rocket import Rocket as NewRocket
 from src.models.engine import EnhancedEngine
 from src.models.aerodynamics import Aerodynamics
 from src.models.atmosphere import Atmosphere
+from src.utils.simulation_constants import RocketConstants as RC
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class LegacyRocketAdapter:
         engine = EnhancedEngine(
             time=0.0,
             burn_time=kwargs.get('burn_time', 10.0),
-            ambient_pressure=101325.0,
+            ambient_pressure=RC.DEFAULT_PRESSURE,
             nozzle_exit_diameter=kwargs.get('nozzle_exit_diameter', 0.05),
             propellant_mass=kwargs.get('propellant_mass', 1.0),
             specific_impulse=kwargs.get('specific_impulse', 200.0),

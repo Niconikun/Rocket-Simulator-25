@@ -26,8 +26,9 @@ Date: 2026
 import numpy as np
 import logging
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Optional
 from src.utils.simulation_constants import WindConstants as WC
+from src.utils.simulation_errors import InputValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class WindModel(ABC):
                        Positive Up = vertical wind (updraft)
         
         Raises:
-            ValueError: If altitude is invalid
+            InputValidationError: If altitude is invalid
         """
         pass
     
@@ -229,17 +230,17 @@ class LogarithmicWind(WindModel):
             launch_altitude (float): Launch site elevation [m]
         
         Raises:
-            ValueError: If parameters are invalid (negative, zero reference height, etc.)
+            InputValidationError: If parameters are invalid (negative, zero reference height, etc.)
         """
         super().__init__(wind_direction, launch_altitude)
         
         # Validate and set parameters
         if wind_speed_ref < WC.MIN_WIND_SPEED or wind_speed_ref > WC.MAX_WIND_SPEED:
-            raise ValueError(f"wind_speed_ref must be in [0, 100] m/s, got {wind_speed_ref}")
+            raise InputValidationError(f"wind_speed_ref must be in [0, 100] m/s, got {wind_speed_ref}")
         if reference_height <= 0:
-            raise ValueError(f"reference_height must be > 0, got {reference_height}")
+            raise InputValidationError(f"reference_height must be > 0, got {reference_height}")
         if roughness_length < WC.MIN_WIND_SPEED or roughness_length >= reference_height:
-            raise ValueError(f"roughness_length must be in [0, reference_height), got {roughness_length}")
+            raise InputValidationError(f"roughness_length must be in [0, reference_height), got {roughness_length}")
         
         self.wind_speed_ref = float(wind_speed_ref)
         self.reference_height = float(reference_height)
@@ -348,14 +349,14 @@ class PowerLawWind(WindModel):
             launch_altitude (float): Launch site elevation [m]
         
         Raises:
-            ValueError: If parameters invalid
+            InputValidationError: If parameters invalid
         """
         super().__init__(wind_direction, launch_altitude)
         
         if wind_speed_ref < WC.MIN_WIND_SPEED or wind_speed_ref > WC.MAX_WIND_SPEED:
-            raise ValueError(f"wind_speed_ref must be [0, 100], got {wind_speed_ref}")
+            raise InputValidationError(f"wind_speed_ref must be [0, 100], got {wind_speed_ref}")
         if reference_height <= 0:
-            raise ValueError(f"reference_height must be > 0, got {reference_height}")
+            raise InputValidationError(f"reference_height must be > 0, got {reference_height}")
         if exponent < WC.MIN_POWER_LAW_EXPONENT or exponent > WC.MAX_POWER_LAW_EXPONENT:
             logger.warning(f"Unusual exponent {exponent}; typical range is {WC.POWER_LAW_SMOOTH}-{WC.POWER_LAW_ROUGH}")
         
@@ -774,7 +775,7 @@ def create_wind_model(model_type: str = 'logarithmic', **kwargs) -> WindModel:
         WindModel: Initialized wind model instance
     
     Raises:
-        ValueError: If model_type is unknown
+        InputValidationError: If model_type is unknown
     
     Examples:
         >>> wind = create_wind_model('constant', wind_speed=5.0)
@@ -793,7 +794,7 @@ def create_wind_model(model_type: str = 'logarithmic', **kwargs) -> WindModel:
     elif model_type == 'shear':
         return WindShearWind(**kwargs)
     else:
-        raise ValueError(
+        raise InputValidationError(
             f"Unknown wind model type: '{model_type}'. "
             f"Supported: 'constant', 'logarithmic', 'power_law', 'gust', 'shear'"
         )

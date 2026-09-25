@@ -140,12 +140,42 @@ class Atmosphere(IAtmosphere):
         self.atmosphere = self._get_atmosphere_data(float(height), self.offset)
         return float(self.atmosphere.T)
 
+    def give_pressure(self, height: float) -> float:
+        """
+        Get atmospheric pressure at a given height.
+        
+        Uses US Standard Atmosphere 1976 model, consistent with give_temp(),
+        give_dens(), and give_v_sonic() methods.
+        
+        This is the primary method for pressure retrieval. The give_press() method
+        is maintained for backward compatibility.
+        
+        Args:
+            height: Altitude above sea level [m]. Must be non-negative.
+        
+        Returns:
+            Pressure [Pa]
+        
+        Raises:
+            TypeError: If height is not a number
+        
+        Examples:
+            >>> atmos = Atmosphere(15.0)
+            >>> atmos.give_pressure(0)    # ~101325 Pa (sea level)
+            >>> atmos.give_pressure(1000) # ~89876 Pa (1000m altitude)
+        """
+        if not isinstance(height, (int, float)):
+            raise TypeError(f"height must be a number, got {type(height).__name__}")
+        
+        self.atmosphere = self._get_atmosphere_data(float(height), self.offset)
+        return float(self.atmosphere.P)
+    
     def give_press(self, height: float) -> float:
         """
         Get atmospheric pressure at a given height.
         
-        Uses US Standard Atmosphere 1976 model, consistent with give_temp() and
-        give_dens() methods.
+        DEPRECATED: Use give_pressure() instead. This method is maintained for
+        backward compatibility only.
         
         Args:
             height: Altitude above sea level [m]. Must be non-negative.
@@ -161,18 +191,20 @@ class Atmosphere(IAtmosphere):
             >>> atmos.give_press(0)    # ~101325 Pa (sea level)
             >>> atmos.give_press(1000) # ~89876 Pa (1000m altitude)
         """
-        if not isinstance(height, (int, float)):
-            raise TypeError(f"height must be a number, got {type(height).__name__}")
-        
-        self.atmosphere = self._get_atmosphere_data(float(height), self.offset)
-        return float(self.atmosphere.P)
+        import warnings
+        warnings.warn(
+            "give_press() is deprecated, use give_pressure() instead",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return self.give_pressure(height)
 
     def give_dens(self, height: float) -> float:
         """
         Get atmospheric density at a given height.
         
-        Uses US Standard Atmosphere 1976 model, consistent with give_temp() and
-        give_press() methods.
+        Uses US Standard Atmosphere 1976 model, consistent with give_temp(),
+        give_pressure(), and give_v_sonic() methods.
         
         Args:
             height: Altitude above sea level [m]. Must be non-negative.
@@ -230,7 +262,9 @@ class Atmosphere(IAtmosphere):
         """
         Get atmospheric pressure at a given height.
         
-        Alias for give_press() to match IAtmosphere interface.
+        This is the primary method for pressure retrieval, implementing the
+        IAtmosphere interface contract. For backward compatibility, give_press()
+        is also available but deprecated.
         
         Args:
             height: Altitude above sea level [m]
@@ -238,4 +272,8 @@ class Atmosphere(IAtmosphere):
         Returns:
             Pressure [Pa]
         """
-        return self.give_press(height)
+        if not isinstance(height, (int, float)):
+            raise TypeError(f"height must be a number, got {type(height).__name__}")
+        
+        self.atmosphere = self._get_atmosphere_data(float(height), self.offset)
+        return float(self.atmosphere.P)

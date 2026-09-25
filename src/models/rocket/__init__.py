@@ -92,8 +92,16 @@ __all__ = [
 # Always export factory functions (available in both modes)
 from src.models.rocket.factory import (
     create_rocket_from_config, create_engine, create_aerodynamics,
-    create_mass_properties, load_rocket_config, update_rocket_for_step,
-    run_simulation
+    create_mass_properties, create_wind_model, create_parachute, load_rocket_config,
+    update_rocket_for_step, run_simulation,
+    # Builder pattern components
+    RocketBuilder,
+    EngineConfig,
+    ParachuteConfig,
+    MassPropertiesConfig,
+    AerodynamicsConfig,
+    RocketConfigurationError,
+    RocketFileNotFoundError
 )
 
 # Add factory functions to __all__
@@ -103,7 +111,16 @@ if 'create_rocket_from_config' not in __all__:
         'create_engine',
         'create_aerodynamics',
         'create_mass_properties',
+        'create_wind_model',
+        'create_parachute',
         'load_rocket_config',
         'update_rocket_for_step',
         'run_simulation',
+        'RocketBuilder',
+        'EngineConfig',
+        'ParachuteConfig',
+        'MassPropertiesConfig',
+        'AerodynamicsConfig',
+        'RocketConfigurationError',
+        'RocketFileNotFoundError',
     ])

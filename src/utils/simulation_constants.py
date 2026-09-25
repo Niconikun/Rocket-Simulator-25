@@ -53,7 +53,7 @@ class SimulationConstants:
     
     # ========== Physical Limits ==========
     MAX_ALTITUDE = 100_000.0      # [m] 100 km maximum altitude
-    MAX_VELOCITY = 10_000.0        # [m/s] 10 km/s maximum velocity
+    MAX_VELOCITY = 100_000.0        # [m/s] 10 km/s maximum velocity
     MIN_PRESSURE = 1.0             # [Pa] Minimum atmospheric pressure
     MAX_MACH = 5.0                 # Maximum Mach number (high hypersonic)
     

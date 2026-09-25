@@ -15,6 +15,10 @@ import logging
 import numpy as np
 from typing import Dict, List, Tuple, Optional
 
+from src.utils.simulation_constants import EngineConstants as EC
+from src.utils.simulation_constants import EngineConstants as EC
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -340,7 +344,7 @@ class SimulationValidator:
         mass_flux_hist = mass_flux_hist[:n]
         isp_hist = isp_hist[:n]
 
-        g0 = 9.80665
+        g0 = EC.STANDARD_GRAVITY_G0
         active = (thrust_hist > 1e-6) & (isp_hist > 1e-6)
         consistency_ok = True
         max_rel_error_pct = 0.0

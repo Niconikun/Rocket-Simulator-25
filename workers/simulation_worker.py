@@ -209,8 +209,8 @@ class SimulationWorker(QThread):
             
         # Create time reference
         sim_datetime = datetime.combine(launch_date, launch_time)
-        date = [sim_datetime.year, sim_datetime.month, sim_datetime.day,
-               sim_datetime.hour, sim_datetime.minute, sim_datetime.second]
+        date = np.array([sim_datetime.year, sim_datetime.month, sim_datetime.day,
+                        sim_datetime.hour, sim_datetime.minute, sim_datetime.second])
             
         julian_date = Clock().julian_day(date)
         gmst_0 = Clock().gmst(julian_date, 1)
@@ -624,9 +624,9 @@ class SimulationWorker(QThread):
                 
             # Log validation summary
             if validation_report['valid']:
-                logger.info(f"✓ VALIDATION PASS: {validator.summary()}")
+                logger.info(f"[VALID]ATION PASS: {validator.summary()}")
             else:
-                logger.warning(f"✗ VALIDATION WARNINGS: {validator.summary()}")
+                logger.warning(f"[X] VALIDATION WARNINGS: {validator.summary()}")
                 if validation_report['errors']:
                     logger.error(f"  Critical errors: {len(validation_report['errors'])}")
                     for err in validation_report['errors'][:3]:  # Show first 3
@@ -851,7 +851,7 @@ class SimulationWorker(QThread):
             logger.info(f"\n{'='*70}")
             logger.info(f"ROCKET CONFIGURATION VALIDATION: {rocket_name}")
             logger.info(f"{'='*70}")
-            logger.info(f"Status: {'✓ VALID' if report['valid'] else '✗ INVALID'}")
+            logger.info(f"Status: {'[VALID]' if report['valid'] else '[INVALID]'}")
             
             if report['diagnostics']:
                 logger.info("\nDiagnostics Summary:")

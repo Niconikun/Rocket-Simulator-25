@@ -32,6 +32,7 @@ from scipy.interpolate import interp1d
 
 from src.utils.thrust_processor import ThrustCurveData, ThrustCurveError, ThrustCurveProcessor
 from src.utils.simulation_constants import EngineConstants as EC
+from src.utils.simulation_errors import InputValidationError
 from src.models.interfaces import IEngine
 
 class EnhancedEngine(IEngine):
@@ -172,23 +173,23 @@ class EnhancedEngine(IEngine):
                         mean_chamber_pressure, max_chamber_pressure, thrust_to_weight_ratio):
         """Comprehensive input validation"""
         if time < 0:
-            raise ValueError("Time cannot be negative")
+            raise InputValidationError("Time cannot be negative")
         if burn_time <= 0:
-            raise ValueError("Burn time must be positive")
+            raise InputValidationError("Burn time must be positive")
         if ambient_pressure < 0:
-            raise ValueError("Ambient pressure cannot be negative")
+            raise InputValidationError("Ambient pressure cannot be negative")
         if nozzle_exit_diameter <= 0:
-            raise ValueError("Nozzle exit diameter must be positive")
+            raise InputValidationError("Nozzle exit diameter must be positive")
         if propellant_mass <= 0:
-            raise ValueError("Propellant mass must be positive")
+            raise InputValidationError("Propellant mass must be positive")
         if specific_impulse <= 0:
-            raise ValueError("Specific impulse must be positive")
+            raise InputValidationError("Specific impulse must be positive")
         if mean_thrust <= 0 or max_thrust <= 0:
-            raise ValueError("Thrust values must be positive")
+            raise InputValidationError("Thrust values must be positive")
         if mean_chamber_pressure <= 0 or max_chamber_pressure <= 0:
-            raise ValueError("Chamber pressures must be positive")
+            raise InputValidationError("Chamber pressures must be positive")
         if thrust_to_weight_ratio <= 0:
-            raise ValueError("Thrust-to-weight ratio must be positive")
+            raise InputValidationError("Thrust-to-weight ratio must be positive")
         
         if max_thrust < mean_thrust:
             logger.warning("Max thrust is less than mean thrust - this may indicate data issues")
@@ -621,12 +622,12 @@ class EnhancedEngine(IEngine):
         """
         if time is not None:
             if time < 0:
-                raise ValueError("Time cannot be negative")
+                raise InputValidationError("Time cannot be negative")
             self.time = time
             
         if ambient_pressure is not None:
             if ambient_pressure < 0:
-                raise ValueError("Ambient pressure cannot be negative")
+                raise InputValidationError("Ambient pressure cannot be negative")
             self.ambient_pressure = ambient_pressure
         
         self._calculate_performance()

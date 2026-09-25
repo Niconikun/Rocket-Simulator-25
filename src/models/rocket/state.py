@@ -294,7 +294,6 @@ class RocketState:
         if not self._cache_dirty:
             return
         
-        # Calculate derived values
         self._calculate_derived()
         self._cache_dirty = False
     

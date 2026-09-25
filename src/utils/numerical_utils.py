@@ -121,7 +121,7 @@ class StateValidator:
     
     # Configuration constants - can be customized per rocket
     MAX_ALTITUDE = 100_000.0          # [m] - 100 km max altitude
-    MAX_VELOCITY = 10_000.0            # [m/s] - 10 km/s max velocity
+    MAX_VELOCITY = 100_000.0            # [m/s] - 100 km/s max velocity
     MIN_MASS_FRACTION = 0.05           # Minimum viable mass (5% of initial)
     MAX_FORCE = 100_000.0              # [N] - 100 kN maximum reasonable force
     

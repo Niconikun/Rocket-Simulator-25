@@ -36,6 +36,7 @@ Usage:
 import numpy as np
 from typing import Optional
 from src.models.interfaces import IMassProperties
+from src.utils.simulation_errors import InputValidationError
 
 
 class MassProperties(IMassProperties):
@@ -96,20 +97,20 @@ class MassProperties(IMassProperties):
                            Options: 'linear' (default), 'cubic', 'quadratic'
         
         Raises:
-            ValueError: If mass_after >= mass_before
-            ValueError: If cm or inertia arrays have wrong dimensions
+            InputValidationError: If mass_after >= mass_before
+            InputValidationError: If cm or inertia arrays have wrong dimensions
         """
         # Validate inputs
         if mass_after >= mass_before:
-            raise ValueError(
+            raise InputValidationError(
                 f"mass_after ({mass_after}) must be less than mass_before ({mass_before})"
             )
         
         if cm_before.shape != (3,) or cm_after.shape != (3,):
-            raise ValueError("cm_before and cm_after must be 3-element arrays")
+            raise InputValidationError("cm_before and cm_after must be 3-element arrays")
         
         if inertia_before.shape != (3,) or inertia_after.shape != (3,):
-            raise ValueError("inertia_before and inertia_after must be 3-element arrays")
+            raise InputValidationError("inertia_before and inertia_after must be 3-element arrays")
         
         # Store properties
         self.mass_before = float(mass_before)
@@ -292,9 +293,9 @@ class SimpleMassProperties(IMassProperties):
             inertia: Constant moments of inertia [Ixx, Iyy, Izz] [kg·m²]
         """
         if center_of_mass.shape != (3,):
-            raise ValueError("center_of_mass must be 3-element array")
+            raise InputValidationError("center_of_mass must be 3-element array")
         if inertia.shape != (3,):
-            raise ValueError("inertia must be 3-element array")
+            raise InputValidationError("inertia must be 3-element array")
         
         self._mass = float(mass)
         self._center_of_mass = np.array(center_of_mass, dtype=float)

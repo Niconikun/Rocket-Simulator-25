@@ -19,6 +19,7 @@ import logging
 
 from src.models.state import StateProvider
 
+from src.utils.simulation_constants import RocketConstants as RC
 logger = logging.getLogger(__name__)
 
 # Default session file name
@@ -85,7 +86,7 @@ class ApplicationState(StateProvider):
         
         # Environment parameters
         self._state['average_temperature'] = 20.0  # Celsius
-        self._state['average_pressure'] = 101325.0  # Pa
+        self._state['average_pressure'] = RC.DEFAULT_PRESSURE  # Pa
         self._state['launch_elevation'] = 60.0  # meters
         self._state['launch_site_orientation'] = 20.0  # degrees (magnetic declination at launch site)
         self._state['conditions'] = []  # Environmental conditions list (can be used for weather/wind data)

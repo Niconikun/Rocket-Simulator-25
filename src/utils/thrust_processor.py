@@ -26,6 +26,8 @@ from typing import List
 import numpy as np
 import pandas as pd
 
+from src.utils.simulation_constants import EngineConstants as EC
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -33,7 +35,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 SUPPORTED_UNITS = ('N', 'kgf')
-KGF_TO_N = 9.80665
+KGF_TO_N = EC.STANDARD_GRAVITY_G0
 
 # Minimum thrust value accepted before raising an error.
 # Small negative readings are common sensor noise and are clipped to 0 by the
@@ -214,7 +216,7 @@ class ThrustCurveProcessor:
             Keys: ``valid``, ``impulse_error_percent``, ``measured_impulse``,
             ``expected_impulse``, ``measured_avg_thrust``, ``expected_avg_thrust``.
         """
-        g0 = 9.80665
+        g0 = EC.STANDARD_GRAVITY_G0
         expected_impulse = propellant_mass * isp * g0
         if expected_impulse <= 0.0:
             impulse_error = 0.0 if data.total_impulse <= 0.0 else 1.0
@@ -321,7 +323,7 @@ class ThrustCurveProcessor:
         if unit == 'kgf':
             thrust_N = thrust_raw * KGF_TO_N
             logger.info(
-                "Thrust curve '%s': converted from kgf → N (×%.5f).", source, KGF_TO_N
+                "Thrust curve '%s': converted from kgf -> N (×%.5f).", source, KGF_TO_N
             )
         else:  # unit == 'N'
             thrust_N = thrust_raw.copy()

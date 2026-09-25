@@ -498,6 +498,14 @@ class ParachuteSettingsWidget(BaseWidget):
         self.inflation_time.setEnabled(enabled)
         self.drogue_enabled_check.setEnabled(enabled)
     
+        
+        # If main parachute is disabled, also disable all drogue controls
+        if not enabled:
+            self.drogue_diameter.setEnabled(False)
+            self.drogue_cd.setEnabled(False)
+            self.drogue_deployment_altitude.setEnabled(False)
+            self.drogue_inflation_time.setEnabled(False)
+            self.drogue_mass.setEnabled(False)
     def calculate_descent(self):
         """Calculate parachute descent parameters."""
         if not self.parachute_enabled_check.isChecked():

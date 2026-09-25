@@ -44,9 +44,11 @@ from typing import Optional, TYPE_CHECKING, Callable
 from dataclasses import dataclass, field
 from collections import deque
 
+from src.models.rocket.state import RocketState
+from src.models.rocket.dynamics import RocketDynamics
+
 if TYPE_CHECKING:
-    from src.models.rocket.state import RocketState
-    from src.models.rocket.dynamics import RocketDynamics
+    pass
 
 
 @dataclass
@@ -293,12 +295,30 @@ class RocketSimulation:
         return Mat.q_rot(w_b, q_enu2b, 1)
     
     def _create_temp_dynamics(self, state: 'RocketState') -> 'RocketDynamics':
-        """Create a temporary dynamics instance with updated state."""
-        # For now, just update the existing dynamics state temporarily
-        # In a full implementation, we'd create a new dynamics object
-        old_state = self.dynamics.state
-        self.dynamics.state = state
-        return self.dynamics
+        """
+        Create a temporary dynamics context with updated state.
+        
+        This method creates a new RocketDynamics instance with the temporary state
+        to avoid modifying the shared self.dynamics.state, ensuring thread-safety.
+        
+        Args:
+            state: Temporary rocket state for calculations
+            
+        Returns:
+            RocketDynamics: New dynamics instance with temporary state
+        """
+        # Create a new RocketDynamics instance with the temporary state
+        # This avoids modifying shared state and ensures thread-safety
+        temp_dynamics = RocketDynamics(
+            state=state,
+            engine=self.dynamics.engine,
+            aerodynamics=self.dynamics.aerodynamics,
+            atmosphere=self.dynamics.atmosphere,
+            reference_area=self.dynamics.reference_area,
+            mass_properties=self.dynamics.mass_properties,
+            wind_vector_enu=self.dynamics.wind_vector_enu
+        )
+        return temp_dynamics
     
     # ------------------------------------------------------------------
     # State Vector Management
