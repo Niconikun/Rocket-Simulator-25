@@ -44,10 +44,13 @@ if TYPE_CHECKING:
     from fluids import Atmosphere as FluidsAtmosphere
 
 from fluids import ATMOSPHERE_1976 as atmos76
+from src.models.interfaces import IAtmosphere
 
-class Atmosphere:
+class Atmosphere(IAtmosphere):
     """
     Atmospheric model based on US Standard Atmosphere 1976.
+    
+    Implements IAtmosphere interface for dependency injection and loose coupling.
     
     This class provides atmospheric property calculations (temperature, pressure,
     density, speed of sound) at various altitudes, with support for temperature
@@ -222,3 +225,17 @@ class Atmosphere:
         temp: float = self.give_temp(float(height))
         
         return float(np.sqrt(gamma * R * temp))
+    
+    def give_pressure(self, height: float) -> float:
+        """
+        Get atmospheric pressure at a given height.
+        
+        Alias for give_press() to match IAtmosphere interface.
+        
+        Args:
+            height: Altitude above sea level [m]
+        
+        Returns:
+            Pressure [Pa]
+        """
+        return self.give_press(height)

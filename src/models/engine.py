@@ -32,10 +32,13 @@ from scipy.interpolate import interp1d
 
 from src.utils.thrust_processor import ThrustCurveData, ThrustCurveError, ThrustCurveProcessor
 from src.utils.simulation_constants import EngineConstants as EC
+from src.models.interfaces import IEngine
 
-class EnhancedEngine:
+class EnhancedEngine(IEngine):
     """
     Enhanced rocket engine model with realistic thermodynamics and performance tracking.
+    
+    Implements IEngine interface for dependency injection and loose coupling.
     
     Attributes:
         time (float): Current simulation time [s]
@@ -637,6 +640,25 @@ class EnhancedEngine:
     def thrust(self):
         """Get thrust [N]"""
         return self._thrust
+    
+    # IEngine interface methods
+    def get_thrust(self) -> float:
+        """
+        Get current thrust output.
+        
+        Returns:
+            float: Current thrust in Newtons [N]. Returns 0.0 if engine is off or burned out.
+        """
+        return self._thrust
+    
+    def get_mass_flow(self) -> float:
+        """
+        Get current mass flow rate.
+        
+        Returns:
+            float: Current mass flow rate in kg/s [kg/s]. Returns 0.0 if no flow.
+        """
+        return self._mass_flux
 
     def calculate_specific_impulse(self, ambient_pressure=None):
         """

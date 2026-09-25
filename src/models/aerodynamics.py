@@ -32,6 +32,7 @@ import math
 import logging
 
 from src.utils.simulation_constants import AerodynamicsConstants as AC
+from src.models.interfaces import IAerodynamics
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +78,12 @@ def _calculate_dynamic_viscosity(temperature: float) -> float:
 # EnhancedAerodynamics Class
 # =============================================================================
 
-class EnhancedAerodynamics:
+class EnhancedAerodynamics(IAerodynamics):
     """
     Enhanced aerodynamics module with component-based drag modeling
     and Barrowman stability calculations.
+    
+    Implements IAerodynamics interface for dependency injection and loose coupling.
     
     This class provides comprehensive aerodynamic coefficient calculations
     for rocket flight simulations, including:
@@ -148,11 +151,12 @@ class EnhancedAerodynamics:
             self.ref_area = rocket_data['reference_area']  # [m²]
             self.ref_diameter = rocket_data['fuselage']['diameter'] / 1000.0  # [m]
             
-            # Calculate coefficients
-            self.cd = self._calculate_drag_coefficient()
-            self.cl = self._calculate_lift_coefficient()
-            self.xcp = self._calculate_pressure_center()
-            self.stability_margin = self._calculate_stability_margin()
+            # Calculate and store coefficients in internal attributes
+            # Use underscores to avoid shadowing the IAerodynamics properties
+            self._cd = self._calculate_drag_coefficient()
+            self._cl = self._calculate_lift_coefficient()
+            self._xcp = self._calculate_pressure_center()
+            self._stability_margin = self._calculate_stability_margin()
             
             logging.debug(f"Coefficients calculated: CD={self.cd:.3f}, CL={self.cl:.3f}, Stability={self.stability_margin:.2f} calibers")
             
@@ -162,6 +166,75 @@ class EnhancedAerodynamics:
         except Exception as e:
             logging.error(f"Error in aerodynamics: {str(e)}")
             raise
+
+    # IAerodynamics interface methods
+    def update(self, mach: float, angle_attack: float, height: float, 
+               density: float) -> None:
+        """
+        Update aerodynamic coefficients based on flight conditions.
+        
+        This method recalculates all aerodynamic coefficients (drag, lift, etc.)
+        based on the current flight conditions.
+        
+        Args:
+            mach: Mach number [-] (dimensionless)
+            angle_attack: Angle of attack in degrees [deg]
+            height: Altitude above sea level in meters [m]
+            density: Air density in kg/m³ [kg/m³]
+        
+        Returns:
+            None. Updates internal state (cd, cl, xcp, stability_margin).
+        """
+        self.mach = float(mach)
+        self.alpha = _validate_angle(angle_attack)
+        self.height = float(height)
+        self.rho = density
+        
+        # Update atmospheric properties from stored atmosphere object
+        if hasattr(self, 'atmosphere') and self.atmosphere is not None:
+            self.temp = self.atmosphere.give_temp(height)
+            self.speed_of_sound = self.atmosphere.give_v_sonic(height)
+            self.velocity = mach * self.speed_of_sound
+        else:
+            # Fallback: calculate velocity from mach and a default speed of sound
+            # This allows the interface to work even without atmosphere object
+            self.velocity = mach * AC.SPEED_OF_SOUND_SEA_LEVEL
+        
+        # Recalculate coefficients (store in internal attributes)
+        self._cd = self._calculate_drag_coefficient()
+        self._cl = self._calculate_lift_coefficient()
+        self._xcp = self._calculate_pressure_center()
+        self._stability_margin = self._calculate_stability_margin()
+        
+        logging.debug(f"Aerodynamics updated: CD={self.cd:.3f}, CL={self.cl:.3f}, "
+                     f"Stability={self.stability_margin:.2f} calibers")
+    
+    def get_coefficients(self) -> tuple[float, float]:
+        """
+        Get drag and lift coefficients.
+        
+        Returns:
+            tuple[float, float]: (drag_coefficient, lift_coefficient)
+        """
+        return float(self.cd), float(self.cl)
+    
+    def get_center_of_pressure(self) -> np.ndarray:
+        """
+        Get center of pressure position in body frame.
+        
+        Returns:
+            np.ndarray: Center of pressure position as [x, y, z] in body frame [m]
+        """
+        return self.xcp.copy() if hasattr(self, 'xcp') else np.array([0.0, 0.0, 0.0])
+    
+    def get_stability_margin(self) -> float:
+        """
+        Get static stability margin.
+        
+        Returns:
+            float: Stability margin in calibers (positive = stable) [calibers]
+        """
+        return float(self.stability_margin) if hasattr(self, 'stability_margin') else 0.0
 
     def _calculate_drag_coefficient(self) -> float:
         """Calculate total drag coefficient using component-based model."""
