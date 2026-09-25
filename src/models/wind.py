@@ -174,7 +174,7 @@ class ConstantWind(WindModel):
             altitude = 0
         
         # Convert meteorological direction (FROM) to mathematical direction (TO)
-        direction_rad = np.radians((self.wind_direction + WC.SOUTH) % WC.WEST)
+        direction_rad = np.radians(self.wind_direction + 180.0)
         
         east = self.wind_speed * np.sin(direction_rad)
         north = self.wind_speed * np.cos(direction_rad)
@@ -279,7 +279,7 @@ class LogarithmicWind(WindModel):
         wind_speed = max(WC.MIN_WIND_SPEED, wind_speed)
         
         # Convert meteorological direction (FROM) to math direction (TO)
-        direction_rad = np.radians((self.wind_direction + WC.SOUTH) % WC.WEST)
+        direction_rad = np.radians(self.wind_direction + 180.0)
         
         east = wind_speed * np.sin(direction_rad)
         north = wind_speed * np.cos(direction_rad)
@@ -389,7 +389,7 @@ class PowerLawWind(WindModel):
         wind_speed = self.wind_speed_ref * (effective_height / self.reference_height) ** self.exponent
         
         # Convert direction
-        direction_rad = np.radians((self.wind_direction + WC.SOUTH) % WC.WEST)
+        direction_rad = np.radians(self.wind_direction + 180.0)
         
         east = wind_speed * np.sin(direction_rad)
         north = wind_speed * np.cos(direction_rad)

@@ -2,6 +2,11 @@
 
 import os
 import unittest
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Ensure Qt can initialize in headless CI/local test runs.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

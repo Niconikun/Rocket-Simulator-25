@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from models.app_state import ApplicationState
+from src.models.app_state import ApplicationState
 from workers.simulation_worker import SimulationWorker
 from src.utils.simulation_validator import SimulationValidator
 from src.utils.convergence_tester import ConvergenceTester

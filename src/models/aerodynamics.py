@@ -387,7 +387,7 @@ class Aerodynamics(IAerodynamics):
                 - cp_position: Center of pressure [x, y, z] [m]
                 - stability_margin: Stability margin [calibers]
         """
-        ref_area = reference_area if reference_area is not None else self.ref_area
+        ref_area = reference_area if reference_area is not None else (getattr(self, "ref_area", getattr(self, "_reference_area", 0.01)))
         drag_force = self._cd * dynamic_pressure * ref_area
         lift_force = self._cl * dynamic_pressure * ref_area
         

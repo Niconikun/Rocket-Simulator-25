@@ -113,16 +113,22 @@ class MatTools:
 
     @staticmethod
     def q_rot(v, q, invs):
-        """Rota un vector usando un cuaternión"""
+        """Rota un vector usando un cuaternión
+        
+        Formula: v' = q * v * q* for normal rotation (invs=0)
+                 v' = q* * v * q for inverse rotation (invs=1)
+        """
         q_v = np.array([v[0], v[1], v[2], 0])
         if invs == 0:
-            q_conj = MatTools.q_conjugate(q)
-            first = MatTools.hamilton(q_conj, q_v)
-            new = MatTools.hamilton(first, q)
-        else:
+            # Normal rotation: v' = q * v * q*
             q_conj = MatTools.q_conjugate(q)
             first = MatTools.hamilton(q, q_v)
             new = MatTools.hamilton(first, q_conj)
+        else:
+            # Inverse rotation: v' = q* * v * q
+            q_conj = MatTools.q_conjugate(q)
+            first = MatTools.hamilton(q_conj, q_v)
+            new = MatTools.hamilton(first, q)
         return np.array([new[0], new[1], new[2]])
 
     @staticmethod

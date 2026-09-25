@@ -19,7 +19,7 @@ import sys
 # Add parent directories to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from models.app_state import ApplicationState
+from src.models.app_state import ApplicationState
 from workers.simulation_worker import SimulationWorker
 from src.utils.simulation_manager import SimulationManager
 

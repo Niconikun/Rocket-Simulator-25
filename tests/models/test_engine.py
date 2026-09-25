@@ -1,6 +1,7 @@
 import unittest
 import numpy as np
 from src.models.engine import EnhancedEngine as Engine
+from src.utils.simulation_errors import InputValidationError
 
 class TestEngine(unittest.TestCase):
     def setUp(self):
@@ -64,9 +65,9 @@ class TestEngine(unittest.TestCase):
 
     def test_invalid_parameters(self):
         """Prueba el manejo de parámetros inválidos"""
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InputValidationError):
             Engine(0.0, -1.0, 2.0, 0.1, 5.0, 220.0, 1000.0, 1200.0, 2e6, 2.5e6, 20.0)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InputValidationError):
             Engine(0.0, 101325.0, -1.0, 0.1, 5.0, 220.0, 1000.0, 1200.0, 2e6, 2.5e6, 20.0)
 
     def test_sea_level_performance(self):

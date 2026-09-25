@@ -49,9 +49,13 @@ class TestGeoTools(unittest.TestCase):
         lat = self.test_coord[0]
         N = Geo.calculate_geodetic_radius(lat)
         
-        # Verificar que está entre el radio polar y ecuatorial
-        self.assertGreater(N, Geo.b)
-        self.assertLess(N, Geo.a)
+        # El radio geodésico N = a / sqrt(1 - e^2 * sin^2(lat))
+        # Es máximo en el ecuador (N = a) y mínimo en los polos (N = a / sqrt(1 - e^2))
+        # Por lo tanto: a <= N <= a / sqrt(1 - e^2)
+        self.assertGreaterEqual(N, Geo.a)
+        # Máximo valor en el ecuador
+        N_max = Geo.a / np.sqrt(1 - Geo.e2)
+        self.assertLessEqual(N, N_max)
 
     def test_constants(self):
         """Prueba las constantes del elipsoide WGS84"""

@@ -15,6 +15,7 @@ Date: 2026
 import unittest
 import numpy as np
 import logging
+from src.utils.simulation_errors import InputValidationError
 from src.models.wind import (
     WindModel, ConstantWind, LogarithmicWind, PowerLawWind, 
     GustWind, WindShearWind, create_wind_model
@@ -127,18 +128,18 @@ class TestLogarithmicWind(unittest.TestCase):
     
     def test_invalid_reference_height(self):
         """Test invalid reference height raises error."""
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InputValidationError):
             LogarithmicWind(reference_height=0.0)
         
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InputValidationError):
             LogarithmicWind(reference_height=-5.0)
     
     def test_invalid_roughness_length(self):
         """Test invalid roughness length raises error."""
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InputValidationError):
             LogarithmicWind(roughness_length=-0.1)
         
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InputValidationError):
             LogarithmicWind(roughness_length=10.1, reference_height=10.0)
     
     def test_wind_increases_with_altitude(self):
@@ -273,10 +274,10 @@ class TestPowerLawWind(unittest.TestCase):
     
     def test_invalid_parameters(self):
         """Test invalid parameters raise errors."""
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InputValidationError):
             PowerLawWind(wind_speed_ref=-1.0)
         
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InputValidationError):
             PowerLawWind(reference_height=0.0)
     
     def test_wind_increases_with_altitude(self):
@@ -405,7 +406,7 @@ class TestWindModelFactory(unittest.TestCase):
     
     def test_factory_invalid_type(self):
         """Test factory raises error for invalid type."""
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InputValidationError):
             create_wind_model('invalid_model_type')
     
     def test_factory_case_insensitive(self):
