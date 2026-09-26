@@ -253,10 +253,8 @@ class Rocket:
                 ambient_pressure=self.atmosphere.give_pressure(self.state.r_enu[2])
             )
         
-        # Update mass based on engine mass flow
-        if self.engine is not None:
-            mass_flow = self.engine.get_mass_flow()
-            self.state.mass -= mass_flow * dt
+        # Note: Mass is updated through RK4 integration in simulation.step()
+        # Removed separate mass update to avoid double-counting
         
         # Perform integration step
         self.simulation.step(dt)

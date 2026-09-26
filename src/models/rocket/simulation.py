@@ -241,50 +241,69 @@ class RocketSimulation:
         temp_state.w_enu = self._body_to_enu_angular_velocity(w_b, q_enu2b)
         temp_state.mass = mass
         
-        # Create temporary dynamics with updated state
-        temp_dynamics = self._create_temp_dynamics(temp_state)
+        # CRITICAL FIX: Update engine time to match temp_state before calculating forces
+        # This ensures mass_flow and thrust are calculated at the correct time for RK4 intermediate steps
+        old_engine_time = self.dynamics.engine.time
+        old_ambient_pressure = self.dynamics.engine.ambient_pressure
         
-        # Calculate forces and torques
-        forces_b, torques_b = temp_dynamics.calculate_forces()
-        
-        # Calculate gravity in ENU frame
-        g_enu = temp_dynamics.calculate_gravity_enu()
-        
-        # Get mass properties for inertia
-        if self.dynamics.mass_properties is not None:
-            burn_fraction = self.dynamics.mass_properties.get_burn_fraction(mass)
-            inertia_b = self.dynamics.mass_properties.get_inertia(burn_fraction)
-        else:
-            # Default inertia
-            inertia_b = np.array([0.1, 0.1, 0.05])
-        
-        # Calculate accelerations
-        accel_b, alpha_b = temp_dynamics.calculate_accelerations(
-            forces_b, mass, inertia_b, torques_b
-        )
-        
-        # Calculate derivatives
-        # Position: dr/dt = v
-        r_dot = v_enu
-        
-        # Velocity: dv/dt = F/m + g
-        # Convert forces to ENU frame and divide by mass, then add gravity
-        from src.utils.mattools import MatTools as Mat
-        total_force_enu = Mat.q_rot(forces_b, q_enu2b, 1)
-        v_dot = total_force_enu / mass + g_enu
-        
-        # Quaternion: dq/dt = 1/2 * Omega(w) * q
-        w_enu = self._body_to_enu_angular_velocity(w_b, q_enu2b)
-        from src.utils.mattools import MatTools as Mat
-        w_enu_skew4 = Mat.skew4(w_enu)
-        q_dot = 0.5 * w_enu_skew4.dot(q_enu2b)
-        
-        # Angular velocity: dw/dt = alpha (already in body frame)
-        w_dot = alpha_b
-        
-        # Mass: dm/dt = -mass_flow
-        mass_flow = self.dynamics.engine.get_mass_flow()
-        mass_dot = -mass_flow
+        # Save mass_flow before updating engine (to use consistent engine state)
+        # Actually, we need to get mass_flow AFTER updating engine to temp_state.time
+        try:
+            self.dynamics.engine.update(
+                time=temp_state.time,
+                ambient_pressure=self.dynamics.atmosphere.give_pressure(temp_state.r_enu[2])
+            )
+            
+            # Get mass_flow at this intermediate time
+            mass_flow_at_temp_time = self.dynamics.engine.get_mass_flow()
+            
+            # Create temporary dynamics with updated state
+            temp_dynamics = self._create_temp_dynamics(temp_state)
+            
+            # Calculate forces and torques
+            forces_b, torques_b = temp_dynamics.calculate_forces()
+            
+            # Calculate gravity in ENU frame
+            g_enu = temp_dynamics.calculate_gravity_enu()
+            
+            # Get mass properties for inertia
+            if self.dynamics.mass_properties is not None:
+                burn_fraction = self.dynamics.mass_properties.get_burn_fraction(mass)
+                inertia_b = self.dynamics.mass_properties.get_inertia(burn_fraction)
+            else:
+                # Default inertia
+                inertia_b = np.array([0.1, 0.1, 0.05])
+            
+            # Calculate accelerations
+            accel_b, alpha_b = temp_dynamics.calculate_accelerations(
+                forces_b, mass, inertia_b, torques_b
+            )
+            
+            # Calculate derivatives
+            # Position: dr/dt = v
+            r_dot = v_enu
+            
+            # Velocity: dv/dt = F/m + g
+            # Convert forces to ENU frame and divide by mass, then add gravity
+            from src.utils.mattools import MatTools as Mat
+            total_force_enu = Mat.q_rot(forces_b, q_enu2b, 1)
+            v_dot = total_force_enu / mass + g_enu
+            
+            # Quaternion: dq/dt = 1/2 * Omega(w) * q
+            w_enu = self._body_to_enu_angular_velocity(w_b, q_enu2b)
+            from src.utils.mattools import MatTools as Mat
+            w_enu_skew4 = Mat.skew4(w_enu)
+            q_dot = 0.5 * w_enu_skew4.dot(q_enu2b)
+            
+            # Angular velocity: dw/dt = alpha (already in body frame)
+            w_dot = alpha_b
+            
+            # Mass: dm/dt = -mass_flow (use the value saved from the updated engine state)
+            mass_dot = -mass_flow_at_temp_time
+        finally:
+            # Restore original engine state
+            self.dynamics.engine.time = old_engine_time
+            self.dynamics.engine.ambient_pressure = old_ambient_pressure
         
         # Concatenate derivatives
         return np.concatenate([r_dot, v_dot, q_dot, w_dot, np.array([mass_dot])])
@@ -409,7 +428,8 @@ class RocketSimulation:
         Get history data as numpy array.
         
         Args:
-            field: Field name ('times', 'positions', 'velocities', 'masses')
+            field: Field name ('times', 'positions', 'velocities', 'masses', 
+                   'attitudes', 'forces', 'torques')
         
         Returns:
             np.ndarray: Array of historical values
@@ -422,6 +442,12 @@ class RocketSimulation:
             return np.array(self.history.velocities)
         elif field == 'masses':
             return np.array(self.history.masses)
+        elif field == 'attitudes':
+            return np.array(self.history.attitudes)
+        elif field == 'forces':
+            return np.array(self.history.forces)
+        elif field == 'torques':
+            return np.array(self.history.torques)
         else:
             raise ValueError(f"Unknown field: {field}")
     

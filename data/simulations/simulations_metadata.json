@@ -192,5 +192,27 @@
     "drogue_deployment_time": null,
     "drogue_deployment_altitude": null,
     "notes": ""
+  },
+  "sim_20260926_012757_dc95c92c": {
+    "timestamp": "2026-09-26T01:27:58.036164",
+    "rocket": "Agni-1",
+    "location": "El Alamo",
+    "max_altitude": 45.54449283227471,
+    "max_velocity": 1602.7883450244342,
+    "max_range": 182.31726508421463,
+    "max_mach": 4.708109879606464,
+    "max_accel_g": 27.778391354235332,
+    "flight_duration": 210.58100000064144,
+    "temperature": 20.0,
+    "pressure": 101325.0,
+    "parachute_enabled": false,
+    "parachute_deployed": false,
+    "parachute_deployment_time": null,
+    "parachute_deployment_altitude": null,
+    "parachute_deployment_velocity": null,
+    "drogue_deployed": false,
+    "drogue_deployment_time": null,
+    "drogue_deployment_altitude": null,
+    "notes": ""
   }
 }

@@ -9,8 +9,8 @@ __license__ = "MIT"
 
 # Version components for easy access
 VERSION_MAJOR = 2
-VERSION_MINOR = 2
-VERSION_PATCH = 5
+VERSION_MINOR = 3
+VERSION_PATCH = 1
 
 def get_version_string():
     """Get full version string."""

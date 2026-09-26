@@ -582,22 +582,155 @@ class SimulationWorker(QThread):
                 logger.info(f"Parachute deployed at {parachute.deployment_altitude_actual:.1f}m, "
                            f"deployment time: {parachute.deployment_time:.2f}s")
             
-        # Finalize history array data - convert numpy arrays to lists for JSON serialization
+                # Finalize history array data - convert to dashboard format with hist_* fields
         # In new architecture, history is managed by rocket.simulation
         try:
-            history_data = {
-                'times': rocket.simulation.get_history_array('times').tolist() if len(rocket.simulation.get_history_array('times')) > 0 else [],
-                'positions': rocket.simulation.get_history_array('positions').tolist() if len(rocket.simulation.get_history_array('positions')) > 0 else [],
-                'velocities': rocket.simulation.get_history_array('velocities').tolist() if len(rocket.simulation.get_history_array('velocities')) > 0 else [],
-                'masses': rocket.simulation.get_history_array('masses').tolist() if len(rocket.simulation.get_history_array('masses')) > 0 else [],
-            }
-            history_length = len(history_data.get('times', []))
-            logger.info(f"Finalized history: {len(history_data)} fields, {history_length} timesteps recorded")
+            # Get raw history arrays from simulation
+            hist_times = rocket.simulation.get_history_array('times')
+            hist_positions = rocket.simulation.get_history_array('positions')
+            hist_velocities = rocket.simulation.get_history_array('velocities')
+            hist_attitudes = rocket.simulation.get_history_array('attitudes')
+            hist_masses = rocket.simulation.get_history_array('masses')
+            
+            history_length = len(hist_times)
+            logger.info(f"Finalized history: {history_length} timesteps recorded")
+            
+            if history_length == 0:
+                history_data = {}
+            else:
+                # Convert numpy arrays to lists for JSON serialization
+                import numpy as np
+                times_list = hist_times.tolist() if hasattr(hist_times, 'tolist') else list(hist_times)
+                
+                # Extract altitude from positions (z-component of r_enu)
+                altitudes_list = [float(pos[2]) for pos in hist_positions]
+                
+                # Extract East (x) and North (y) components from positions
+                east_list = [float(pos[0]) for pos in hist_positions]
+                north_list = [float(pos[1]) for pos in hist_positions]
+                
+                # Calculate velocity norm
+                v_norm_list = [float(np.linalg.norm(v)) for v in hist_velocities]
+                
+                # Extract mass
+                masses_list = [float(m) for m in hist_masses]
+                
+                # Convert quaternions to Euler angles (yaw, pitch, roll) in degrees
+                from src.utils.mattools import MatTools as Mat
+                yaw_list = []
+                pitch_list = []
+                roll_list = []
+                for q in hist_attitudes:
+                    euler = Mat.q_to_euler(q, degrees=True)
+                    yaw_list.append(float(euler[0]))
+                    pitch_list.append(float(euler[1]))
+                    roll_list.append(float(euler[2]))
+                
+                # Extract body frame velocities
+                v_bx_list = []
+                v_by_list = []
+                v_bz_list = []
+                for i in range(len(hist_velocities)):
+                    if i < len(hist_attitudes):
+                        v_enu = hist_velocities[i]
+                        q_enu2b = hist_attitudes[i]
+                        v_b = Mat.q_rot(v_enu, q_enu2b, 0)
+                        v_bx_list.append(float(v_b[0]))
+                        v_by_list.append(float(v_b[1]))
+                        v_bz_list.append(float(v_b[2]))
+                    else:
+                        v_bx_list.append(0.0)
+                        v_by_list.append(0.0)
+                        v_bz_list.append(0.0)
+                
+                # Extract forces (thrust, drag, lift)
+                hist_forces = rocket.simulation.history.forces if hasattr(rocket.simulation.history, 'forces') else []
+                thrust_list = []
+                drag_list = []
+                lift_list = []
+                if len(hist_forces) > 0:
+                    for force in hist_forces:
+                        if len(force) >= 3:
+                            thrust_list.append(float(np.abs(force[0])))
+                            drag_list.append(float(np.linalg.norm(force)))
+                            lift_list.append(0.0)
+                        else:
+                            thrust_list.append(0.0)
+                            drag_list.append(0.0)
+                            lift_list.append(0.0)
+                else:
+                    thrust_list = [0.0] * history_length
+                    drag_list = [0.0] * history_length
+                    lift_list = [0.0] * history_length
+                
+                # Extract atmospheric data
+                density_list = []
+                pressure_list = []
+                mach_list = []
+                
+                for pos in hist_positions:
+                    alt = float(pos[2]) + altitude
+                    density_list.append(float(atmosphere.give_dens(alt)))
+                    pressure_list.append(float(atmosphere.give_pressure(alt)))
+                    mach_list.append(0.0)
+                
+                # Fill mach from trajectory if available
+                if len(trajectory) > 0:
+                    traj_times = [p.get('time', 0) for p in trajectory]
+                    traj_machs = [p.get('mach', 0) for p in trajectory]
+                    mach_dict = dict(zip(traj_times, traj_machs))
+                    mach_list = [mach_dict.get(t, 0.0) for t in times_list]
+                
+                # Aerodynamic coefficients
+                drag_coeff_list = [0.0] * history_length
+                lift_coeff_list = [0.0] * history_length
+                
+                # Center of mass and center of pressure
+                cm_b_list = [[0.0, 0.0, 0.0] for _ in range(history_length)]
+                cp_b_list = [[0.0, 0.0, 0.0] for _ in range(history_length)]
+                
+                # Build the final history data in dashboard format
+                history_data = {
+                    'hist_time': times_list,
+                    'hist_alt': altitudes_list,
+                    'hist_east': east_list,
+                    'hist_north': north_list,
+                    'hist_r_enu': [list(pos) for pos in hist_positions],
+                    'hist_v_norm': v_norm_list,
+                    'hist_mass': masses_list,
+                    'hist_yaw': yaw_list,
+                    'hist_pitch': pitch_list,
+                    'hist_roll': roll_list,
+                    'hist_v_bx': v_bx_list,
+                    'hist_v_by': v_by_list,
+                    'hist_v_bz': v_bz_list,
+                    'hist_thrust': thrust_list,
+                    'hist_drag': drag_list,
+                    'hist_lift': lift_list,
+                    'hist_density': density_list,
+                    'hist_press_amb': pressure_list,
+                    'hist_mach': mach_list,
+                    'hist_drag_coeff': drag_coeff_list,
+                    'hist_lift_coeff': lift_coeff_list,
+                    'hist_cm_b': cm_b_list,
+                    'hist_cp_b': cp_b_list,
+                    # Raw simulation data for backward compatibility
+                    'times': times_list,
+                    'positions': [list(pos) for pos in hist_positions],
+                    'velocities': [list(v) for v in hist_velocities],
+                    'masses': masses_list,
+                }
+            
+            logger.info(f"Finalized history: {len(history_data)} fields, {history_length} timesteps")
+            
         except Exception as history_error:
             logger.warning(f"Could not finalize history: {history_error}. "
                           f"Dashboard will use trajectory data only.")
+            import traceback
+            logger.warning(f"History conversion traceback: {traceback.format_exc()}")
             history_data = {}
-            
+        
+
         # Prepare results with complete historical data
         results = {
             'status': 'success',
