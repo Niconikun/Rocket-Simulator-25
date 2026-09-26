@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt
 from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
+from src.config import Constants
 from typing import Optional
 from src.utils.location_manager import LocationManager
 from typing import Tuple
@@ -88,8 +89,8 @@ class LocationSettingsWidget(BaseWidget):
         
         return True, ""
     
-    def __init__(self, state: Optional[StateProvider] = None):
-        super().__init__(state=state)
+    def __init__(self, state: Optional[StateProvider] = None, parent=None):
+        super().__init__(state=state, parent=parent)
         self.locations = {}
         self.location_manager = LocationManager()
         self.init_ui()
@@ -138,37 +139,37 @@ class LocationSettingsWidget(BaseWidget):
         # Name
         self.name_edit = QLineEdit()
         self.name_edit.textChanged.connect(
-            lambda v: self.state.set('sim_location', v)
+            lambda v: self.state.set(Constants.StateKeys.SIM_LOCATION, v)
         )
         props_layout.addRow("Location Name:", self.name_edit)
         
         # Latitude
         self.latitude_spinbox = QDoubleSpinBox()
-        self.latitude_spinbox.setRange(-90, 90)
+        self.latitude_spinbox.setRange(Constants.Location.MIN_LATITUDE, Constants.Location.MAX_LATITUDE)
         self.latitude_spinbox.setDecimals(6)
         self.latitude_spinbox.setSuffix(" °")
         self.latitude_spinbox.valueChanged.connect(
-            lambda v: self.state.set('launch_latitude', v)
+            lambda v: self.state.set(Constants.StateKeys.LAUNCH_LATITUDE, v)
         )
         props_layout.addRow("Latitude:", self.latitude_spinbox)
         
         # Longitude
         self.longitude_spinbox = QDoubleSpinBox()
-        self.longitude_spinbox.setRange(-180, 180)
+        self.longitude_spinbox.setRange(Constants.Location.MIN_LONGITUDE, Constants.Location.MAX_LONGITUDE)
         self.longitude_spinbox.setDecimals(6)
         self.longitude_spinbox.setSuffix(" °")
         self.longitude_spinbox.valueChanged.connect(
-            lambda v: self.state.set('launch_longitude', v)
+            lambda v: self.state.set(Constants.StateKeys.LAUNCH_LONGITUDE, v)
         )
         props_layout.addRow("Longitude:", self.longitude_spinbox)
         
         # Elevation
         self.elevation_spinbox = QDoubleSpinBox()
-        self.elevation_spinbox.setRange(-500, 5000)
+        self.elevation_spinbox.setRange(Constants.Environmental.MIN_ELEVATION, Constants.Environmental.MAX_ELEVATION)
         self.elevation_spinbox.setSuffix(" m")
-        self.elevation_spinbox.setValue(self.state.get('launch_elevation', 60.0))
+        self.elevation_spinbox.setValue(self.state.get(Constants.StateKeys.LAUNCH_ELEVATION, Constants.Environmental.DEFAULT_ELEVATION))
         self.elevation_spinbox.valueChanged.connect(
-            lambda v: self.state.set('launch_elevation', v)
+            lambda v: self.state.set(Constants.StateKeys.LAUNCH_ELEVATION, v)
         )
         props_layout.addRow("Elevation:", self.elevation_spinbox)
         
@@ -699,10 +700,10 @@ class LocationSettingsWidget(BaseWidget):
             self.elevation_spinbox.blockSignals(False)
             
             # Update application state
-            self.state.set('sim_location', location_name)
-            self.state.set('launch_latitude', float(location_data['latitude']))
-            self.state.set('launch_longitude', float(location_data['longitude']))
-            self.state.set('launch_elevation', float(location_data['elevation']))
+            self.state.set(Constants.StateKeys.SIM_LOCATION, location_name)
+            self.state.set(Constants.StateKeys.LAUNCH_LATITUDE, float(location_data['latitude']))
+            self.state.set(Constants.StateKeys.LAUNCH_LONGITUDE, float(location_data['longitude']))
+            self.state.set(Constants.StateKeys.LAUNCH_ELEVATION, float(location_data['elevation']))
             
             # Refresh map with new location
             self.refresh_map()

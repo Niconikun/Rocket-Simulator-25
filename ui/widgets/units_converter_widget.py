@@ -103,8 +103,8 @@ class UnitsConverterWidget(BaseWidget):
     - Pressure (Pa, atm, bar, mmHg, psi)
     """
     
-    def __init__(self, state: Optional[StateProvider] = None):
-        super().__init__(state=state)
+    def __init__(self, state: Optional[StateProvider] = None, parent=None):
+        super().__init__(state=state, parent=parent)
         self.init_ui()
     
     def init_ui(self):

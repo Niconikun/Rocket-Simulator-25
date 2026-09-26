@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
+from src.config import Constants
 from typing import Optional
 import logging
 import json
@@ -32,8 +33,8 @@ class ParachuteSettingsWidget(BaseWidget):
     
     parachute_changed = pyqtSignal()
     
-    def __init__(self, state: Optional[StateProvider] = None):
-        super().__init__(state=state)
+    def __init__(self, state: Optional[StateProvider] = None, parent=None):
+        super().__init__(state=state, parent=parent)
         self.parachute_configs = {}
         self.current_parachute = None
         self.init_ui()
@@ -70,7 +71,7 @@ class ParachuteSettingsWidget(BaseWidget):
         
         self.parachute_enabled_check = QCheckBox("Enable Main Parachute Deployment")
         self.parachute_enabled_check.setChecked(
-            self.state.get('parachute_enabled', False)
+            self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False)
         )
         self.parachute_enabled_check.stateChanged.connect(self.on_parachute_enabled)
         enable_layout.addRow(self.parachute_enabled_check)
@@ -86,7 +87,7 @@ class ParachuteSettingsWidget(BaseWidget):
         self.parachute_name = QLineEdit("Standard Round")
         self.parachute_name.editingFinished.connect(
             lambda: [
-                self.state.set('selected_parachute', self.parachute_name.text()),
+                self.state.set(Constants.StateKeys.SELECTED_PARACHUTE, self.parachute_name.text()),
                 self.parachute_changed.emit()
             ]
         )
@@ -95,95 +96,95 @@ class ParachuteSettingsWidget(BaseWidget):
         # Material (must match the enum in data/schemas/parachute.schema.json)
         self.parachute_material = QComboBox()
         self.parachute_material.addItems(['ripstop_nylon', 'silnylon', 'kevlar'])
-        self.parachute_material.setCurrentText(self.state.get('parachute_material', 'ripstop_nylon'))
+        self.parachute_material.setCurrentText(self.state.get(Constants.StateKeys.PARACHUTE_MATERIAL, 'ripstop_nylon'))
         self.parachute_material.currentTextChanged.connect(
-            lambda v: [self.state.set('parachute_material', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.PARACHUTE_MATERIAL, v), self.parachute_changed.emit()]
         )
         deployment_layout.addRow("Material:", self.parachute_material)
 
         # Diameter
         self.parachute_diameter = QDoubleSpinBox()
-        self.parachute_diameter.setRange(0.1, 5.0)
+        self.parachute_diameter.setRange(Constants.Parachute.MIN_PARACHUTE_DIAMETER, Constants.Parachute.MAX_PARACHUTE_DIAMETER)
         self.parachute_diameter.setDecimals(2)
         self.parachute_diameter.setValue(
-            self.state.get('parachute_diameter', 0.6)
+            self.state.get(Constants.StateKeys.PARACHUTE_DIAMETER, 0.6)
         )
         self.parachute_diameter.setSuffix(" m")
         self.parachute_diameter.valueChanged.connect(
-            lambda v: [self.state.set('parachute_diameter', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.PARACHUTE_DIAMETER, v), self.parachute_changed.emit()]
         )
         deployment_layout.addRow("Canopy Diameter:", self.parachute_diameter)
 
         # Packed mass (recovery bay contribution — not yet added to rocket total mass)
         self.parachute_mass = QDoubleSpinBox()
-        self.parachute_mass.setRange(0.0, 50.0)
+        self.parachute_mass.setRange(Constants.Parachute.MIN_PARACHUTE_MASS, Constants.Parachute.MAX_PARACHUTE_MASS)
         self.parachute_mass.setDecimals(3)
-        self.parachute_mass.setValue(self.state.get('parachute_mass', 0.05))
+        self.parachute_mass.setValue(self.state.get(Constants.StateKeys.PARACHUTE_MASS, Constants.Parachute.DEFAULT_PARACHUTE_MASS))
         self.parachute_mass.setSuffix(" kg")
         self.parachute_mass.valueChanged.connect(
-            lambda v: [self.state.set('parachute_mass', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.PARACHUTE_MASS, v), self.parachute_changed.emit()]
         )
         deployment_layout.addRow("Packed Mass:", self.parachute_mass)
 
         # Drag coefficient
         self.parachute_cd = QDoubleSpinBox()
-        self.parachute_cd.setRange(0.5, 2.5)
+        self.parachute_cd.setRange(Constants.Parachute.MIN_PARACHUTE_CD, Constants.Parachute.MAX_PARACHUTE_CD)
         self.parachute_cd.setDecimals(2)
         self.parachute_cd.setSingleStep(0.1)
         self.parachute_cd.setValue(
-            self.state.get('parachute_cd', 1.5)
+            self.state.get(Constants.StateKeys.PARACHUTE_CD, 1.5)
         )
         self.parachute_cd.valueChanged.connect(
-            lambda v: [self.state.set('parachute_cd', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.PARACHUTE_CD, v), self.parachute_changed.emit()]
         )
         deployment_layout.addRow("Drag Coefficient (Cd):", self.parachute_cd)
         
         # Deployment altitude
         self.deployment_altitude = QDoubleSpinBox()
-        self.deployment_altitude.setRange(100, 10000)
+        self.deployment_altitude.setRange(Constants.Parachute.MIN_DEPLOYMENT_ALTITUDE, Constants.Parachute.MAX_DEPLOYMENT_ALTITUDE)
         self.deployment_altitude.setValue(
-            self.state.get('parachute_deployment_altitude', 300.0)
+            self.state.get(Constants.StateKeys.PARACHUTE_DEPLOYMENT_ALTITUDE, 300.0)
         )
         self.deployment_altitude.setSuffix(" m")
         self.deployment_altitude.valueChanged.connect(
-            lambda v: [self.state.set('parachute_deployment_altitude', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.PARACHUTE_DEPLOYMENT_ALTITUDE, v), self.parachute_changed.emit()]
         )
         deployment_layout.addRow("Deployment Altitude (Threshold):", self.deployment_altitude)
         
         # Minimum velocity
         self.min_velocity = QDoubleSpinBox()
-        self.min_velocity.setRange(0, 200)
+        self.min_velocity.setRange(Constants.Parachute.MIN_SAFE_VELOCITY, Constants.Parachute.DEFAULT_MAX_SAFE_VELOCITY * 2)
         self.min_velocity.setValue(
-            self.state.get('parachute_min_velocity', 5.0)
+            self.state.get(Constants.StateKeys.PARACHUTE_MIN_VELOCITY, 5.0)
         )
         self.min_velocity.setSuffix(" m/s")
         self.min_velocity.valueChanged.connect(
-            lambda v: [self.state.set('parachute_min_velocity', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.PARACHUTE_MIN_VELOCITY, v), self.parachute_changed.emit()]
         )
         deployment_layout.addRow("Min Safe Velocity:", self.min_velocity)
         
         # Maximum velocity
         self.max_velocity = QDoubleSpinBox()
-        self.max_velocity.setRange(0, 300)
+        self.max_velocity.setRange(Constants.Parachute.MIN_SAFE_VELOCITY, Constants.Parachute.MAX_SAFE_VELOCITY)
         self.max_velocity.setValue(
-            self.state.get('parachute_max_velocity', 80.0)
+            self.state.get(Constants.StateKeys.PARACHUTE_MAX_VELOCITY, 80.0)
         )
         self.max_velocity.setSuffix(" m/s")
         self.max_velocity.valueChanged.connect(
-            lambda v: [self.state.set('parachute_max_velocity', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.PARACHUTE_MAX_VELOCITY, v), self.parachute_changed.emit()]
         )
         deployment_layout.addRow("Max Safe Velocity:", self.max_velocity)
         
         # Inflation time
         self.inflation_time = QDoubleSpinBox()
-        self.inflation_time.setRange(0.1, 5.0)
+        self.inflation_time.setRange(Constants.Parachute.MIN_PARACHUTE_DIAMETER, Constants.Parachute.MAX_PARACHUTE_DIAMETER)
         self.inflation_time.setDecimals(2)
         self.inflation_time.setSuffix(" s")
         self.inflation_time.setValue(
-            self.state.get('parachute_inflation_time', 0.5)
+            self.state.get(Constants.StateKeys.PARACHUTE_INFLATION_TIME, 0.5)
         )
         self.inflation_time.valueChanged.connect(
-            lambda v: [self.state.set('parachute_inflation_time', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.PARACHUTE_INFLATION_TIME, v), self.parachute_changed.emit()]
         )
         deployment_layout.addRow("Inflation Time:", self.inflation_time)
         
@@ -197,36 +198,36 @@ class ParachuteSettingsWidget(BaseWidget):
         # Enable drogue
         self.drogue_enabled_check = QCheckBox("Enable Drogue Chute")
         self.drogue_enabled_check.setChecked(
-            self.state.get('drogue_enabled', False)
+            self.state.get(Constants.StateKeys.DROGUE_ENABLED, False)
         )
         self.drogue_enabled_check.stateChanged.connect(self.on_drogue_enabled)
         drogue_layout.addRow(self.drogue_enabled_check)
         
         # Drogue diameter
         self.drogue_diameter = QDoubleSpinBox()
-        self.drogue_diameter.setRange(0.1, 2.0)
+        self.drogue_diameter.setRange(Constants.Parachute.MIN_PARACHUTE_MASS, Constants.Parachute.MAX_PARACHUTE_MASS)
         self.drogue_diameter.setDecimals(2)
         self.drogue_diameter.setValue(
-            self.state.get('drogue_diameter', 0.25)
+            self.state.get(Constants.StateKeys.DROGUE_DIAMETER, 0.25)
         )
         self.drogue_diameter.setSuffix(" m")
         self.drogue_diameter.setEnabled(self.drogue_enabled_check.isChecked())
         self.drogue_diameter.valueChanged.connect(
-            lambda v: [self.state.set('drogue_diameter', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.DROGUE_DIAMETER, v), self.parachute_changed.emit()]
         )
         drogue_layout.addRow("Drogue Diameter:", self.drogue_diameter)
         
         # Drogue Cd
         self.drogue_cd = QDoubleSpinBox()
-        self.drogue_cd.setRange(0.5, 2.5)
+        self.drogue_cd.setRange(Constants.Parachute.MIN_PARACHUTE_CD, Constants.Parachute.MAX_PARACHUTE_CD)
         self.drogue_cd.setDecimals(2)
         self.drogue_cd.setSingleStep(0.1)
         self.drogue_cd.setValue(
-            self.state.get('drogue_cd', 1.5)
+            self.state.get(Constants.StateKeys.DROGUE_CD, 1.5)
         )
         self.drogue_cd.setEnabled(self.drogue_enabled_check.isChecked())
         self.drogue_cd.valueChanged.connect(
-            lambda v: [self.state.set('drogue_cd', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.DROGUE_CD, v), self.parachute_changed.emit()]
         )
         drogue_layout.addRow("Drogue Cd:", self.drogue_cd)
         
@@ -234,12 +235,12 @@ class ParachuteSettingsWidget(BaseWidget):
         self.drogue_deployment_altitude = QDoubleSpinBox()
         self.drogue_deployment_altitude.setRange(100, 20000)
         self.drogue_deployment_altitude.setValue(
-            self.state.get('drogue_deployment_altitude', 800.0)
+            self.state.get(Constants.StateKeys.DROGUE_DEPLOYMENT_ALTITUDE, 800.0)
         )
         self.drogue_deployment_altitude.setSuffix(" m")
         self.drogue_deployment_altitude.setEnabled(self.drogue_enabled_check.isChecked())
         self.drogue_deployment_altitude.valueChanged.connect(
-            lambda v: [self.state.set('drogue_deployment_altitude', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.DROGUE_DEPLOYMENT_ALTITUDE, v), self.parachute_changed.emit()]
         )
         drogue_layout.addRow("Drogue Deployment Altitude (Threshold):", self.drogue_deployment_altitude)
 
@@ -247,11 +248,11 @@ class ParachuteSettingsWidget(BaseWidget):
         self.drogue_inflation_time = QDoubleSpinBox()
         self.drogue_inflation_time.setRange(0.05, 2.0)
         self.drogue_inflation_time.setDecimals(2)
-        self.drogue_inflation_time.setValue(self.state.get('drogue_inflation_time', 0.2))
+        self.drogue_inflation_time.setValue(self.state.get(Constants.StateKeys.DROGUE_INFLATION_TIME, 0.2))
         self.drogue_inflation_time.setSuffix(" s")
         self.drogue_inflation_time.setEnabled(self.drogue_enabled_check.isChecked())
         self.drogue_inflation_time.valueChanged.connect(
-            lambda v: [self.state.set('drogue_inflation_time', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.DROGUE_INFLATION_TIME, v), self.parachute_changed.emit()]
         )
         drogue_layout.addRow("Drogue Inflation Time:", self.drogue_inflation_time)
 
@@ -259,11 +260,11 @@ class ParachuteSettingsWidget(BaseWidget):
         self.drogue_mass = QDoubleSpinBox()
         self.drogue_mass.setRange(0.0, 20.0)
         self.drogue_mass.setDecimals(3)
-        self.drogue_mass.setValue(self.state.get('drogue_mass', 0.03))
+        self.drogue_mass.setValue(self.state.get(Constants.StateKeys.DROGUE_MASS, 0.03))
         self.drogue_mass.setSuffix(" kg")
         self.drogue_mass.setEnabled(self.drogue_enabled_check.isChecked())
         self.drogue_mass.valueChanged.connect(
-            lambda v: [self.state.set('drogue_mass', v), self.parachute_changed.emit()]
+            lambda v: [self.state.set(Constants.StateKeys.DROGUE_MASS, v), self.parachute_changed.emit()]
         )
         drogue_layout.addRow("Drogue Packed Mass:", self.drogue_mass)
 
@@ -381,7 +382,7 @@ class ParachuteSettingsWidget(BaseWidget):
             self.drogue_mass.setValue(drogue.get('mass', 0.03))
             
             # Update app state
-            self.state.set('selected_parachute', config.get('name', 'Unknown'))
+            self.state.set(Constants.StateKeys.SELECTED_PARACHUTE, config.get('name', 'Unknown'))
             self.parachute_enabled_check.setChecked(True)
             
             self.parachute_changed.emit()
@@ -469,7 +470,7 @@ class ParachuteSettingsWidget(BaseWidget):
     def on_parachute_enabled(self, state):
         """Handle parachute enable/disable."""
         enabled = state == Qt.CheckState.Checked
-        self.state.set('parachute_enabled', enabled)
+        self.state.set(Constants.StateKeys.PARACHUTE_ENABLED, enabled)
         self.enable_parachute_controls(enabled)
         self.parachute_changed.emit()
         logger.info(f"Main parachute {'enabled' if enabled else 'disabled'}")
@@ -477,7 +478,7 @@ class ParachuteSettingsWidget(BaseWidget):
     def on_drogue_enabled(self, state):
         """Handle drogue chute enable/disable."""
         enabled = state == Qt.CheckState.Checked
-        self.state.set('drogue_enabled', enabled)
+        self.state.set(Constants.StateKeys.DROGUE_ENABLED, enabled)
         self.drogue_diameter.setEnabled(enabled)
         self.drogue_cd.setEnabled(enabled)
         self.drogue_deployment_altitude.setEnabled(enabled)
@@ -516,7 +517,7 @@ class ParachuteSettingsWidget(BaseWidget):
             import numpy as np
             
             # Get rocket mass from state (you should set this when rocket is loaded)
-            rocket_mass = self.state.get('initial_mass', 1.5)  # Default 1.5 kg
+            rocket_mass = self.state.get(Constants.StateKeys.INITIAL_MASS, 1.5)  # Default 1.5 kg
             
             # Parachute area
             diameter = self.parachute_diameter.value()

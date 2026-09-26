@@ -39,6 +39,7 @@ from src.models.wind import (
 from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
+from src.config import Constants
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -134,7 +135,7 @@ class WindScenarioEditorWidget(BaseWidget):
     scenario_selected = pyqtSignal(dict)
     scenario_saved = pyqtSignal(str)
     
-    def __init__(self, parent=None, state=None):
+    def __init__(self, state=None, parent=None):
         """
         Initialize wind scenario editor.
         
@@ -142,8 +143,7 @@ class WindScenarioEditorWidget(BaseWidget):
             state: ApplicationState instance (optional, for dependency injection)
             parent: Parent widget
         """
-        super().__init__(parent)
-        self.state = state if state is not None else ApplicationState()
+        super().__init__(state=state, parent=parent)
         self.current_scenario = None
         self.scenarios_dir = Path("data/scenarios")
         self.scenarios_dir.mkdir(exist_ok=True)
@@ -905,31 +905,31 @@ class WindScenarioEditorWidget(BaseWidget):
         """Get current custom scenario configuration."""
         return {
             'model_type': self.custom_model_combo.currentText(),
-            'wind_speed': self.custom_speed_spin.value(),
-            'wind_direction': self.custom_direction_spin.value(),
-            'wind_reference_height': self.custom_ref_height_spin.value(),
-            'wind_roughness_length': self.custom_roughness_spin.value(),
-            'wind_exponent': self.custom_exponent_spin.value(),
-            'wind_gust_intensity': self.custom_gust_intensity_spin.value(),
-            'wind_gust_length_scale': self.custom_gust_length_spin.value(),
-            'shear_direction_change': self.custom_shear_angle_spin.value(),
-            'shear_altitude_range': self.custom_shear_range_spin.value(),
-            'vertical_wind': self.custom_vertical_wind_spin.value(),
+            Constants.StateKeys.WIND_SPEED: self.custom_speed_spin.value(),
+            Constants.StateKeys.WIND_DIRECTION: self.custom_direction_spin.value(),
+            Constants.StateKeys.WIND_REFERENCE_HEIGHT: self.custom_ref_height_spin.value(),
+            Constants.StateKeys.WIND_ROUGHNESS_LENGTH: self.custom_roughness_spin.value(),
+            Constants.StateKeys.WIND_EXPONENT: self.custom_exponent_spin.value(),
+            Constants.StateKeys.WIND_GUST_INTENSITY: self.custom_gust_intensity_spin.value(),
+            Constants.StateKeys.WIND_GUST_LENGTH_SCALE: self.custom_gust_length_spin.value(),
+            Constants.StateKeys.SHEAR_DIRECTION_CHANGE: self.custom_shear_angle_spin.value(),
+            Constants.StateKeys.SHEAR_ALTITUDE_RANGE: self.custom_shear_range_spin.value(),
+            Constants.StateKeys.VERTICAL_WIND: self.custom_vertical_wind_spin.value(),
         }
     
     def _populate_custom_from_scenario(self, scenario: dict):
         """Populate custom tab from scenario dict."""
         self.custom_model_combo.setCurrentText(scenario.get('model_type', 'logarithmic'))
-        self.custom_speed_spin.setValue(scenario.get('wind_speed', 5.0))
-        self.custom_direction_spin.setValue(scenario.get('wind_direction', 0.0))
-        self.custom_ref_height_spin.setValue(scenario.get('wind_reference_height', 10.0))
-        self.custom_roughness_spin.setValue(scenario.get('wind_roughness_length', 0.1))
-        self.custom_exponent_spin.setValue(scenario.get('wind_exponent', 0.2))
-        self.custom_gust_intensity_spin.setValue(scenario.get('wind_gust_intensity', 0.1))
-        self.custom_gust_length_spin.setValue(scenario.get('wind_gust_length_scale', 300.0))
-        self.custom_shear_angle_spin.setValue(scenario.get('shear_direction_change', 0.0))
-        self.custom_shear_range_spin.setValue(scenario.get('shear_altitude_range', 1000.0))
-        self.custom_vertical_wind_spin.setValue(scenario.get('vertical_wind', 0.0))
+        self.custom_speed_spin.setValue(scenario.get(Constants.StateKeys.WIND_SPEED, 5.0))
+        self.custom_direction_spin.setValue(scenario.get(Constants.StateKeys.WIND_DIRECTION, 0.0))
+        self.custom_ref_height_spin.setValue(scenario.get(Constants.StateKeys.WIND_REFERENCE_HEIGHT, 10.0))
+        self.custom_roughness_spin.setValue(scenario.get(Constants.StateKeys.WIND_ROUGHNESS_LENGTH, 0.1))
+        self.custom_exponent_spin.setValue(scenario.get(Constants.StateKeys.WIND_EXPONENT, 0.2))
+        self.custom_gust_intensity_spin.setValue(scenario.get(Constants.StateKeys.WIND_GUST_INTENSITY, 0.1))
+        self.custom_gust_length_spin.setValue(scenario.get(Constants.StateKeys.WIND_GUST_LENGTH_SCALE, 300.0))
+        self.custom_shear_angle_spin.setValue(scenario.get(Constants.StateKeys.SHEAR_DIRECTION_CHANGE, 0.0))
+        self.custom_shear_range_spin.setValue(scenario.get(Constants.StateKeys.SHEAR_ALTITUDE_RANGE, 1000.0))
+        self.custom_vertical_wind_spin.setValue(scenario.get(Constants.StateKeys.VERTICAL_WIND, 0.0))
     
     def _display_scenario_details(self, scenario: dict):
         """Display scenario details in table."""
@@ -950,15 +950,15 @@ class WindScenarioEditorWidget(BaseWidget):
     def _apply_scenario(self, scenario: dict):
         """Apply scenario to application state."""
         # Update app state with scenario parameters
-        self.state.set('wind_enabled', True)
-        self.state.set('wind_model_type', scenario.get('model_type', 'logarithmic'))
-        self.state.set('wind_speed', scenario.get('wind_speed', 5.0))
-        self.state.set('wind_direction', scenario.get('wind_direction', 0.0))
-        self.state.set('wind_reference_height', scenario.get('wind_reference_height', 10.0))
-        self.state.set('wind_roughness_length', scenario.get('wind_roughness_length', 0.1))
-        self.state.set('wind_exponent', scenario.get('wind_exponent', 0.2))
-        self.state.set('wind_gust_intensity', scenario.get('wind_gust_intensity', 0.1))
-        self.state.set('wind_gust_length_scale', scenario.get('wind_gust_length_scale', 300.0))
+        self.state.set(Constants.StateKeys.WIND_ENABLED, True)
+        self.state.set(Constants.StateKeys.WIND_MODEL_TYPE, scenario.get('model_type', 'logarithmic'))
+        self.state.set(Constants.StateKeys.WIND_SPEED, scenario.get(Constants.StateKeys.WIND_SPEED, 5.0))
+        self.state.set(Constants.StateKeys.WIND_DIRECTION, scenario.get(Constants.StateKeys.WIND_DIRECTION, 0.0))
+        self.state.set(Constants.StateKeys.WIND_REFERENCE_HEIGHT, scenario.get(Constants.StateKeys.WIND_REFERENCE_HEIGHT, 10.0))
+        self.state.set(Constants.StateKeys.WIND_ROUGHNESS_LENGTH, scenario.get(Constants.StateKeys.WIND_ROUGHNESS_LENGTH, 0.1))
+        self.state.set(Constants.StateKeys.WIND_EXPONENT, scenario.get(Constants.StateKeys.WIND_EXPONENT, 0.2))
+        self.state.set(Constants.StateKeys.WIND_GUST_INTENSITY, scenario.get(Constants.StateKeys.WIND_GUST_INTENSITY, 0.1))
+        self.state.set(Constants.StateKeys.WIND_GUST_LENGTH_SCALE, scenario.get(Constants.StateKeys.WIND_GUST_LENGTH_SCALE, 300.0))
         
         self.current_scenario = scenario
         self.scenario_selected.emit(scenario)
@@ -968,17 +968,17 @@ class WindScenarioEditorWidget(BaseWidget):
         """Update custom tab UI from wind settings widget state."""
         try:
             # Get current values from state
-            model_type = self.state.get('wind_model_type', 'logarithmic')
-            wind_speed = self.state.get('wind_speed', 5.0)
-            wind_direction = self.state.get('wind_direction', 0.0)
-            ref_height = self.state.get('wind_reference_height', 10.0)
-            roughness = self.state.get('wind_roughness_length', 0.1)
-            exponent = self.state.get('wind_exponent', 0.2)
-            gust_intensity = self.state.get('wind_gust_intensity', 0.1)
-            gust_length = self.state.get('wind_gust_length_scale', 300.0)
-            shear_angle = self.state.get('shear_direction_change', 0.0)
-            shear_range = self.state.get('shear_altitude_range', 1000.0)
-            vertical_wind = self.state.get('vertical_wind', 0.0)
+            model_type = self.state.get(Constants.StateKeys.WIND_MODEL_TYPE, 'logarithmic')
+            wind_speed = self.state.get(Constants.StateKeys.WIND_SPEED, 5.0)
+            wind_direction = self.state.get(Constants.StateKeys.WIND_DIRECTION, 0.0)
+            ref_height = self.state.get(Constants.StateKeys.WIND_REFERENCE_HEIGHT, 10.0)
+            roughness = self.state.get(Constants.StateKeys.WIND_ROUGHNESS_LENGTH, 0.1)
+            exponent = self.state.get(Constants.StateKeys.WIND_EXPONENT, 0.2)
+            gust_intensity = self.state.get(Constants.StateKeys.WIND_GUST_INTENSITY, 0.1)
+            gust_length = self.state.get(Constants.StateKeys.WIND_GUST_LENGTH_SCALE, 300.0)
+            shear_angle = self.state.get(Constants.StateKeys.SHEAR_DIRECTION_CHANGE, 0.0)
+            shear_range = self.state.get(Constants.StateKeys.SHEAR_ALTITUDE_RANGE, 1000.0)
+            vertical_wind = self.state.get(Constants.StateKeys.VERTICAL_WIND, 0.0)
             
             # Update UI without triggering signals
             self.custom_model_combo.blockSignals(True)

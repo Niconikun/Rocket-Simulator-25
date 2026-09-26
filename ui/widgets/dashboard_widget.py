@@ -7,12 +7,11 @@ from PyQt6.QtWidgets import (
     QHeaderView, QApplication
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QPalette
-from ui.widgets import BaseWidget
+from PyQt6.QtGui import QColor, QPalette, QCloseEvent
 from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
-from src.models.state import StateProvider
+from src.config import Constants
 from typing import Optional
 from src.utils.simulation_manager import SimulationManager
 import logging
@@ -70,13 +69,18 @@ class DashboardWidget(BaseWidget):
     - Comparison analysis
     """
     
-    def __init__(self, state: Optional[StateProvider] = None):
-        super().__init__(state=state)
+    def __init__(self, state: Optional[StateProvider] = None, parent=None):
+        super().__init__(state=state, parent=parent)
         self.sim_manager = SimulationManager()
         self.current_sim_id = None
         self._active_figures = []  # matplotlib Figures tracked for explicit plt.close()
         self.init_ui()
         self.load_simulation_history()
+    
+    def closeEvent(self, event: QCloseEvent):
+        """Clean up matplotlib figures when widget is closed."""
+        self._close_active_figures()
+        super().closeEvent(event)
     
     def init_ui(self):
         """Initialize the dashboard UI."""
@@ -359,6 +363,9 @@ class DashboardWidget(BaseWidget):
         # Populate parachute summary
         self._populate_parachute_summary(sim_data, metadata)
         
+        # Close previous figures to prevent memory leaks
+        self._close_active_figures()
+        
         # Generate charts and maps from simulation data
         self.generate_performance_charts(sim_data)
         self.generate_trajectory_maps(sim_data, metadata)
@@ -450,7 +457,7 @@ class DashboardWidget(BaseWidget):
                 if parachute_info and parachute_info.get('drogue_deployed', False):
                     events.append(("🪂 Drogue Deploy",
                                   parachute_info.get('drogue_deployment_time', 0),
-                                  parachute_info.get('drogue_deployment_altitude', 0),
+                                  parachute_info.get(Constants.StateKeys.DROGUE_DEPLOYMENT_ALTITUDE, 0),
                                   0))
                 
                 # Event 7: Landing (last data point)
@@ -476,7 +483,7 @@ class DashboardWidget(BaseWidget):
         metrics = sim_data.get('metrics', {}) if isinstance(sim_data, dict) else {}
         
         has_parachute = bool(
-            metadata.get('parachute_enabled', False) or
+            metadata.get(Constants.StateKeys.PARACHUTE_ENABLED, False) or
             (parachute_info and parachute_info.get('deployed', False))
         )
         
@@ -486,7 +493,7 @@ class DashboardWidget(BaseWidget):
             return
         
         deploy_alt = (parachute_info.get('deployment_altitude', 0) or
-                     metrics.get('parachute_deployment_altitude', 0))
+                     metrics.get(Constants.StateKeys.PARACHUTE_DEPLOYMENT_ALTITUDE, 0))
         deploy_vel = (parachute_info.get('deployment_velocity', 0) or
                      metrics.get('parachute_deployment_velocity', 0))
         deploy_time = (parachute_info.get('deployment_time', 0) or
@@ -1169,9 +1176,9 @@ class DashboardWidget(BaseWidget):
     
     def _resolve_launch_coords(self, metadata: dict) -> tuple:
         """Return (lat, lon, azimuth) from metadata, falling back to launch_sites.json."""
-        lat = metadata.get('launch_latitude')
-        lon = metadata.get('launch_longitude')
-        az  = metadata.get('launch_azimuth')
+        lat = metadata.get(Constants.StateKeys.LAUNCH_LATITUDE)
+        lon = metadata.get(Constants.StateKeys.LAUNCH_LONGITUDE)
+        az  = metadata.get(Constants.StateKeys.LAUNCH_AZIMUTH)
 
         # Missing or exactly zero may mean old simulation without coords saved
         if not lat and not lon:

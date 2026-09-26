@@ -24,6 +24,7 @@ from scipy.stats import chi2
 from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
+from src.config import Constants
 from typing import Optional
 from src.utils.simulation_manager import SimulationManager
 from src.utils.monte_carlo_aggregator import MonteCarloAggregator
@@ -137,9 +138,9 @@ class MonteCarloWidget(BaseWidget):
         run_form = QFormLayout(run_group)
 
         self.runs_spinbox = QSpinBox()
-        self.runs_spinbox.setRange(2, 10000)
-        self.runs_spinbox.setValue(self.state.get('monte_carlo_runs', 100))
-        self.runs_spinbox.valueChanged.connect(lambda v: self.state.set('monte_carlo_runs', v))
+        self.runs_spinbox.setRange(Constants.MonteCarlo.MIN_MONTE_CARLO_RUNS, Constants.MonteCarlo.MAX_MONTE_CARLO_RUNS)
+        self.runs_spinbox.setValue(self.state.get(Constants.StateKeys.MONTE_CARLO_RUNS, Constants.MonteCarlo.DEFAULT_MONTE_CARLO_RUNS))
+        self.runs_spinbox.valueChanged.connect(lambda v: self.state.set(Constants.StateKeys.MONTE_CARLO_RUNS, v))
         run_form.addRow("Number of Runs:", self.runs_spinbox)
 
         self.seed_spinbox = QSpinBox()
@@ -151,9 +152,9 @@ class MonteCarloWidget(BaseWidget):
         self.workers_spinbox = QSpinBox()
         self.workers_spinbox.setRange(1, max(1, os.cpu_count() or 1))
         self.workers_spinbox.setValue(
-            self.state.get('monte_carlo_workers', max(1, (os.cpu_count() or 1) - 1))
+            self.state.get(Constants.StateKeys.MONTE_CARLO_WORKERS, max(1, (os.cpu_count() or 1) - 1))
         )
-        self.workers_spinbox.valueChanged.connect(lambda v: self.state.set('monte_carlo_workers', v))
+        self.workers_spinbox.valueChanged.connect(lambda v: self.state.set(Constants.StateKeys.MONTE_CARLO_WORKERS, v))
         run_form.addRow("Parallel Workers (processes):", self.workers_spinbox)
 
         layout.addWidget(run_group)
@@ -303,15 +304,15 @@ class MonteCarloWidget(BaseWidget):
 
     def _refresh_mode_labels(self):
         """Reflect the currently configured descent mode and wind model."""
-        parachute_on = self.state.get('parachute_enabled', False)
+        parachute_on = self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False)
         mode_txt = "Parachute descent" if parachute_on else "Ballistic (no parachute)"
-        if parachute_on and self.state.get('drogue_enabled', False):
+        if parachute_on and self.state.get(Constants.StateKeys.DROGUE_ENABLED, False):
             mode_txt += " + drogue"
         self.cfg_mode_label.setText(mode_txt)
 
-        if self.state.get('wind_enabled', False):
-            speed = self.state.get('wind_speed_ref', self.state.get('wind_speed', 0.0))
-            direction = self.state.get('wind_direction', 0.0)
+        if self.state.get(Constants.StateKeys.WIND_ENABLED, False):
+            speed = self.state.get(Constants.StateKeys.WIND_SPEED_REF, self.state.get(Constants.StateKeys.WIND_SPEED, 0.0))
+            direction = self.state.get(Constants.StateKeys.WIND_DIRECTION, 0.0)
             self.cfg_wind_label.setText(f"Enabled — {speed:.1f} m/s from {direction:.0f}°")
         else:
             self.cfg_wind_label.setText("Disabled")
@@ -352,48 +353,48 @@ class MonteCarloWidget(BaseWidget):
         from src.utils.monte_carlo_sampler import ParameterConfig
         extra: dict = {}
 
-        elev = float(self.state.get('launch_elevation_angle', 85.0))
-        extra['launch_elevation_angle'] = ParameterConfig(
+        elev = float(self.state.get(Constants.StateKeys.LAUNCH_ELEVATION_ANGLE, 85.0))
+        extra[Constants.StateKeys.LAUNCH_ELEVATION_ANGLE] = ParameterConfig(
             'truncated_normal', nominal=elev,
             sigma=self.sigma_elev.value(), low=5.0, high=90.0)
 
-        az = float(self.state.get('launch_azimuth', 0.0))
-        extra['launch_azimuth'] = ParameterConfig(
+        az = float(self.state.get(Constants.StateKeys.LAUNCH_AZIMUTH, 0.0))
+        extra[Constants.StateKeys.LAUNCH_AZIMUTH] = ParameterConfig(
             'truncated_normal', nominal=az,
             sigma=self.sigma_az.value(), low=0.0, high=360.0)
 
-        temp = float(self.state.get('average_temperature', 20.0))
-        extra['average_temperature'] = ParameterConfig(
+        temp = float(self.state.get(Constants.StateKeys.AVERAGE_TEMPERATURE, 20.0))
+        extra[Constants.StateKeys.AVERAGE_TEMPERATURE] = ParameterConfig(
             'normal', nominal=temp,
             sigma=self.sigma_temp.value(), low=-50.0, high=55.0)
 
-        if self.state.get('wind_enabled', False):
-            ws = float(self.state.get('wind_speed_ref', 5.0))
-            extra['wind_speed_ref'] = ParameterConfig(
+        if self.state.get(Constants.StateKeys.WIND_ENABLED, False):
+            ws = float(self.state.get(Constants.StateKeys.WIND_SPEED_REF, 5.0))
+            extra[Constants.StateKeys.WIND_SPEED_REF] = ParameterConfig(
                 'truncated_normal', nominal=ws,
                 sigma=self.sigma_wind.value(), low=0.0)
-            wd = float(self.state.get('wind_direction', 180.0))
-            extra['wind_direction'] = ParameterConfig(
+            wd = float(self.state.get(Constants.StateKeys.WIND_DIRECTION, 180.0))
+            extra[Constants.StateKeys.WIND_DIRECTION] = ParameterConfig(
                 'truncated_normal', nominal=wd,
                 sigma=self.sigma_winddir.value(), low=0.0, high=360.0)
 
-        if self.state.get('parachute_enabled', False):
-            pa = float(self.state.get('parachute_deployment_altitude', 300.0))
-            extra['parachute_deployment_altitude'] = ParameterConfig(
+        if self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False):
+            pa = float(self.state.get(Constants.StateKeys.PARACHUTE_DEPLOYMENT_ALTITUDE, 300.0))
+            extra[Constants.StateKeys.PARACHUTE_DEPLOYMENT_ALTITUDE] = ParameterConfig(
                 'truncated_normal', nominal=pa,
                 sigma=self.sigma_para_alt.value(), low=50.0)
-            pc = float(self.state.get('parachute_cd', 1.5))
-            extra['parachute_cd'] = ParameterConfig(
+            pc = float(self.state.get(Constants.StateKeys.PARACHUTE_CD, 1.5))
+            extra[Constants.StateKeys.PARACHUTE_CD] = ParameterConfig(
                 'truncated_normal', nominal=pc,
                 sigma=self.sigma_para_cd.value(), low=0.5)
 
-            if self.state.get('drogue_enabled', False):
-                da = float(self.state.get('drogue_deployment_altitude', 800.0))
-                extra['drogue_deployment_altitude'] = ParameterConfig(
+            if self.state.get(Constants.StateKeys.DROGUE_ENABLED, False):
+                da = float(self.state.get(Constants.StateKeys.DROGUE_DEPLOYMENT_ALTITUDE, 800.0))
+                extra[Constants.StateKeys.DROGUE_DEPLOYMENT_ALTITUDE] = ParameterConfig(
                     'truncated_normal', nominal=da,
                     sigma=self.sigma_drogue_alt.value(), low=100.0)
-                dc = float(self.state.get('drogue_cd', 1.5))
-                extra['drogue_cd'] = ParameterConfig(
+                dc = float(self.state.get(Constants.StateKeys.DROGUE_CD, 1.5))
+                extra[Constants.StateKeys.DROGUE_CD] = ParameterConfig(
                     'truncated_normal', nominal=dc,
                     sigma=self.sigma_drogue_cd.value(), low=0.5)
 
@@ -442,7 +443,11 @@ class MonteCarloWidget(BaseWidget):
             self._runner.stop()
         if self._thread and self._thread.isRunning():
             self._thread.quit()
-            self._thread.wait()
+            # Wait with timeout to avoid hanging
+            if not self._thread.wait(5000):
+                logger.warning("Monte Carlo thread did not stop gracefully")
+                self._thread.terminate()
+                self._thread.wait(5000)
         self._accumulated_runs.clear()
         self.progress_bar.setValue(0)
         self.results_table.setRowCount(0)
@@ -478,7 +483,7 @@ class MonteCarloWidget(BaseWidget):
         self.status_label.setText(
             f"Done — {n_ok} successful, {n_fail} failed."
         )
-        self.state.set('monte_carlo_results', summary)
+        self.state.set(Constants.StateKeys.MONTE_CARLO_RESULTS, summary)
 
         if self._accumulated_runs:
             self._populate_stats_table(self._accumulated_runs)
@@ -499,7 +504,11 @@ class MonteCarloWidget(BaseWidget):
         self.stop_button.setEnabled(False)
         if self._thread:
             self._thread.quit()
-            self._thread.wait()
+            # Wait with timeout to avoid hanging
+            if not self._thread.wait(5000):
+                logger.warning("Monte Carlo thread did not stop gracefully")
+                self._thread.terminate()
+                self._thread.wait(5000)
 
     # ------------------------------------------------------------------
     # Stats table
@@ -584,10 +593,10 @@ class MonteCarloWidget(BaseWidget):
         mean_x, mean_y = float(np.mean(ix)), float(np.mean(iy))
         ellipse = agg.dispersion_ellipse(sigma_level=_CONFIDENCE_95_FACTOR)
 
-        lat0 = float(self.state.get('launch_latitude', 0.0))
-        lon0 = float(self.state.get('launch_longitude', 0.0))
+        lat0 = float(self.state.get(Constants.StateKeys.LAUNCH_LATITUDE, 0.0))
+        lon0 = float(self.state.get(Constants.StateKeys.LAUNCH_LONGITUDE, 0.0))
         has_coords = abs(lat0) > 1e-9 or abs(lon0) > 1e-9
-        mode_txt = "Parachute descent" if self.state.get('parachute_enabled', False) else "Ballistic (no parachute)"
+        mode_txt = "Parachute descent" if self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False) else "Ballistic (no parachute)"
 
         if HAS_CARTOPY and has_coords:
             return self._draw_map_landing_zone(fig, ix, iy, mean_x, mean_y, ellipse, lat0, lon0, mode_txt)
@@ -709,13 +718,13 @@ class MonteCarloWidget(BaseWidget):
         ix, iy = agg.impact_arrays()
 
         self.runs_value_label.setText(str(len(ix)))
-        parachute_on = self.state.get('parachute_enabled', False)
+        parachute_on = self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False)
         mode_txt = "Parachute descent" if parachute_on else "Ballistic (no parachute)"
-        if parachute_on and self.state.get('drogue_enabled', False):
+        if parachute_on and self.state.get(Constants.StateKeys.DROGUE_ENABLED, False):
             mode_txt += " + drogue"
         self.mode_value_label.setText(mode_txt)
-        if self.state.get('wind_enabled', False):
-            speed = self.state.get('wind_speed_ref', self.state.get('wind_speed', 0.0))
+        if self.state.get(Constants.StateKeys.WIND_ENABLED, False):
+            speed = self.state.get(Constants.StateKeys.WIND_SPEED_REF, self.state.get(Constants.StateKeys.WIND_SPEED, 0.0))
             self.wind_value_label.setText(f"Enabled ({speed:.1f} m/s)")
         else:
             self.wind_value_label.setText("Disabled")
@@ -733,8 +742,8 @@ class MonteCarloWidget(BaseWidget):
         distance_m = float(np.hypot(mean_x, mean_y))
         bearing_deg = float(np.degrees(np.arctan2(mean_x, mean_y)) % 360)
 
-        lat0 = float(self.state.get('launch_latitude', 0.0))
-        lon0 = float(self.state.get('launch_longitude', 0.0))
+        lat0 = float(self.state.get(Constants.StateKeys.LAUNCH_LATITUDE, 0.0))
+        lon0 = float(self.state.get(Constants.StateKeys.LAUNCH_LONGITUDE, 0.0))
         if abs(lat0) > 1e-9 or abs(lon0) > 1e-9:
             lat_m, lon_m = self._enu_to_latlon(np.array([mean_x]), np.array([mean_y]), lat0, lon0)
             self.landing_point_label.setText(f"{float(lat_m[0]):.5f}°, {float(lon_m[0]):.5f}°")

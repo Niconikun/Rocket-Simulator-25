@@ -10,6 +10,7 @@ from PyQt6.QtGui import QPixmap
 from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
+from src.config import Constants
 from typing import Optional
 import json
 import os
@@ -104,8 +105,8 @@ class RocketSettingsWidget(BaseWidget):
         
         return True, ""
     
-    def __init__(self, state: Optional[StateProvider] = None):
-        super().__init__(state=state)
+    def __init__(self, state: Optional[StateProvider] = None, parent=None):
+        super().__init__(state=state, parent=parent)
         self.rockets = {}
         self.current_rocket = None
         self.thrust_curve_data = None  # Store loaded thrust curve
@@ -967,14 +968,14 @@ class RocketSettingsWidget(BaseWidget):
         if rocket_name in self.rockets:
             self.current_rocket = rocket_name
             self.load_rocket_data(self.rockets[rocket_name])
-            self.state.set('selected_rocket', rocket_name)
+            self.state.set(Constants.StateKeys.SELECTED_ROCKET, rocket_name)
     
     def load_rocket_data(self, rocket_data: dict):
         """Load rocket data into UI fields."""
         # Basic Properties
         self.name_edit.setText(rocket_data.get('name', ''))
-        self.initial_mass_spinbox.setValue(rocket_data.get('initial_mass', 0.0))
-        self.reference_area_spinbox.setValue(rocket_data.get('reference_area', 0.0))
+        self.initial_mass_spinbox.setValue(rocket_data.get(Constants.StateKeys.INITIAL_MASS, 0.0))
+        self.reference_area_spinbox.setValue(rocket_data.get(Constants.StateKeys.REFERENCE_AREA, 0.0))
         
         # Inertia & CoM - Before Burn
         i_before = rocket_data.get('I_before_burn', {})
@@ -1433,10 +1434,10 @@ class RocketSettingsWidget(BaseWidget):
         
         rocket_data = {
             'name': self.name_edit.text(),
-            'initial_mass': self.initial_mass_spinbox.value(),
+            Constants.StateKeys.INITIAL_MASS: self.initial_mass_spinbox.value(),
             'propellant_mass': self.propellant_mass.value(),
             'dry_mass_kg': round(self.initial_mass_spinbox.value() - self.propellant_mass.value(), 6),
-            'reference_area': self.reference_area_spinbox.value(),
+            Constants.StateKeys.REFERENCE_AREA: self.reference_area_spinbox.value(),
             'I_before_burn': {
                 'x': self.i_before_x.value(),
                 'y': self.i_before_y.value(),
@@ -1666,7 +1667,7 @@ class RocketSettingsWidget(BaseWidget):
 
             bb = result["bounding_box"]
             details = (
-                f"Reference Area : {result['reference_area']:.6f} m²\n"
+                f"Reference Area : {result[Constants.StateKeys.REFERENCE_AREA]:.6f} m²\n"
                 f"Ixx (axial)    : {inertia['x']:.6f} kg·m²\n"
                 f"Iyy (pitch)    : {inertia['y']:.6f} kg·m²\n"
                 f"Izz (yaw)      : {inertia['z']:.6f} kg·m²\n"
@@ -1844,10 +1845,10 @@ class RocketSettingsWidget(BaseWidget):
         """
         return {
             'name': self.name_edit.text(),
-            'initial_mass': self.initial_mass_spinbox.value(),
+            Constants.StateKeys.INITIAL_MASS: self.initial_mass_spinbox.value(),
             'propellant_mass': self.propellant_mass.value(),
             'dry_mass_kg': round(self.initial_mass_spinbox.value() - self.propellant_mass.value(), 6),
-            'reference_area': self.reference_area_spinbox.value(),
+            Constants.StateKeys.REFERENCE_AREA: self.reference_area_spinbox.value(),
             'I_before_burn': {
                 'x': self.i_before_x.value(),
                 'y': self.i_before_y.value(),

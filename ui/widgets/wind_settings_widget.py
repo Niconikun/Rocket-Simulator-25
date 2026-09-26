@@ -17,6 +17,7 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from typing import Optional
+from src.config import Constants
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
 from typing import Tuple
 import logging
@@ -56,9 +57,9 @@ class WindSettingsWidget(BaseWidget):
             return False, f"Invalid wind model: {model_type}"
         
         try:
-            wind_speed = float(params.get('wind_speed', 0))
-            wind_dir = float(params.get('wind_direction', 0))
-            ref_height = float(params.get('wind_reference_height', 10))
+            wind_speed = float(params.get(Constants.StateKeys.WIND_SPEED, 0))
+            wind_dir = float(params.get(Constants.StateKeys.WIND_DIRECTION, 0))
+            ref_height = float(params.get(Constants.StateKeys.WIND_REFERENCE_HEIGHT, 10))
         except (TypeError, ValueError):
             return False, "Wind parameters must be numeric"
         
@@ -77,18 +78,18 @@ class WindSettingsWidget(BaseWidget):
         
         # Model-specific validation
         if model_type in ['logarithmic', 'power_law']:
-            roughness = float(params.get('wind_roughness_length', 0.1))
+            roughness = float(params.get(Constants.StateKeys.WIND_ROUGHNESS_LENGTH, 0.1))
             if roughness < 0.001 or roughness > 10:
                 return False, "Roughness length should be in [0.001, 10] m"
         
         if model_type == 'power_law':
-            exponent = float(params.get('wind_exponent', 0.2))
+            exponent = float(params.get(Constants.StateKeys.WIND_EXPONENT, 0.2))
             if not (0.05 <= exponent <= 0.5):
                 return False, "Power law exponent should be in [0.05, 0.5]"
         
         if model_type == 'gust':
-            intensity = float(params.get('wind_gust_intensity', 0.1))
-            length = float(params.get('wind_gust_length_scale', 300))
+            intensity = float(params.get(Constants.StateKeys.WIND_GUST_INTENSITY, 0.1))
+            length = float(params.get(Constants.StateKeys.WIND_GUST_LENGTH_SCALE, 300))
             if not (0 <= intensity <= 1):
                 return False, "Gust intensity must be in [0, 1]"
             if length < 10 or length > 10000:
@@ -96,8 +97,8 @@ class WindSettingsWidget(BaseWidget):
         
         return True, ""
     
-    def __init__(self, state: Optional[StateProvider] = None):
-        super().__init__(state=state)
+    def __init__(self, state: Optional[StateProvider] = None, parent=None):
+        super().__init__(state=state, parent=parent)
         self.wind_model = None
         self.init_ui()
         self.load_wind_settings()
@@ -111,7 +112,7 @@ class WindSettingsWidget(BaseWidget):
         control_layout = QFormLayout()
         
         self.wind_enabled_check = QCheckBox("Enable Wind Simulation")
-        self.wind_enabled_check.setChecked(self.state.get('wind_enabled', False))
+        self.wind_enabled_check.setChecked(self.state.get(Constants.StateKeys.WIND_ENABLED, False))
         self.wind_enabled_check.stateChanged.connect(self.on_wind_enabled_changed)
         control_layout.addRow(self.wind_enabled_check)
         
@@ -130,7 +131,7 @@ class WindSettingsWidget(BaseWidget):
             'power_law',
             'gust'
         ])
-        self.wind_model_combo.setCurrentText(self.state.get('wind_model_type', 'logarithmic'))
+        self.wind_model_combo.setCurrentText(self.state.get(Constants.StateKeys.WIND_MODEL_TYPE, 'logarithmic'))
         self.wind_model_combo.currentTextChanged.connect(self.on_wind_model_changed)
         model_layout.addRow("Model Type:", self.wind_model_combo)
         
@@ -176,8 +177,8 @@ class WindSettingsWidget(BaseWidget):
         
         # Wind speed
         self.wind_speed_spin = QDoubleSpinBox()
-        self.wind_speed_spin.setRange(0.0, 50.0)
-        self.wind_speed_spin.setValue(self.state.get('wind_speed', 0.0))
+        self.wind_speed_spin.setRange(Constants.Wind.MIN_WIND_SPEED, Constants.Wind.MAX_WIND_SPEED)
+        self.wind_speed_spin.setValue(self.state.get(Constants.StateKeys.WIND_SPEED, Constants.Wind.DEFAULT_WIND_SPEED))
         self.wind_speed_spin.setSuffix(" m/s")
         self.wind_speed_spin.setSingleStep(0.5)
         self.wind_speed_spin.valueChanged.connect(self.on_parameter_changed)
@@ -185,8 +186,8 @@ class WindSettingsWidget(BaseWidget):
         
         # Wind direction (FROM)
         self.wind_direction_spin = QDoubleSpinBox()
-        self.wind_direction_spin.setRange(0.0, 360.0)
-        self.wind_direction_spin.setValue(self.state.get('wind_direction', 0.0))
+        self.wind_direction_spin.setRange(Constants.Wind.MIN_WIND_DIRECTION, Constants.Wind.MAX_WIND_DIRECTION)
+        self.wind_direction_spin.setValue(self.state.get(Constants.StateKeys.WIND_DIRECTION, Constants.Wind.DEFAULT_WIND_DIRECTION))
         self.wind_direction_spin.setSuffix("°")
         self.wind_direction_spin.setSingleStep(1.0)
         self.wind_direction_spin.valueChanged.connect(self.on_parameter_changed)
@@ -194,8 +195,8 @@ class WindSettingsWidget(BaseWidget):
         
         # Reference height (for wind profiles)
         self.wind_ref_height_spin = QDoubleSpinBox()
-        self.wind_ref_height_spin.setRange(0.1, 1000.0)
-        self.wind_ref_height_spin.setValue(self.state.get('wind_reference_height', 10.0))
+        self.wind_ref_height_spin.setRange(Constants.Wind.MIN_REFERENCE_HEIGHT, Constants.Wind.MAX_REFERENCE_HEIGHT)
+        self.wind_ref_height_spin.setValue(self.state.get(Constants.StateKeys.WIND_REFERENCE_HEIGHT, Constants.Wind.DEFAULT_REFERENCE_HEIGHT))
         self.wind_ref_height_spin.setSuffix(" m")
         self.wind_ref_height_spin.setSingleStep(1.0)
         self.wind_ref_height_spin.valueChanged.connect(self.on_parameter_changed)
@@ -211,8 +212,8 @@ class WindSettingsWidget(BaseWidget):
         
         # Logarithmic/Power Law: Roughness length or exponent
         self.wind_roughness_spin = QDoubleSpinBox()
-        self.wind_roughness_spin.setRange(0.001, 10.0)
-        self.wind_roughness_spin.setValue(self.state.get('wind_roughness_length', 0.1))
+        self.wind_roughness_spin.setRange(Constants.Wind.MIN_ROUGHNESS, Constants.Wind.MAX_ROUGHNESS)
+        self.wind_roughness_spin.setValue(self.state.get(Constants.StateKeys.WIND_ROUGHNESS_LENGTH, Constants.Wind.DEFAULT_ROUGHNESS))
         self.wind_roughness_spin.setSuffix(" m")
         self.wind_roughness_spin.setSingleStep(0.01)
         self.wind_roughness_spin.valueChanged.connect(self.on_parameter_changed)
@@ -221,8 +222,8 @@ class WindSettingsWidget(BaseWidget):
         
         # Power law exponent
         self.wind_exponent_spin = QDoubleSpinBox()
-        self.wind_exponent_spin.setRange(0.05, 0.5)
-        self.wind_exponent_spin.setValue(self.state.get('wind_exponent', 0.2))
+        self.wind_exponent_spin.setRange(Constants.Wind.MIN_POWER_LAW_EXPONENT, Constants.Wind.MAX_POWER_LAW_EXPONENT)
+        self.wind_exponent_spin.setValue(self.state.get(Constants.StateKeys.WIND_EXPONENT, Constants.Wind.DEFAULT_POWER_LAW_EXPONENT))
         self.wind_exponent_spin.setSingleStep(0.01)
         self.exponent_label = QLabel("Power Law Exponent (α):")
         layout.addRow(self.exponent_label, self.wind_exponent_spin)
@@ -230,16 +231,16 @@ class WindSettingsWidget(BaseWidget):
         
         # Gust parameters
         self.wind_gust_intensity_spin = QDoubleSpinBox()
-        self.wind_gust_intensity_spin.setRange(0.0, 1.0)
-        self.wind_gust_intensity_spin.setValue(self.state.get('wind_gust_intensity', 0.1))
+        self.wind_gust_intensity_spin.setRange(Constants.Wind.MIN_GUST_INTENSITY, Constants.Wind.MAX_GUST_INTENSITY)
+        self.wind_gust_intensity_spin.setValue(self.state.get(Constants.StateKeys.WIND_GUST_INTENSITY, Constants.Wind.DEFAULT_GUST_INTENSITY))
         self.wind_gust_intensity_spin.setSingleStep(0.05)
         self.gust_intensity_label = QLabel("Gust Intensity (I_u):")
         layout.addRow(self.gust_intensity_label, self.wind_gust_intensity_spin)
         self.wind_gust_intensity_spin.valueChanged.connect(self.on_parameter_changed)
         
         self.wind_gust_length_spin = QDoubleSpinBox()
-        self.wind_gust_length_spin.setRange(10.0, 10000.0)
-        self.wind_gust_length_spin.setValue(self.state.get('wind_gust_length_scale', 300.0))
+        self.wind_gust_length_spin.setRange(Constants.Wind.MIN_GUST_LENGTH, Constants.Wind.MAX_GUST_LENGTH)
+        self.wind_gust_length_spin.setValue(self.state.get(Constants.StateKeys.WIND_GUST_LENGTH_SCALE, Constants.Wind.DEFAULT_GUST_LENGTH))
         self.wind_gust_length_spin.setSuffix(" m")
         self.wind_gust_length_spin.setSingleStep(10.0)
         self.gust_length_label = QLabel("Gust Length Scale (L_u):")
@@ -300,15 +301,15 @@ class WindSettingsWidget(BaseWidget):
         """
         try:
             # Update UI with current state values
-            self.wind_enabled_check.setChecked(self.state.get('wind_enabled', False))
-            self.wind_model_combo.setCurrentText(self.state.get('wind_model_type', 'logarithmic'))
-            self.wind_speed_spin.setValue(self.state.get('wind_speed', 0.0))
-            self.wind_direction_spin.setValue(self.state.get('wind_direction', 0.0))
-            self.wind_ref_height_spin.setValue(self.state.get('wind_reference_height', 10.0))
-            self.wind_roughness_spin.setValue(self.state.get('wind_roughness_length', 0.1))
-            self.wind_exponent_spin.setValue(self.state.get('wind_exponent', 0.2))
-            self.wind_gust_intensity_spin.setValue(self.state.get('wind_gust_intensity', 0.1))
-            self.wind_gust_length_spin.setValue(self.state.get('wind_gust_length_scale', 300.0))
+            self.wind_enabled_check.setChecked(self.state.get(Constants.StateKeys.WIND_ENABLED, False))
+            self.wind_model_combo.setCurrentText(self.state.get(Constants.StateKeys.WIND_MODEL_TYPE, 'logarithmic'))
+            self.wind_speed_spin.setValue(self.state.get(Constants.StateKeys.WIND_SPEED, Constants.Wind.DEFAULT_WIND_SPEED))
+            self.wind_direction_spin.setValue(self.state.get(Constants.StateKeys.WIND_DIRECTION, Constants.Wind.DEFAULT_WIND_DIRECTION))
+            self.wind_ref_height_spin.setValue(self.state.get(Constants.StateKeys.WIND_REFERENCE_HEIGHT, Constants.Wind.DEFAULT_REFERENCE_HEIGHT))
+            self.wind_roughness_spin.setValue(self.state.get(Constants.StateKeys.WIND_ROUGHNESS_LENGTH, Constants.Wind.DEFAULT_ROUGHNESS))
+            self.wind_exponent_spin.setValue(self.state.get(Constants.StateKeys.WIND_EXPONENT, Constants.Wind.DEFAULT_POWER_LAW_EXPONENT))
+            self.wind_gust_intensity_spin.setValue(self.state.get(Constants.StateKeys.WIND_GUST_INTENSITY, Constants.Wind.DEFAULT_GUST_INTENSITY))
+            self.wind_gust_length_spin.setValue(self.state.get(Constants.StateKeys.WIND_GUST_LENGTH_SCALE, Constants.Wind.DEFAULT_GUST_LENGTH))
             
             # Update wind model UI
             self.update_wind_model_ui()
@@ -329,7 +330,7 @@ class WindSettingsWidget(BaseWidget):
         wind controls based on checkbox state. Emits wind_changed signal.
         """
         enabled = self.wind_enabled_check.isChecked()
-        self.state.set('wind_enabled', enabled)
+        self.state.set(Constants.StateKeys.WIND_ENABLED, enabled)
         
         # Enable/disable other controls
         self.wind_model_combo.setEnabled(enabled)
@@ -353,7 +354,7 @@ class WindSettingsWidget(BaseWidget):
         Updates ApplicationState wind_model_type. Calls update_wind_model_ui() to
         show/hide model-specific parameters. Emits wind_changed signal.
         """
-        self.state.set('wind_model_type', model_type)
+        self.state.set(Constants.StateKeys.WIND_MODEL_TYPE, model_type)
         self.update_wind_model_ui()
         logger.info(f"Wind model changed to: {model_type}")
         self.wind_changed.emit()
@@ -369,14 +370,14 @@ class WindSettingsWidget(BaseWidget):
         gust intensity, or gust length scale changes.
         """
         # Update state with new values
-        self.state.set('wind_speed', self.wind_speed_spin.value())
-        self.state.set('wind_speed_ref', self.wind_speed_spin.value())
-        self.state.set('wind_direction', self.wind_direction_spin.value())
-        self.state.set('wind_reference_height', self.wind_ref_height_spin.value())
-        self.state.set('wind_roughness_length', self.wind_roughness_spin.value())
-        self.state.set('wind_exponent', self.wind_exponent_spin.value())
-        self.state.set('wind_gust_intensity', self.wind_gust_intensity_spin.value())
-        self.state.set('wind_gust_length_scale', self.wind_gust_length_spin.value())
+        self.state.set(Constants.StateKeys.WIND_SPEED, self.wind_speed_spin.value())
+        self.state.set(Constants.StateKeys.WIND_SPEED_REF, self.wind_speed_spin.value())
+        self.state.set(Constants.StateKeys.WIND_DIRECTION, self.wind_direction_spin.value())
+        self.state.set(Constants.StateKeys.WIND_REFERENCE_HEIGHT, self.wind_ref_height_spin.value())
+        self.state.set(Constants.StateKeys.WIND_ROUGHNESS_LENGTH, self.wind_roughness_spin.value())
+        self.state.set(Constants.StateKeys.WIND_EXPONENT, self.wind_exponent_spin.value())
+        self.state.set(Constants.StateKeys.WIND_GUST_INTENSITY, self.wind_gust_intensity_spin.value())
+        self.state.set(Constants.StateKeys.WIND_GUST_LENGTH_SCALE, self.wind_gust_length_spin.value())
         
         self.wind_changed.emit()
     
@@ -432,17 +433,17 @@ class WindSettingsWidget(BaseWidget):
         try:
             # Validate parameters before creating model
             model_type = self.wind_model_combo.currentText()
-            is_valid, error_msg = self.validate_wind_parameters(model_type, self.state._state)
+            is_valid, error_msg = self.validate_wind_parameters(model_type, self.state.get_all())
             
             if not is_valid:
                 QMessageBox.warning(self, "Parameter Validation Error", error_msg)
                 logger.warning(f"Wind parameter validation failed: {error_msg}")
                 return
             
-            self.wind_model = create_wind_model_from_state(self.state._state)
+            self.wind_model = create_wind_model_from_state(self.state.get_all())
             
             if self.wind_model is not None:
-                log_wind_config(self.state._state, self.wind_model)
+                log_wind_config(self.state.get_all(), self.wind_model)
                 QMessageBox.information(
                     self,
                     "Wind Model Updated",
@@ -479,7 +480,7 @@ class WindSettingsWidget(BaseWidget):
                 return
             
             # Create wind model from current state
-            self.wind_model = create_wind_model_from_state(self.state._state)
+            self.wind_model = create_wind_model_from_state(self.state.get_all())
             if self.wind_model is None:
                 self.wind_table.setRowCount(0)
                 self.wind_info_text.setText("Unable to create wind model with current settings.")
@@ -551,7 +552,7 @@ class WindSettingsWidget(BaseWidget):
                 QMessageBox.information(self, "Wind Info", "Wind simulation is currently disabled.")
                 return
             
-            self.wind_model = create_wind_model_from_state(self.state._state)
+            self.wind_model = create_wind_model_from_state(self.state.get_all())
             if self.wind_model is None:
                 QMessageBox.warning(self, "Wind Info", "Failed to create wind model.")
                 return
