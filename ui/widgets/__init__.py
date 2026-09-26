@@ -5,9 +5,11 @@ Rocket Simulator application.
 """
 
 from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore import pyqtSlot
 from src.models.state import StateProvider
 from src.models.app_state import ApplicationState
-from typing import Optional
+from src.config import tr
+from typing import Optional, Any, Callable
 
 
 class BaseWidget(QWidget):
@@ -45,3 +47,91 @@ class BaseWidget(QWidget):
             state: The StateProvider instance to use
         """
         self.state = state
+    
+    def create_state_setter(self, key: str, emit_signal: Optional[Callable] = None) -> Callable[[Any], None]:
+        """
+        Create a lambda function that sets a state value.
+        
+        This is a helper method to reduce repetitive lambda patterns like:
+            lambda v: self.state.set('key', v)
+        
+        Args:
+            key: The state key to set
+            emit_signal: Optional signal to emit after setting state
+        
+        Returns:
+            A callable that sets the state value and optionally emits a signal
+        
+        Usage:
+            self.spinbox.valueChanged.connect(
+                self.create_state_setter(Constants.StateKeys.SIM_RUNTIME)
+            )
+            
+            # With signal emission
+            self.spinbox.valueChanged.connect(
+                self.create_state_setter(Constants.StateKeys.WIND_SPEED, self.wind_changed.emit)
+            )
+        """
+        def setter(value: Any) -> None:
+            self.state.set(key, value)
+            if emit_signal is not None:
+                emit_signal()
+        return setter
+    
+    def create_state_setter_with_emit(self, key: str, signal: Callable) -> Callable[[Any], None]:
+        """
+        Create a lambda function that sets a state value and emits a signal.
+        
+        Convenience method when you always want to emit a signal after setting state.
+        
+        Args:
+            key: The state key to set
+            signal: The signal to emit (e.g., self.changed, self.wind_changed.emit)
+        
+        Returns:
+            A callable that sets the state value and emits the signal
+        
+        Usage:
+            self.spinbox.valueChanged.connect(
+                self.create_state_setter_with_emit(Constants.StateKeys.WIND_SPEED, self.wind_changed.emit)
+            )
+        """
+        def setter(value: Any) -> None:
+            self.state.set(key, value)
+            signal()
+        return setter
+    
+    def get_state_value(self, key: str, default: Any = None) -> Any:
+        """
+        Get a value from state with a default.
+        
+        Convenience wrapper around self.state.get().
+        
+        Args:
+            key: The state key to get
+            default: Default value if key doesn't exist
+        
+        Returns:
+            The value from state or default
+        """
+        return self.state.get(key, default)
+    
+    @staticmethod
+    def tr(text: str, context: Optional[str] = None) -> str:
+        """
+        Translate a string using the application's translation system.
+        
+        This is a static method that wraps the global tr() function.
+        
+        Args:
+            text: The text to translate
+            context: Optional context for disambiguation
+        
+        Returns:
+            The translated string
+        
+        Usage:
+            label = QLabel(self.tr("Simulation Parameters"))
+            button = QPushButton(self.tr("Run Simulation"))
+        """
+        return tr(text, context)
