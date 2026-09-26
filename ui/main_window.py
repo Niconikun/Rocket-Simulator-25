@@ -13,6 +13,7 @@ from PyQt6.QtGui import QIcon, QAction, QPalette, QColor
 from models.app_state import ApplicationState
 import logging
 from src.models.state import StateProvider, StateProxy
+from src.config import Constants, TranslationManager, tr, SUPPORTED_LANGUAGES
 from typing import Optional
 import sys
 
@@ -37,16 +38,21 @@ class MainWindow(QMainWindow):
         # Use provided state or fall back to singleton (Phase 3: Dependency Injection)
         self.state = state if state is not None else ApplicationState.get_instance()
         self._app = QApplication.instance()  # Store reference to application
+        
+        # Initialize translation system
+        TranslationManager.initialize(self._app)
+        
         self.init_ui()
         self.setup_menu_bar()
         self.setup_status_bar()
+        self._setup_keyboard_shortcuts()
         
         # Apply theme based on state (after UI is initialized)
         self._apply_theme_from_state()
     
     def _apply_theme_from_state(self):
         """Apply theme based on saved state."""
-        dark_mode = self.state.get('dark_mode_enabled', True)
+        dark_mode = self.state.get(Constants.StateKeys.DARK_MODE_ENABLED, True)
         self.dark_mode_action.setChecked(dark_mode)
         if dark_mode:
             self._apply_dark_theme_to_app()
@@ -57,7 +63,7 @@ class MainWindow(QMainWindow):
     
     def init_ui(self):
         """Initialize the user interface."""
-        self.setWindowTitle("Rocket Simulator Pro")
+        self.setWindowTitle(tr("Rocket Simulator Pro"))
         self.setWindowIcon(self.create_icon())
         self.setMinimumSize(QSize(1200, 800))
         
@@ -146,57 +152,98 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
         
         # File menu
-        file_menu = menubar.addMenu("File") # type: ignore
+        file_menu = menubar.addMenu(tr("File")) # type: ignore
         
-        new_sim_action = QAction("New Simulation", self)
+        new_sim_action = QAction(tr("New Simulation"), self)
+        new_sim_action.setShortcut("Ctrl+N")
+        new_sim_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         new_sim_action.triggered.connect(self.new_simulation)
         file_menu.addAction(new_sim_action) # type: ignore
         
-        open_action = QAction("Open Configuration...", self)
+        open_action = QAction(tr("Open Configuration..."), self)
+        open_action.setShortcut("Ctrl+O")
+        open_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         open_action.triggered.connect(self.open_configuration)
         file_menu.addAction(open_action) # type: ignore
         
-        save_action = QAction("Save Configuration...", self)
+        save_action = QAction(tr("Save Configuration..."), self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         save_action.triggered.connect(self.save_configuration)
         file_menu.addAction(save_action) # type: ignore
         
         file_menu.addSeparator() # type: ignore
         
-        exit_action = QAction("Exit", self)
+        exit_action = QAction(tr("Exit"), self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         exit_action.triggered.connect(self.close_application)
         file_menu.addAction(exit_action) # type: ignore
         
         # Edit menu
-        edit_menu = menubar.addMenu("Edit") # type: ignore
+        edit_menu = menubar.addMenu(tr("Edit")) # type: ignore
         
-        reset_action = QAction("Reset to Defaults", self)
+        reset_action = QAction(tr("Reset to Defaults"), self)
+        reset_action.setShortcut("Ctrl+R")
+        reset_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         reset_action.triggered.connect(self.reset_to_defaults)
         edit_menu.addAction(reset_action) # type: ignore
         
         # View menu
-        view_menu = menubar.addMenu("View") # type: ignore
+        view_menu = menubar.addMenu(tr("View")) # type: ignore
         
         # Dark mode toggle
-        self.dark_mode_action = QAction("Dark Mode", self)
+        self.dark_mode_action = QAction(tr("Dark Mode"), self)
         self.dark_mode_action.setCheckable(True)
+        self.dark_mode_action.setShortcut("Ctrl+Shift+T")
+        self.dark_mode_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         self.dark_mode_action.setChecked(True)  # Start with dark mode
         self.dark_mode_action.triggered.connect(self.toggle_dark_mode)
         view_menu.addAction(self.dark_mode_action) # type: ignore
         
-        # Help menu
-        help_menu = menubar.addMenu("Help") # type: ignore
+        # Language menu
+        language_menu = menubar.addMenu(tr("Language")) # type: ignore
         
-        about_action = QAction("About", self)
+        # Create language actions
+        self.language_actions = {}
+        for lang_code, lang_name in SUPPORTED_LANGUAGES.items():
+            action = QAction(lang_name, self)
+            action.setCheckable(True)
+            action.setData(lang_code)
+            action.triggered.connect(self.change_language)
+            language_menu.addAction(action) # type: ignore
+            self.language_actions[lang_code] = action
+        
+        # Set current language
+        current_lang = TranslationManager.get_current_language()
+        if current_lang in self.language_actions:
+            self.language_actions[current_lang].setChecked(True)
+        
+        # Help menu
+        help_menu = menubar.addMenu(tr("Help")) # type: ignore
+        
+        about_action = QAction(tr("About"), self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action) # type: ignore
     
     def setup_status_bar(self):
         """Setup application status bar."""
-        self.statusBar().showMessage("Ready") # type: ignore
+        self.statusBar().showMessage(tr("Ready")) # type: ignore
+    
+    def _setup_keyboard_shortcuts(self):
+        """Setup global keyboard shortcuts for the main window."""
+        # Tab navigation shortcuts
+        # These will be handled by the tab widget itself
+        # Ctrl+Tab and Ctrl+Shift+Tab work by default in QTabWidget
+        
+        # Additional shortcuts can be added here
+        # Example: Ctrl+Shift+S for quick save
+        # Example: F5 for refresh
+        pass
     
     def on_tab_changed(self, index: int):
         """Handle tab change events."""
-        self.state.set('current_tab', index)
+        self.state.set(Constants.StateKeys.CURRENT_TAB, index)
         logger.info(f"Switched to tab {index}")
     
     def on_wind_settings_changed(self):
@@ -290,9 +337,48 @@ class MainWindow(QMainWindow):
             self.setStyleSheet(self._get_light_stylesheet())
         
         # Save preference in state
-        self.state.set('dark_mode_enabled', checked)
+        self.state.set(Constants.StateKeys.DARK_MODE_ENABLED, checked)
         self.statusBar().showMessage(f"Dark mode {'enabled' if checked else 'disabled'}") # pyright: ignore[reportOptionalMemberAccess]
     
+    def change_language(self):
+        """Change the application language."""
+        action = self.sender()
+        if action is None:
+            return
+        
+        lang_code = action.data()
+        if lang_code is None:
+            return
+        
+        # Load the translation
+        TranslationManager.load_translation(lang_code)
+        
+        # Update checked state
+        for code, act in self.language_actions.items():
+            act.setChecked(code == lang_code)
+        
+        # Save language preference in state
+        self.state.set(Constants.StateKeys.CURRENT_LANGUAGE, lang_code)
+        
+        # Refresh UI - retranslate all UI elements
+        self._retranslate_ui()
+        
+        # Show message in status bar
+        self.statusBar().showMessage(tr("Language changed to ") + SUPPORTED_LANGUAGES.get(lang_code, lang_code)) # pyright: ignore[reportOptionalMemberAccess]
+        logger.info(f"Language changed to: {lang_code}")
+    
+    def _retranslate_ui(self):
+        """Retranslate all UI elements after language change."""
+        # Retranslate window title
+        self.setWindowTitle(tr("Rocket Simulator Pro"))
+        
+        # Retranslate status bar
+        self.statusBar().showMessage(tr("Ready")) # type: ignore[reportOptionalMemberAccess]
+        
+        # Note: For full UI retranslation, widgets would need to be recreated
+        # or implement a retranslateUi() method in each widget
+        # For now, the tr() function uses fallback translations which work immediately
+        
     def _apply_dark_theme_to_app(self):
         """Apply dark theme palette to the entire application."""
         if self._app is None:
