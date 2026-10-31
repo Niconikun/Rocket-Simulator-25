@@ -167,7 +167,17 @@ class Rocket:
             atmosphere = Atmosphere(15.0)  # Default: 15°C at sea level
         self.atmosphere = atmosphere
         
-        # Store other dependencies
+        # Validate and ensure required dependencies are non-None
+        if engine is None:
+            raise ValueError("Engine is required. Provide an IEngine implementation.")
+        
+        # If aerodynamics is None, create a simple placeholder
+        # This will be updated later via set_aerodynamics()
+        if aerodynamics is None:
+            from src.models.aerodynamics import Aerodynamics
+            aerodynamics = Aerodynamics()
+        
+        # Store other dependencies (now engine and aerodynamics are guaranteed non-None)
         self.engine = engine
         self.aerodynamics = aerodynamics
         self.mass_properties = mass_properties
@@ -179,25 +189,15 @@ class Rocket:
         # Validate mass_properties consistency if provided
         if mass_properties is not None:
             # Check that initial mass is consistent with mass_properties
-            mass_before = mass_properties.mass_before
+            # Use get_mass(0) to get initial mass from any IMassProperties implementation
+            mass_before = mass_properties.get_mass(0.0)
             if abs(initial_mass - mass_before) > 0.001:  # Allow small floating point tolerance
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(
-                    f"Initial mass ({initial_mass} kg) differs from mass_properties.mass_before "
+                    f"Initial mass ({initial_mass} kg) differs from mass_properties initial mass "
                     f"({mass_before} kg). Using initial_mass from constructor."
                 )
-        
-        # Create dynamics (requires engine, aerodynamics is optional)
-        if engine is None:
-            raise ValueError("Engine is required. Provide an IEngine implementation.")
-        
-        # If aerodynamics is None, create a simple placeholder
-        # This will be updated later via set_aerodynamics()
-        if aerodynamics is None:
-            from src.models.aerodynamics import Aerodynamics
-            aerodynamics = Aerodynamics()
-            self.aerodynamics = aerodynamics
         
         # Create dynamics calculator
         self.dynamics = RocketDynamics(
@@ -228,30 +228,33 @@ class Rocket:
         Args:
             dt: Time step size [s]
         """
+        # Get current altitude as Python float for all downstream calculations
+        altitude = float(self.state.r_enu[2])
+        
         # Update wind from wind model if available
         if self.wind_model is not None:
             # Get wind vector at current altitude
-            altitude = self.state.r_enu[2]
             self.wind_vector_enu = self.wind_model.get_wind_vector(altitude)
             # Update wind model time
             self.wind_model.update(dt)
         
         # Update parachute if available
-        if self.parachute is not None:
-            velocity_magnitude = np.linalg.norm(self.state.v_enu)
-            density = self.atmosphere.give_dens(self.state.r_enu[2])
-            self.parachute.update(velocity_magnitude, self.state.r_enu[2], density)
+        parachute = self.parachute
+        if parachute is not None:
+            velocity_magnitude = float(np.linalg.norm(self.state.v_enu))
+            density = float(self.atmosphere.give_dens(altitude))
+            parachute.update(velocity_magnitude, altitude, density)
         
         # Update environment
         self.dynamics.update_environment(wind_vector_enu=self.wind_vector_enu)
-        self.dynamics.update_atmosphere(self.state.r_enu[2])
+        self.dynamics.update_atmosphere(altitude)
         
         # Update engine state BEFORE integration to get current thrust/mass flow
-        if self.engine is not None:
-            self.engine.update(
-                time=self.state.time,
-                ambient_pressure=self.atmosphere.give_pressure(self.state.r_enu[2])
-            )
+        # engine is guaranteed to be non-None by __init__ validation
+        self.engine.update(
+            time=self.state.time,
+            ambient_pressure=self.atmosphere.give_pressure(altitude)
+        )
         
         # Note: Mass is updated through RK4 integration in simulation.step()
         # Removed separate mass update to avoid double-counting

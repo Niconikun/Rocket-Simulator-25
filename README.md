@@ -104,6 +104,20 @@ python main.py
 3. Ejecutar la simulación desde **Simulation**
 4. Analizar resultados en **Results** o ejecutar Monte Carlo en **Monte Carlo**
 
+## Arquitectura
+
+El proyecto utiliza un **Event Bus** para la comunicación desacoplada entre widgets y componentes. Este sistema permite que diferentes partes de la aplicación se comuniquen sin dependencias directas, utilizando el patrón Pub/Sub.
+
+- **EventBus**: Singleton que gestiona suscripciones y publicación de eventos
+- **EventType**: Enum con tipos de eventos estandarizados (simulación, configuración, cohete, ubicación, viento, paracaídas, Monte Carlo, UI)
+- **subscribe()**: Suscribir un callback a un tipo de evento
+- **unsubscribe()**: Eliminar un callback de un tipo de evento
+- **publish()**: Publicar un evento con datos a todos los suscriptores
+
+El Event Bus utiliza referencias débiles (weak references) para los suscriptores, evitando fugas de memoria. Los eventos son thread-safe gracias a que internamente usa señales de PyQt6.
+
+**Documentación completa**: [EVENT_BUS.md](docs/EVENT_BUS.md)
+
 ## Estructura del Proyecto
 
 ```
@@ -113,6 +127,7 @@ Rocket-Simulator---GUI/
 ├── src/
 │   ├── models/                      # Modelos físicos (aerodinámica, atmósfera, motor, paracaídas...)
 │   └── utils/
+│       ├── event_bus.py             # Event Bus para comunicación desacoplada
 │       ├── monte_carlo_sampler.py   # Distribuciones y muestreo MC
 │       ├── monte_carlo_aggregator.py# Estadísticas y figuras post-MC
 │       ├── ork_importer.py          # Importador OpenRocket .ork

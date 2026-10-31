@@ -14,7 +14,7 @@ from models.app_state import ApplicationState
 import logging
 from src.models.state import StateProvider, StateProxy
 from src.config import Constants, TranslationManager, tr, SUPPORTED_LANGUAGES
-from typing import Optional
+from typing import Optional, cast
 import sys
 
 logger = logging.getLogger(__name__)
@@ -114,19 +114,19 @@ class MainWindow(QMainWindow):
         
         # Connect widget signals for wind updates
         self.wind_widget.wind_changed.connect(self.on_wind_settings_changed)
-        self.simulation_widget.status_message.connect(self.statusBar().showMessage) # pyright: ignore[reportOptionalMemberAccess]
+        self.simulation_widget.status_message.connect(cast(QStatusBar, self.statusBar()).showMessage)
         
         # Connect wind scenario editor signals
         self.wind_scenario_editor_widget.scenario_selected.connect(
             self.wind_widget.load_wind_settings
         )
         self.wind_scenario_editor_widget.scenario_selected.connect(
-            lambda scenario: self.statusBar().showMessage( # pyright: ignore[reportOptionalMemberAccess]
+            lambda scenario: cast(QStatusBar, self.statusBar()).showMessage(
                 f"Wind scenario applied: {scenario.get('model_type', 'unknown')}"
             )
         )
         self.wind_scenario_editor_widget.scenario_saved.connect(
-            lambda name: self.statusBar().showMessage(f"Scenario '{name}' saved") # pyright: ignore[reportOptionalMemberAccess]
+            lambda name: cast(QStatusBar, self.statusBar()).showMessage(f"Scenario '{name}' saved")
         )
         
         # Set up two-way sync between wind widgets
@@ -149,48 +149,48 @@ class MainWindow(QMainWindow):
     
     def setup_menu_bar(self):
         """Setup application menu bar."""
-        menubar = self.menuBar()
+        menubar = cast(QMenuBar, self.menuBar())
         
         # File menu
-        file_menu = menubar.addMenu(tr("File")) # type: ignore
+        file_menu = cast(QMenu, menubar.addMenu(tr("File")))
         
         new_sim_action = QAction(tr("New Simulation"), self)
         new_sim_action.setShortcut("Ctrl+N")
         new_sim_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         new_sim_action.triggered.connect(self.new_simulation)
-        file_menu.addAction(new_sim_action) # type: ignore
+        file_menu.addAction(new_sim_action)
         
         open_action = QAction(tr("Open Configuration..."), self)
         open_action.setShortcut("Ctrl+O")
         open_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         open_action.triggered.connect(self.open_configuration)
-        file_menu.addAction(open_action) # type: ignore
+        file_menu.addAction(open_action)
         
         save_action = QAction(tr("Save Configuration..."), self)
         save_action.setShortcut("Ctrl+S")
         save_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         save_action.triggered.connect(self.save_configuration)
-        file_menu.addAction(save_action) # type: ignore
+        file_menu.addAction(save_action)
         
-        file_menu.addSeparator() # type: ignore
+        file_menu.addSeparator()
         
         exit_action = QAction(tr("Exit"), self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         exit_action.triggered.connect(self.close_application)
-        file_menu.addAction(exit_action) # type: ignore
+        file_menu.addAction(exit_action)
         
         # Edit menu
-        edit_menu = menubar.addMenu(tr("Edit")) # type: ignore
+        edit_menu = cast(QMenu, menubar.addMenu(tr("Edit")))
         
         reset_action = QAction(tr("Reset to Defaults"), self)
         reset_action.setShortcut("Ctrl+R")
         reset_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         reset_action.triggered.connect(self.reset_to_defaults)
-        edit_menu.addAction(reset_action) # type: ignore
+        edit_menu.addAction(reset_action)
         
         # View menu
-        view_menu = menubar.addMenu(tr("View")) # type: ignore
+        view_menu = cast(QMenu, menubar.addMenu(tr("View")))
         
         # Dark mode toggle
         self.dark_mode_action = QAction(tr("Dark Mode"), self)
@@ -199,10 +199,10 @@ class MainWindow(QMainWindow):
         self.dark_mode_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         self.dark_mode_action.setChecked(True)  # Start with dark mode
         self.dark_mode_action.triggered.connect(self.toggle_dark_mode)
-        view_menu.addAction(self.dark_mode_action) # type: ignore
+        view_menu.addAction(self.dark_mode_action)
         
         # Language menu
-        language_menu = menubar.addMenu(tr("Language")) # type: ignore
+        language_menu = cast(QMenu, menubar.addMenu(tr("Language")))
         
         # Create language actions
         self.language_actions = {}
@@ -211,7 +211,7 @@ class MainWindow(QMainWindow):
             action.setCheckable(True)
             action.setData(lang_code)
             action.triggered.connect(self.change_language)
-            language_menu.addAction(action) # type: ignore
+            language_menu.addAction(action)
             self.language_actions[lang_code] = action
         
         # Set current language
@@ -220,15 +220,15 @@ class MainWindow(QMainWindow):
             self.language_actions[current_lang].setChecked(True)
         
         # Help menu
-        help_menu = menubar.addMenu(tr("Help")) # type: ignore
+        help_menu = cast(QMenu, menubar.addMenu(tr("Help")))
         
         about_action = QAction(tr("About"), self)
         about_action.triggered.connect(self.show_about)
-        help_menu.addAction(about_action) # type: ignore
+        help_menu.addAction(about_action)
     
     def setup_status_bar(self):
         """Setup application status bar."""
-        self.statusBar().showMessage(tr("Ready")) # type: ignore
+        cast(QStatusBar, self.statusBar()).showMessage(tr("Ready"))
     
     def _setup_keyboard_shortcuts(self):
         """Setup global keyboard shortcuts for the main window."""
@@ -259,7 +259,7 @@ class MainWindow(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.state.reset()
-            self.statusBar().showMessage("New simulation created") # pyright: ignore[reportOptionalMemberAccess]
+            cast(QStatusBar, self.statusBar()).showMessage("New simulation created")
     
     def open_configuration(self):
         """Open a saved configuration file."""
@@ -269,7 +269,7 @@ class MainWindow(QMainWindow):
         )
         if filepath:
             if self.state.load_from_file(filepath):
-                self.statusBar().showMessage(f"Configuration loaded from {filepath}") # pyright: ignore[reportOptionalMemberAccess]
+                cast(QStatusBar, self.statusBar()).showMessage(f"Configuration loaded from {filepath}")
             else:
                 QMessageBox.critical(self, "Error", "Failed to load configuration")
     
@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
         )
         if filepath:
             if self.state.save_to_file(filepath):
-                self.statusBar().showMessage(f"Configuration saved to {filepath}") # pyright: ignore[reportOptionalMemberAccess]
+                cast(QStatusBar, self.statusBar()).showMessage(f"Configuration saved to {filepath}")
             else:
                 QMessageBox.critical(self, "Error", "Failed to save configuration")
     
@@ -294,7 +294,7 @@ class MainWindow(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.state.reset()
-            self.statusBar().showMessage("All parameters reset to defaults") # pyright: ignore[reportOptionalMemberAccess]
+            cast(QStatusBar, self.statusBar()).showMessage("All parameters reset to defaults")
     
     def show_about(self):
         """Show about dialog."""
@@ -311,7 +311,7 @@ class MainWindow(QMainWindow):
         """Close the application."""
         self.close()
     
-    def toggle_dark_mode(self, checked: bool = None):  # type: ignore
+    def toggle_dark_mode(self, checked: Optional[bool] = None):
         """Toggle dark mode on/off.
         
         Args:
@@ -338,7 +338,7 @@ class MainWindow(QMainWindow):
         
         # Save preference in state
         self.state.set(Constants.StateKeys.DARK_MODE_ENABLED, checked)
-        self.statusBar().showMessage(f"Dark mode {'enabled' if checked else 'disabled'}") # pyright: ignore[reportOptionalMemberAccess]
+        cast(QStatusBar, self.statusBar()).showMessage(f"Dark mode {'enabled' if checked else 'disabled'}")
     
     def change_language(self):
         """Change the application language."""
@@ -346,7 +346,7 @@ class MainWindow(QMainWindow):
         if action is None:
             return
         
-        lang_code = action.data()
+        lang_code = cast(QAction, action).data()
         if lang_code is None:
             return
         
@@ -364,7 +364,7 @@ class MainWindow(QMainWindow):
         self._retranslate_ui()
         
         # Show message in status bar
-        self.statusBar().showMessage(tr("Language changed to ") + SUPPORTED_LANGUAGES.get(lang_code, lang_code)) # pyright: ignore[reportOptionalMemberAccess]
+        cast(QStatusBar, self.statusBar()).showMessage(f"{tr('Language changed to ')}{SUPPORTED_LANGUAGES.get(lang_code, lang_code)}")
         logger.info(f"Language changed to: {lang_code}")
     
     def _retranslate_ui(self):
@@ -373,7 +373,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(tr("Rocket Simulator Pro"))
         
         # Retranslate status bar
-        self.statusBar().showMessage(tr("Ready")) # type: ignore[reportOptionalMemberAccess]
+        cast(QStatusBar, self.statusBar()).showMessage(tr("Ready"))
         
         # Note: For full UI retranslation, widgets would need to be recreated
         # or implement a retranslateUi() method in each widget
@@ -411,7 +411,7 @@ class MainWindow(QMainWindow):
         dark_palette.setColor(QPalette.ColorRole.Link, QColor(50, 150, 255))
         dark_palette.setColor(QPalette.ColorRole.LinkVisited, QColor(200, 100, 255))
         
-        self._app.setPalette(dark_palette) # type: ignore
+        cast(QApplication, self._app).setPalette(dark_palette)
     
     def _apply_light_theme_to_app(self):
         """Apply light theme palette to the entire application."""
@@ -445,7 +445,7 @@ class MainWindow(QMainWindow):
         # Placeholder text (for disabled state)
         light_palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(150, 150, 150))
         
-        self._app.setPalette(light_palette) # type: ignore
+        cast(QApplication, self._app).setPalette(light_palette)
     
     def _apply_dark_theme(self):
         """Apply dark theme to this window only (legacy)."""

@@ -92,6 +92,36 @@ class StateProvider(ABC):
         """
         pass
     
+    def load_from_file(self, filepath: str = None) -> bool:
+        """
+        Load state from a JSON file.
+        
+        Args:
+            filepath: Path to load file.
+        
+        Returns:
+            True if successful, False otherwise
+            
+        Default implementation returns False (not supported).
+        Override in implementations that support persistence.
+        """
+        return False
+    
+    def save_to_file(self, filepath: str = None) -> bool:
+        """
+        Save state to a JSON file.
+        
+        Args:
+            filepath: Path to save file.
+        
+        Returns:
+            True if successful, False otherwise
+            
+        Default implementation returns False (not supported).
+        Override in implementations that support persistence.
+        """
+        return False
+    
     # Optional methods with default implementations
     
     def set_multiple(self, updates: Dict[str, Any]) -> None:

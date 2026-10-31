@@ -91,7 +91,7 @@ class WindModel(ABC):
             float: Wind speed magnitude [m/s], always >= 0
         """
         wind_vector = self.get_wind_vector(altitude)
-        return np.linalg.norm(wind_vector[:2])  # Only horizontal components
+        return float(np.linalg.norm(wind_vector[:2]))  # Only horizontal components
     
     def get_wind_direction_at_altitude(self, altitude: float) -> float:
         """
@@ -112,7 +112,7 @@ class WindModel(ABC):
         
         # Convert to direction FROM (opposite direction)
         direction_from = (direction_to + 180.0) % 360.0
-        return direction_from
+        return float(direction_from)
     
     def update(self, dt: float) -> None:
         """
@@ -300,7 +300,7 @@ class LogarithmicWind(WindModel):
         altitude = max(WC.MIN_WIND_SPEED, altitude)
         absolute_height = altitude + self.launch_altitude
         numerator = np.log((absolute_height + self.roughness_length) / self.roughness_length)
-        return self.wind_speed_ref * numerator / self._denominator
+        return float(self.wind_speed_ref * numerator / self._denominator)
     
     def get_info(self) -> dict:
         info = super().get_info()
@@ -429,13 +429,13 @@ class GustWind(WindModel):
         - Hoblit, F. M. (1988). Gust loads on aircraft: concepts and applications
     """
     
-    def __init__(self, base_wind_model: WindModel = None, gust_intensity: float = WC.DEFAULT_GUST_INTENSITY,
-                 gust_length_scale: float = WC.DEFAULT_GUST_LENGTH_SCALE, random_seed: int = None):
+    def __init__(self, base_wind_model: Optional[WindModel] = None, gust_intensity: float = WC.DEFAULT_GUST_INTENSITY,
+                 gust_length_scale: float = WC.DEFAULT_GUST_LENGTH_SCALE, random_seed: Optional[int] = None):
         """
         Initialize gust wind model with Dryden spectrum filtering.
         
         Args:
-            base_wind_model (WindModel): Base wind profile (constant or log)
+            base_wind_model (Optional[WindModel]): Base wind profile (constant or log)
             gust_intensity (float): Turbulence intensity [0-1] (std dev / mean wind)
             gust_length_scale (float): Integral length scale L [m]
                 - 200-400m typical for low altitude (<600m)

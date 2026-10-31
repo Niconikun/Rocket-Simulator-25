@@ -371,6 +371,12 @@ class RocketBuilder:
         """
         self._validate()
         
+        # After validation, we know these are not None - use assertions to satisfy type checker
+        assert self._r_enu_0 is not None
+        assert self._v_enu_0 is not None
+        assert self._q_enu2b_0 is not None
+        assert self._w_enu_0 is not None
+        
         # Create atmosphere if not provided
         atmosphere = self._atmosphere
         if atmosphere is None:

@@ -243,36 +243,42 @@ class RocketState:
     def w_b(self) -> np.ndarray:
         """Angular velocity in body frame [rad/s]"""
         self._ensure_cache()
+        assert self._w_b is not None
         return self._w_b.copy()
     
     @property
     def v_norm(self) -> float:
         """Velocity magnitude [m/s]"""
         self._ensure_cache()
+        assert self._v_norm is not None
         return self._v_norm
     
     @property
     def v_b(self) -> np.ndarray:
         """Velocity in body frame [m/s]"""
         self._ensure_cache()
+        assert self._v_b is not None
         return self._v_b.copy()
     
     @property
     def yaw(self) -> float:
         """Yaw angle [deg]"""
         self._ensure_cache()
+        assert self._yaw is not None
         return self._yaw
     
     @property
     def pitch(self) -> float:
         """Pitch angle [deg]"""
         self._ensure_cache()
+        assert self._pitch is not None
         return self._pitch
     
     @property
     def roll(self) -> float:
         """Roll angle [deg]"""
         self._ensure_cache()
+        assert self._roll is not None
         return self._roll
     
     # ------------------------------------------------------------------
