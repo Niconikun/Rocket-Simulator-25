@@ -102,11 +102,11 @@ class RocketDynamics:
         self.parachute = parachute
         
         # Initialize derived values
-        self._dynamic_pressure: Optional[float] = None
-        self._mach: Optional[float] = None
-        self._alpha: Optional[float] = None
-        self._density: Optional[float] = None
-        self._v_sonic: Optional[float] = None
+        self._dynamic_pressure: float = 0.0
+        self._mach: float = 0.0
+        self._alpha: float = 0.0
+        self._density: float = 0.0
+        self._v_sonic: float = 0.0
         
         # Force/torque results (cached)
         self._forces_aero_b: Optional[np.ndarray] = None
@@ -146,8 +146,10 @@ class RocketDynamics:
         Args:
             altitude: Current altitude [m]
         """
-        self._density = self.atmosphere.give_dens(altitude)
-        self._v_sonic = self.atmosphere.give_v_sonic(altitude)
+        density = self.atmosphere.give_dens(altitude)
+        v_sonic = self.atmosphere.give_v_sonic(altitude)
+        self._density = float(density) if density is not None else 0.0
+        self._v_sonic = float(v_sonic) if v_sonic is not None else 0.0
         self._invalidate_cache()
     
     # ------------------------------------------------------------------
@@ -411,8 +413,10 @@ class RocketDynamics:
         
         # Update atmosphere
         altitude = self.state.r_enu[2]
-        self._density = self.atmosphere.give_dens(altitude)
-        self._v_sonic = self.atmosphere.give_v_sonic(altitude)
+        density = self.atmosphere.give_dens(altitude)
+        v_sonic = self.atmosphere.give_v_sonic(altitude)
+        self._density = float(density) if density is not None else 0.0
+        self._v_sonic = float(v_sonic) if v_sonic is not None else 0.0
         
         # Calculate Mach number
         if self._v_sonic > 0 and v_rel_norm > 0:
@@ -485,19 +489,19 @@ class RocketDynamics:
     def mach(self) -> float:
         """Current Mach number [-]"""
         self._ensure_cache()
-        return self._mach if self._mach is not None else 0.0
+        return self._mach
     
     @property
     def alpha(self) -> float:
         """Current angle of attack [deg]"""
         self._ensure_cache()
-        return self._alpha if self._alpha is not None else 0.0
+        return self._alpha
     
     @property
     def dynamic_pressure(self) -> float:
         """Current dynamic pressure [Pa]"""
         self._ensure_cache()
-        return self._dynamic_pressure if self._dynamic_pressure is not None else 0.0
+        return self._dynamic_pressure
 
 
 __all__ = ['RocketDynamics']
