@@ -357,12 +357,22 @@ class SimulationWidget(BaseWidget):
             self.pause_button.setText(tr("⏸️ Pause"))
             self.status_message.emit(tr("Simulation resumed"))
             logger.info("Simulation resumed from GUI")
+            
+            # Publish resumed event
+            publish(EventType.SIMULATION_RESUMED, {
+                "timestamp": datetime.now().isoformat()
+            })
         else:
             self.simulation_worker.pause()
             self.simulation_paused = True
             self.pause_button.setText(tr("▶️ Resume"))
             self.status_message.emit(tr("Simulation paused"))
             logger.info("Simulation paused from GUI")
+            
+            # Publish paused event
+            publish(EventType.SIMULATION_PAUSED, {
+                "timestamp": datetime.now().isoformat()
+            })
 
     def stop_simulation(self):
         """Request graceful stop for the active simulation."""
@@ -374,6 +384,12 @@ class SimulationWidget(BaseWidget):
         self.pause_button.setEnabled(False)
         self.stop_button.setEnabled(False)
         self.pause_button.setText(tr("⏸️ Pause"))
+        
+        # Publish stopped event
+        publish(EventType.SIMULATION_STOPPED, {
+            "timestamp": datetime.now().isoformat()
+        })
+        logger.info("Simulation stopped by user")
 
     def _reset_simulation_controls(self):
         """Restore control states after simulation ends or errors."""

@@ -25,7 +25,7 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
-from src.utils.event_bus import EventType, publish
+from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
 from typing import Optional
 from src.utils.simulation_manager import SimulationManager
 from src.utils.monte_carlo_aggregator import MonteCarloAggregator
@@ -88,6 +88,24 @@ class MonteCarloWidget(BaseWidget):
         self._accumulated_runs: list[dict] = []   # grows as runs complete
         self._landing_canvas: _PlotCanvas | None = None
         self.init_ui()
+        self._setup_event_bus()
+    
+    def _setup_event_bus(self):
+        """Set up event bus subscriptions."""
+        # Subscribe to simulation completed to update configuration display
+        subscribe(EventType.SIMULATION_COMPLETED, self._on_simulation_completed)
+        logger.info("MonteCarloWidget subscribed to SIMULATION_COMPLETED via EventBus")
+    
+    def _on_simulation_completed(self, data: Dict[str, Any]) -> None:
+        """Callback for SIMULATION_COMPLETED event.
+        
+        Updates the current flight configuration display with data from the latest simulation.
+        """
+        results = data.get('results')
+        if results:
+            # Update configuration labels
+            self._refresh_mode_labels()
+            logger.info("MonteCarloWidget: Simulation completed, refreshed configuration display")
 
     # ------------------------------------------------------------------
     # UI construction
@@ -786,4 +804,13 @@ class MonteCarloWidget(BaseWidget):
         else:
             self.ellipse_value_label.setText("N/A (need ≥ 2 runs)")
             self.area_value_label.setText("N/A")
+    
+    def closeEvent(self, event):
+        """Clean up event bus subscriptions when widget is closed."""
+        try:
+            unsubscribe(EventType.SIMULATION_COMPLETED, self._on_simulation_completed)
+            logger.info("MonteCarloWidget unsubscribed from event bus")
+        except Exception as e:
+            logger.warning(f"Error unsubscribing from event bus: {e}")
+        super().closeEvent(event)
 

@@ -11,11 +11,13 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QAction, QPalette, QColor
 from models.app_state import ApplicationState
+from src.utils.event_bus import EventType, publish
 import logging
 from src.models.state import StateProvider, StateProxy
 from src.config import Constants, TranslationManager, tr, SUPPORTED_LANGUAGES
 from typing import Optional, cast
 import sys
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +246,16 @@ class MainWindow(QMainWindow):
     def on_tab_changed(self, index: int):
         """Handle tab change events."""
         self.state.set(Constants.StateKeys.CURRENT_TAB, index)
-        logger.info(f"Switched to tab {index}")
+        tab_name = self.tabs.tabText(index)
+        logger.info(f"Switched to tab {index}: {tab_name}")
+        
+        # Publish tab changed event
+        publish(EventType.TAB_CHANGED, {
+            'index': index,
+            'tab_name': tab_name,
+            'timestamp': datetime.now().isoformat()
+        })
+        logger.debug(f"Published TAB_CHANGED event for: {tab_name}")
     
     def on_wind_settings_changed(self):
         """Handle wind settings changes from the wind widget."""
@@ -270,6 +281,13 @@ class MainWindow(QMainWindow):
         if filepath:
             if self.state.load_from_file(filepath):
                 cast(QStatusBar, self.statusBar()).showMessage(f"Configuration loaded from {filepath}")
+                
+                # Publish configuration loaded event
+                publish(EventType.CONFIGURATION_LOADED, {
+                    'filepath': filepath,
+                    'timestamp': datetime.now().isoformat()
+                })
+                logger.info(f"Published CONFIGURATION_LOADED event for: {filepath}")
             else:
                 QMessageBox.critical(self, "Error", "Failed to load configuration")
     
@@ -282,6 +300,13 @@ class MainWindow(QMainWindow):
         if filepath:
             if self.state.save_to_file(filepath):
                 cast(QStatusBar, self.statusBar()).showMessage(f"Configuration saved to {filepath}")
+                
+                # Publish configuration saved event
+                publish(EventType.CONFIGURATION_SAVED, {
+                    'filepath': filepath,
+                    'timestamp': datetime.now().isoformat()
+                })
+                logger.info(f"Published CONFIGURATION_SAVED event for: {filepath}")
             else:
                 QMessageBox.critical(self, "Error", "Failed to save configuration")
     
@@ -295,6 +320,13 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.StandardButton.Yes:
             self.state.reset()
             cast(QStatusBar, self.statusBar()).showMessage("All parameters reset to defaults")
+            
+            # Publish configuration changed event
+            publish(EventType.CONFIGURATION_CHANGED, {
+                'action': 'reset_to_defaults',
+                'timestamp': datetime.now().isoformat()
+            })
+            logger.info("Published CONFIGURATION_CHANGED event (reset to defaults)")
     
     def show_about(self):
         """Show about dialog."""
@@ -339,6 +371,13 @@ class MainWindow(QMainWindow):
         # Save preference in state
         self.state.set(Constants.StateKeys.DARK_MODE_ENABLED, checked)
         cast(QStatusBar, self.statusBar()).showMessage(f"Dark mode {'enabled' if checked else 'disabled'}")
+        
+        # Publish theme changed event
+        publish(EventType.THEME_CHANGED, {
+            'dark_mode': checked,
+            'timestamp': datetime.now().isoformat()
+        })
+        logger.debug(f"Published THEME_CHANGED event: dark_mode={checked}")
     
     def change_language(self):
         """Change the application language."""
@@ -366,6 +405,14 @@ class MainWindow(QMainWindow):
         # Show message in status bar
         cast(QStatusBar, self.statusBar()).showMessage(f"{tr('Language changed to ')}{SUPPORTED_LANGUAGES.get(lang_code, lang_code)}")
         logger.info(f"Language changed to: {lang_code}")
+        
+        # Publish language changed event
+        publish(EventType.LANGUAGE_CHANGED, {
+            'language_code': lang_code,
+            'language_name': SUPPORTED_LANGUAGES.get(lang_code, lang_code),
+            'timestamp': datetime.now().isoformat()
+        })
+        logger.debug(f"Published LANGUAGE_CHANGED event for: {lang_code}")
     
     def _retranslate_ui(self):
         """Retranslate all UI elements after language change."""
