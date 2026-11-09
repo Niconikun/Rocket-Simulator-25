@@ -14,6 +14,7 @@ from src.models.state import StateProvider
 from src.config import Constants
 from typing import Optional
 from src.utils.simulation_manager import SimulationManager
+from src.utils.event_bus import EventType, subscribe, unsubscribe
 import logging
 logger = logging.getLogger(__name__)
 from datetime import datetime
@@ -75,11 +76,84 @@ class DashboardWidget(BaseWidget):
         self.current_sim_id = None
         self._active_figures = []  # matplotlib Figures tracked for explicit plt.close()
         self.init_ui()
+        self._setup_event_bus()
         self.load_simulation_history()
     
+    def _setup_event_bus(self):
+        """Set up event bus subscriptions for simulation events."""
+        # Subscribe to simulation events
+        subscribe(EventType.SIMULATION_STARTED, self._on_simulation_started)
+        subscribe(EventType.SIMULATION_COMPLETED, self._on_simulation_completed)
+        subscribe(EventType.SIMULATION_ERROR, self._on_simulation_error)
+        logger.info("DashboardWidget subscribed to simulation events via EventBus")
+    
+    def _on_simulation_started(self, data: Dict[str, Any]) -> None:
+        """Callback for SIMULATION_STARTED event."""
+        logger.info(f"Dashboard received SIMULATION_STARTED event: {data}")
+        # Clear current display when a new simulation starts
+        self._clear_display()
+    
+    def _on_simulation_completed(self, data: Dict[str, Any]) -> None:
+        """Callback for SIMULATION_COMPLETED event."""
+        logger.info(f"Dashboard received SIMULATION_COMPLETED event")
+        results = data.get('results')
+        timestamp = data.get('timestamp')
+        
+        if results:
+            # Store results temporarily so they can be loaded
+            self.state.set(Constants.StateKeys.SIMULATION_RESULTS, results)
+            if timestamp:
+                self.state.set('last_simulation_timestamp', timestamp)
+            
+            # Auto-load the latest results
+            self.load_simulation_history()
+            # Select and load the most recent simulation
+            if self.sim_combo.count() > 0:
+                self.sim_combo.setCurrentIndex(0)
+                self.load_selected_simulation()
+    
+    def _on_simulation_error(self, data: Dict[str, Any]) -> None:
+        """Callback for SIMULATION_ERROR event."""
+        error_msg = data.get('error', 'Unknown error')
+        timestamp = data.get('timestamp', '')
+        logger.error(f"Dashboard received SIMULATION_ERROR event: {error_msg}")
+        
+        # Show error in dashboard
+        QMessageBox.warning(
+            self, 
+            "Simulation Error",
+            f"Simulation failed at {timestamp}:\n{error_msg}"
+        )
+    
+    def _clear_display(self) -> None:
+        """Clear the dashboard display."""
+        # Clear metric labels
+        for key in self.metric_labels:
+            self.metric_labels[key].setText("No data")
+        
+        # Clear info labels
+        for key in self.info_labels:
+            self.info_labels[key].setText("N/A")
+        
+        # Clear events table
+        self.events_table.setRowCount(0)
+        
+        # Clear charts
+        self.charts_tab_widget.clear()
+        
+        logger.info("Dashboard display cleared")
+    
     def closeEvent(self, event: QCloseEvent):
-        """Clean up matplotlib figures when widget is closed."""
+        """Clean up matplotlib figures and event subscriptions when widget is closed."""
         self._close_active_figures()
+        # Clean up event bus subscriptions
+        try:
+            unsubscribe(EventType.SIMULATION_STARTED, self._on_simulation_started)
+            unsubscribe(EventType.SIMULATION_COMPLETED, self._on_simulation_completed)
+            unsubscribe(EventType.SIMULATION_ERROR, self._on_simulation_error)
+            logger.info("DashboardWidget unsubscribed from event bus")
+        except Exception as e:
+            logger.warning(f"Error unsubscribing from event bus: {e}")
         super().closeEvent(event)
     
     def init_ui(self):

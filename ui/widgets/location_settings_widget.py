@@ -10,9 +10,10 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
+from src.utils.event_bus import EventType, publish
 from typing import Optional
 from src.utils.location_manager import LocationManager
-from typing import Tuple
+from typing import Tuple, Dict, Any
 import json
 import os
 import logging
@@ -408,6 +409,13 @@ class LocationSettingsWidget(BaseWidget):
             self.longitude_spinbox.setValue(lon)
             self.elevation_spinbox.setValue(location_data.get('elevation', 0.0))
             self.refresh_map(focus_lat=lat, focus_lon=lon, radius_km=50.0)
+            
+            # Publish location selected event
+            publish(EventType.LOCATION_SELECTED, {
+                'location_name': location_name,
+                'location_data': location_data
+            })
+            logger.info(f"Published LOCATION_SELECTED event for: {location_name}")
     
     def save_location(self):
         """Save location to file with validation.
@@ -488,6 +496,13 @@ class LocationSettingsWidget(BaseWidget):
                 f"Location '{location_name}' saved successfully"
             )
             logger.info(f"Location saved: {location_name} at ({latitude}, {longitude})")
+            
+            # Publish location changed event
+            publish(EventType.LOCATION_CHANGED, {
+                'location_name': location_name,
+                'location_data': location_data
+            })
+            logger.info(f"Published LOCATION_CHANGED event for: {location_name}")
             
             # Reload locations and refresh map
             self.load_locations()

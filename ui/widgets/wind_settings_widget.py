@@ -16,10 +16,11 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
+from src.utils.event_bus import EventType, publish
 from typing import Optional
 from src.config import Constants
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
-from typing import Tuple
+from typing import Tuple, Dict, Any
 import logging
 import numpy as np
 
@@ -358,6 +359,12 @@ class WindSettingsWidget(BaseWidget):
         self.update_wind_model_ui()
         logger.info(f"Wind model changed to: {model_type}")
         self.wind_changed.emit()
+        
+        # Publish wind scenario selected event
+        publish(EventType.WIND_SCENARIO_SELECTED, {
+            'model_type': model_type
+        })
+        logger.info(f"Published WIND_SCENARIO_SELECTED event for: {model_type}")
     
     def on_parameter_changed(self, value):
         """Handle wind parameter changes from spinboxes.
@@ -380,6 +387,20 @@ class WindSettingsWidget(BaseWidget):
         self.state.set(Constants.StateKeys.WIND_GUST_LENGTH_SCALE, self.wind_gust_length_spin.value())
         
         self.wind_changed.emit()
+        
+        # Publish wind settings changed event
+        wind_data = {
+            'wind_speed': self.wind_speed_spin.value(),
+            'wind_direction': self.wind_direction_spin.value(),
+            'reference_height': self.wind_ref_height_spin.value(),
+            'model_type': self.wind_model_combo.currentText(),
+            'roughness_length': self.wind_roughness_spin.value(),
+            'exponent': self.wind_exponent_spin.value(),
+            'gust_intensity': self.wind_gust_intensity_spin.value(),
+            'gust_length_scale': self.wind_gust_length_spin.value()
+        }
+        publish(EventType.WIND_SETTINGS_CHANGED, wind_data)
+        logger.debug(f"Published WIND_SETTINGS_CHANGED event")
     
     def update_wind_model_ui(self):
         """Update UI visibility based on wind model type.

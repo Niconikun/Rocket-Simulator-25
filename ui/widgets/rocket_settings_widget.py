@@ -11,11 +11,12 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
+from src.utils.event_bus import EventType, publish
 from typing import Optional
 import json
 import os
 import logging
-from typing import Tuple
+from typing import Tuple, Dict, Any
 import math
 import numpy as np
 
@@ -969,6 +970,13 @@ class RocketSettingsWidget(BaseWidget):
             self.current_rocket = rocket_name
             self.load_rocket_data(self.rockets[rocket_name])
             self.state.set(Constants.StateKeys.SELECTED_ROCKET, rocket_name)
+            
+            # Publish rocket selected event
+            publish(EventType.ROCKET_SELECTED, {
+                'rocket_name': rocket_name,
+                'rocket_data': self.rockets[rocket_name]
+            })
+            logger.info(f"Published ROCKET_SELECTED event for: {rocket_name}")
     
     def load_rocket_data(self, rocket_data: dict):
         """Load rocket data into UI fields."""
@@ -1524,6 +1532,14 @@ class RocketSettingsWidget(BaseWidget):
             
             QMessageBox.information(self, "Success", f"Rocket saved to {file_path}")
             logger.info(f"Rocket configuration saved: {file_path}")
+            
+            # Publish rocket config changed event
+            publish(EventType.ROCKET_CONFIG_CHANGED, {
+                'rocket_name': rocket_name,
+                'file_path': file_path,
+                'rocket_data': rocket_data
+            })
+            logger.info(f"Published ROCKET_CONFIG_CHANGED event for: {rocket_name}")
             
             # Reload configurations
             self.rockets.clear()

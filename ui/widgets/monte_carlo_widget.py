@@ -25,13 +25,16 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
+from src.utils.event_bus import EventType, publish
 from typing import Optional
 from src.utils.simulation_manager import SimulationManager
 from src.utils.monte_carlo_aggregator import MonteCarloAggregator
 from workers.monte_carlo_runner import MonteCarloRunner
+from datetime import datetime
 import logging
 import os
 import numpy as np
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -428,6 +431,16 @@ class MonteCarloWidget(BaseWidget):
         n_workers = self.workers_spinbox.value()
         self.status_label.setText(f"Running 0 / {n_runs} … ({n_workers} parallel worker(s))")
         logger.info("Monte Carlo batch started: %d runs, seed=%s, workers=%d", n_runs, seed, n_workers)
+        
+        # Publish Monte Carlo started event
+        publish(EventType.MONTE_CARLO_STARTED, {
+            'n_runs': n_runs,
+            'seed': seed,
+            'n_workers': n_workers,
+            'timestamp': datetime.now().isoformat()
+        })
+        logger.info("Published MONTE_CARLO_STARTED event")
+        
         self._thread.start()
 
     def stop_monte_carlo(self):
@@ -493,6 +506,15 @@ class MonteCarloWidget(BaseWidget):
             QMessageBox.warning(self, "Monte Carlo", "No runs completed successfully.")
 
         logger.info("Monte Carlo batch finished: %s", summary.get("batch_id"))
+        
+        # Publish Monte Carlo completed event
+        publish(EventType.MONTE_CARLO_COMPLETED, {
+            'summary': summary,
+            'n_successful': n_ok,
+            'n_failed': n_fail,
+            'timestamp': datetime.now().isoformat()
+        })
+        logger.info("Published MONTE_CARLO_COMPLETED event")
 
     def _on_error(self, msg: str):
         self._cleanup_thread()
