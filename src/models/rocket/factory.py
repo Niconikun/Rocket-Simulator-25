@@ -209,6 +209,12 @@ class RocketBuilder:
         self._reference_area: float = 0.01
         self._temperature: float = 15.0
         
+        # Gravity turn parameters
+        self._enable_gravity_turn: bool = False
+        self._gravity_turn_rotation_rate: float = 20.0
+        self._gravity_turn_min_velocity: float = 10.0
+        self._gravity_turn_use_relative_velocity: bool = False
+        
         logger.debug("RocketBuilder initialized with defaults")
     
     # -------------------------------------------------------------------------
@@ -303,6 +309,27 @@ class RocketBuilder:
     def with_parachute_config(self, config: ParachuteConfig) -> 'RocketBuilder':
         """Set parachute configuration."""
         self._parachute_config = config
+        return self
+    
+    # Gravity turn configuration
+    def with_gravity_turn(self, enable: bool = True) -> 'RocketBuilder':
+        """Enable or disable gravity turn."""
+        self._enable_gravity_turn = enable
+        return self
+    
+    def with_gravity_turn_rate(self, rate: float) -> 'RocketBuilder':
+        """Set maximum rotation rate for gravity turn [deg/s]."""
+        self._gravity_turn_rotation_rate = float(rate)
+        return self
+    
+    def with_gravity_turn_min_velocity(self, min_vel: float) -> 'RocketBuilder':
+        """Set minimum velocity to activate gravity turn [m/s]."""
+        self._gravity_turn_min_velocity = float(min_vel)
+        return self
+    
+    def with_gravity_turn_use_relative_velocity(self, use_relative: bool) -> 'RocketBuilder':
+        """Set whether to use air-relative velocity for gravity turn alignment."""
+        self._gravity_turn_use_relative_velocity = use_relative
         return self
     
     def with_reference_area(self, reference_area: float) -> 'RocketBuilder':
@@ -419,7 +446,12 @@ class RocketBuilder:
             propellant_mass=self._propellant_mass,
             wind_vector_enu=self._wind_vector_enu,
             wind_model=wind_model,
-            parachute=parachute
+            parachute=parachute,
+            # Gravity turn parameters
+            enable_gravity_turn=self._enable_gravity_turn,
+            gravity_turn_rotation_rate=self._gravity_turn_rotation_rate,
+            gravity_turn_min_velocity=self._gravity_turn_min_velocity,
+            gravity_turn_use_relative_velocity=self._gravity_turn_use_relative_velocity
         )
         
         # Set aerodynamics if provided or create from config
@@ -795,7 +827,12 @@ def create_rocket_from_config(
     wind_vector_enu: Optional[np.ndarray] = None,
     reference_area: Optional[float] = None,
     wind_model_config: Optional[Dict[str, Any]] = None,
-    parachute_config: Optional[Dict[str, Any]] = None
+    parachute_config: Optional[Dict[str, Any]] = None,
+    # Gravity turn parameters
+    enable_gravity_turn: bool = False,
+    gravity_turn_rotation_rate: float = 20.0,
+    gravity_turn_min_velocity: float = 10.0,
+    gravity_turn_use_relative_velocity: bool = False
 ) -> Tuple[NewRocket, dict, IEngine, IAerodynamics, IAtmosphere]:
     """
     Create a fully configured Rocket from a rocket configuration file.
@@ -816,6 +853,10 @@ def create_rocket_from_config(
         reference_area: Reference area for aerodynamics [m²]
         wind_model_config: Configuration for wind model (optional)
         parachute_config: Configuration for parachute (optional)
+        enable_gravity_turn: Enable passive gravity turn (default: False)
+        gravity_turn_rotation_rate: Max rotation rate [deg/s] (default: 20.0)
+        gravity_turn_min_velocity: Minimum velocity to activate [m/s] (default: 10.0)
+        gravity_turn_use_relative_velocity: Use air-relative velocity (default: False)
     
     Returns:
         Tuple containing:
@@ -878,7 +919,12 @@ def create_rocket_from_config(
         wind_vector_enu=wind_vector_enu,
         wind_model=wind_model,
         parachute=parachute,
-        propellant_mass=propellant_mass
+        propellant_mass=propellant_mass,
+        # Gravity turn parameters
+        enable_gravity_turn=enable_gravity_turn,
+        gravity_turn_rotation_rate=gravity_turn_rotation_rate,
+        gravity_turn_min_velocity=gravity_turn_min_velocity,
+        gravity_turn_use_relative_velocity=gravity_turn_use_relative_velocity
     )
     
     # Create aerodynamics (requires rocket data and mass props)

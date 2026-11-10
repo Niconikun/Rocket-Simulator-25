@@ -124,7 +124,12 @@ class Rocket:
         propellant_mass: float = 0.0,
         wind_vector_enu: Optional[np.ndarray] = None,
         wind_model: Optional['WindModel'] = None,
-        parachute: Optional['Parachute'] = None
+        parachute: Optional['Parachute'] = None,
+        # Gravity turn parameters
+        enable_gravity_turn: bool = False,
+        gravity_turn_rotation_rate: float = 20.0,
+        gravity_turn_min_velocity: float = 10.0,
+        gravity_turn_use_relative_velocity: bool = False
     ) -> None:
         """
         Initialize rocket with state and dependencies.
@@ -144,6 +149,10 @@ class Rocket:
             wind_vector_enu: Initial wind vector in ENU frame [m/s]
             wind_model: Wind model instance for atmospheric wind (optional)
             parachute: Parachute system for recovery (optional)
+            enable_gravity_turn: Enable passive gravity turn (default: False)
+            gravity_turn_rotation_rate: Max rotation rate for gravity turn [deg/s] (default: 20.0)
+            gravity_turn_min_velocity: Minimum velocity to activate gravity turn [m/s] (default: 10.0)
+            gravity_turn_use_relative_velocity: Use air-relative velocity for alignment (default: False)
         
         Raises:
             InputValidationError: If required dependencies are not provided
@@ -151,6 +160,12 @@ class Rocket:
         # Create or use provided state
         self._initial_mass = initial_mass
         self._propellant_mass = propellant_mass
+        
+        # Gravity turn configuration
+        self.enable_gravity_turn = enable_gravity_turn
+        self.gravity_turn_rotation_rate = gravity_turn_rotation_rate
+        self.gravity_turn_min_velocity = gravity_turn_min_velocity
+        self.gravity_turn_use_relative_velocity = gravity_turn_use_relative_velocity
         
         # Create initial state
         self.state = RocketState(
@@ -218,6 +233,98 @@ class Rocket:
         )
     
     # ------------------------------------------------------------------
+    # Gravity Turn Methods
+    # ------------------------------------------------------------------
+    
+    def _update_gravity_turn_orientation(self, dt: float) -> None:
+        """
+        Update rocket orientation for passive gravity turn.
+        
+        Aligns the rocket's body X-axis with the velocity vector, allowing
+        gravity to naturally pitch the rocket over during ascent. This
+        implements a passive gravity turn without TVC or control systems.
+        
+        Args:
+            dt: Time step size [s]
+        """
+        from src.utils.mattools import MatTools as Mat
+        
+        velocity_enu = self.state.v_enu
+        v_norm = np.linalg.norm(velocity_enu)
+        
+        # Only update if moving fast enough
+        if v_norm < self.gravity_turn_min_velocity:
+            return
+        
+        # Determine target direction based on configuration
+        if self.gravity_turn_use_relative_velocity and hasattr(self, 'wind_vector_enu'):
+            # Use air-relative velocity (velocity - wind)
+            v_rel_enu = velocity_enu - self.wind_vector_enu
+            target_norm = np.linalg.norm(v_rel_enu)
+            if target_norm > self.gravity_turn_min_velocity:
+                target_direction_enu = v_rel_enu / target_norm
+            else:
+                # Fall back to ground-relative velocity
+                target_direction_enu = velocity_enu / v_norm
+        else:
+            # Use ground-relative velocity
+            target_direction_enu = velocity_enu / v_norm
+        
+        # Get current body X-axis direction in ENU frame
+        # Body X in ENU = q_rot([1,0,0], q_enu2b, 1)  (1 = inverse rotation)
+        body_x_enu = Mat.q_rot(np.array([1.0, 0.0, 0.0]), self.state.q_enu2b, 1)
+        
+        # Calculate rotation needed: from current body X to target direction
+        # Rotation axis = cross product of current and target
+        rotation_axis = np.cross(body_x_enu, target_direction_enu)
+        rotation_axis_norm = np.linalg.norm(rotation_axis)
+        
+        # If vectors are parallel (or anti-parallel), no rotation needed
+        if rotation_axis_norm < 1e-10:
+            # Check if they're anti-parallel (180 degree flip)
+            dot_product = np.dot(body_x_enu, target_direction_enu)
+            if dot_product < -0.99:  # Nearly opposite
+                # Need to flip 180 degrees - pick arbitrary perpendicular axis
+                # Use Y-axis if X is dominant, otherwise X-axis
+                if abs(body_x_enu[0]) > 0.5:
+                    rotation_axis = np.array([0.0, 1.0, 0.0])
+                else:
+                    rotation_axis = np.array([1.0, 0.0, 0.0])
+                rotation_axis = rotation_axis - np.dot(rotation_axis, body_x_enu) * body_x_enu
+                rotation_axis_norm = np.linalg.norm(rotation_axis)
+                if rotation_axis_norm > 1e-10:
+                    rotation_axis = rotation_axis / rotation_axis_norm
+                    rotation_angle = np.pi  # 180 degrees
+                else:
+                    return  # Can't rotate, skip
+            else:
+                return  # Already aligned
+        else:
+            # Normalize rotation axis
+            rotation_axis = rotation_axis / rotation_axis_norm
+            # Calculate rotation angle
+            dot_product = np.dot(body_x_enu, target_direction_enu)
+            rotation_angle = np.arccos(np.clip(dot_product, -1.0, 1.0))
+        
+        # Apply rate limiting
+        max_rotation = np.deg2rad(self.gravity_turn_rotation_rate) * dt
+        actual_rotation = min(rotation_angle, max_rotation)
+        
+        # Create rotation quaternion
+        w = np.cos(actual_rotation / 2)
+        x, y, z = rotation_axis * np.sin(actual_rotation / 2)
+        q_rotation = np.array([x, y, z, w])
+        
+        # Apply rotation to current attitude: new_q = q_rotation * current_q
+        new_q = Mat.q_mult(q_rotation, self.state.q_enu2b)
+        
+        # Normalize quaternion
+        new_q = new_q / np.linalg.norm(new_q)
+        
+        # Update state
+        self.state.q_enu2b = new_q
+    
+    # ------------------------------------------------------------------
     # Simulation Control
     # ------------------------------------------------------------------
     
@@ -228,6 +335,10 @@ class Rocket:
         Args:
             dt: Time step size [s]
         """
+        # ===== GRAVITY TURN: Update orientation if enabled =====
+        if self.enable_gravity_turn:
+            self._update_gravity_turn_orientation(dt)
+        
         # Get current altitude as Python float for all downstream calculations
         altitude = float(self.state.r_enu[2])
         
