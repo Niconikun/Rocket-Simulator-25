@@ -77,12 +77,17 @@ temp/
 tmp/
 *.tmp
 
-# Data cache
-data/logs/
-data/temp/
-data/monte_carlo/
-data/exports/
-data/scenarios/
+# Data cache (but track .gitkeep files)
+data/logs/*
+data/temp/*
+data/monte_carlo/*
+data/exports/*
+data/scenarios/*
+!data/logs/.gitkeep
+!data/temp/.gitkeep
+!data/monte_carlo/.gitkeep
+!data/exports/.gitkeep
+!data/scenarios/.gitkeep
 
 # Environment files
 .env
@@ -93,6 +98,8 @@ data/scenarios/
 *.qm
 
 # PyInstaller
+# Note: build_exe.spec is intentionally tracked for reproducibility
+!build_exe.spec
 *.manifest
 *.spec
 
