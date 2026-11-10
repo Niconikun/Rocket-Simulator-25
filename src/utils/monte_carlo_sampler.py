@@ -338,9 +338,12 @@ class MonteCarloSampler:
             return float(cfg.nominal)  # type: ignore[arg-type]
 
         if cfg.distribution == 'uniform':
+            assert cfg.low is not None and cfg.high is not None
             return float(self._rng.uniform(cfg.low, cfg.high))
 
         if cfg.distribution == 'normal':
+            # Type narrowing: __post_init__ guarantees nominal and sigma are not None for normal
+            assert cfg.nominal is not None and cfg.sigma is not None
             value = float(self._rng.normal(cfg.nominal, cfg.sigma))
             # Soft clip
             if cfg.low is not None:
@@ -360,6 +363,8 @@ class MonteCarloSampler:
         Falls back to soft clipping after ``max_truncation_attempts`` iterations
         to prevent infinite loops for very tight bounds.
         """
+        # Type narrowing: __post_init__ guarantees nominal and sigma are not None for truncated_normal
+        assert cfg.nominal is not None and cfg.sigma is not None
         low = cfg.low if cfg.low is not None else -np.inf
         high = cfg.high if cfg.high is not None else np.inf
 
