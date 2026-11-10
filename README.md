@@ -43,7 +43,7 @@ Proyecto iniciado por Jorge Orozco (Universidad de Concepción, 2022) para la pr
 - CEP (Circular Error Probable) y elipse de dispersión
 - Visualizaciones: histograma de apogeo, scatter de impacto, boxplot
 
-### Gravity Turn (NUEVO)
+### Gravity Turn
 - **Gravity Turn pasivo**: Alineación automática del eje X del cuerpo con el vector de velocidad
 - Parámetros configurables:
   - `enable_gravity_turn`: Activar/desactivar gravity turn

@@ -262,6 +262,7 @@ class RocketSettingsWidget(BaseWidget):
             - Rocket Name (string): User-defined rocket identifier
             - Initial Mass (0.1-100000 kg): Wet mass including propellant
             - Reference Area (0.000001-1000 m²): Rocket cross-section area for drag
+            - Gravity Turn settings: Enable/disable passive gravity turn
         
         Returns:
             QWidget: Configured form widget with input controls
@@ -285,6 +286,31 @@ class RocketSettingsWidget(BaseWidget):
         self.reference_area_spinbox.setSuffix(" m²")
         self.reference_area_spinbox.setDecimals(6)
         layout.addRow("Reference Area:", self.reference_area_spinbox)
+        
+        # Gravity Turn Settings
+        layout.addRow(QLabel("Gravity Turn Settings"))
+        
+        self.gravity_turn_enabled = QComboBox()
+        self.gravity_turn_enabled.addItems(["Disabled", "Enabled"])
+        layout.addRow("Enable Gravity Turn:", self.gravity_turn_enabled)
+        
+        self.gravity_turn_rotation_rate = QDoubleSpinBox()
+        self.gravity_turn_rotation_rate.setRange(1.0, 360.0)
+        self.gravity_turn_rotation_rate.setValue(20.0)
+        self.gravity_turn_rotation_rate.setSuffix(" °/s")
+        self.gravity_turn_rotation_rate.setDecimals(1)
+        layout.addRow("Rotation Rate:", self.gravity_turn_rotation_rate)
+        
+        self.gravity_turn_min_velocity = QDoubleSpinBox()
+        self.gravity_turn_min_velocity.setRange(0.0, 1000.0)
+        self.gravity_turn_min_velocity.setValue(10.0)
+        self.gravity_turn_min_velocity.setSuffix(" m/s")
+        self.gravity_turn_min_velocity.setDecimals(1)
+        layout.addRow("Min Velocity:", self.gravity_turn_min_velocity)
+        
+        self.gravity_turn_use_relative_velocity = QComboBox()
+        self.gravity_turn_use_relative_velocity.addItems(["No", "Yes"])
+        layout.addRow("Use Relative Velocity:", self.gravity_turn_use_relative_velocity)
         
         widget.setLayout(layout)
         return widget
@@ -1009,6 +1035,13 @@ class RocketSettingsWidget(BaseWidget):
         self.initial_mass_spinbox.setValue(rocket_data.get(Constants.StateKeys.INITIAL_MASS, 0.0))
         self.reference_area_spinbox.setValue(rocket_data.get(Constants.StateKeys.REFERENCE_AREA, 0.0))
         
+        # Gravity Turn Settings
+        gravity_turn = rocket_data.get('gravity_turn', {})
+        self.gravity_turn_enabled.setCurrentIndex(1 if gravity_turn.get('enabled', False) else 0)
+        self.gravity_turn_rotation_rate.setValue(gravity_turn.get('rotation_rate', 20.0))
+        self.gravity_turn_min_velocity.setValue(gravity_turn.get('min_velocity', 10.0))
+        self.gravity_turn_use_relative_velocity.setCurrentIndex(1 if gravity_turn.get('use_relative_velocity', False) else 0)
+        
         # Inertia & CoM - Before Burn
         i_before = rocket_data.get('I_before_burn', {})
         self.i_before_x.setValue(i_before.get('x', 0.0))
@@ -1470,6 +1503,12 @@ class RocketSettingsWidget(BaseWidget):
             'propellant_mass': self.propellant_mass.value(),
             'dry_mass_kg': round(self.initial_mass_spinbox.value() - self.propellant_mass.value(), 6),
             Constants.StateKeys.REFERENCE_AREA: self.reference_area_spinbox.value(),
+            'gravity_turn': {
+                'enabled': self.gravity_turn_enabled.currentIndex() == 1,
+                'rotation_rate': self.gravity_turn_rotation_rate.value(),
+                'min_velocity': self.gravity_turn_min_velocity.value(),
+                'use_relative_velocity': self.gravity_turn_use_relative_velocity.currentIndex() == 1
+            },
             'I_before_burn': {
                 'x': self.i_before_x.value(),
                 'y': self.i_before_y.value(),

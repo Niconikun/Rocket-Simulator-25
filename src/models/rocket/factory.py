@@ -70,7 +70,7 @@ from src.models.aerodynamics import Aerodynamics
 from src.models.mass_properties import MassProperties
 from src.models.wind import WindModel, LogarithmicWind, ConstantWind
 from src.models.parachute import Parachute
-from src.models.interfaces import IEngine, IAerodynamics, IAtmosphere, IMassProperties, IParachute
+from src.models.interfaces import IEngine, IAerodynamics, IAtmosphere, IMassProperties
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +202,7 @@ class RocketBuilder:
         self._mass_properties_config: Optional[MassPropertiesConfig] = None
         self._wind_model: Optional[WindModel] = None
         self._wind_vector_enu: Optional[np.ndarray] = None
-        self._parachute: Optional[IParachute] = None
+        self._parachute: Optional[Parachute] = None
         self._parachute_config: Optional[ParachuteConfig] = None
         
         # Other parameters
@@ -301,7 +301,7 @@ class RocketBuilder:
         self._wind_vector_enu = np.array(wind_vector_enu)
         return self
     
-    def with_parachute(self, parachute: IParachute) -> 'RocketBuilder':
+    def with_parachute(self, parachute: Parachute) -> 'RocketBuilder':
         """Set parachute instance directly."""
         self._parachute = parachute
         return self
@@ -539,7 +539,7 @@ class RocketBuilder:
             }
         )
     
-    def _create_parachute_from_config(self, config: ParachuteConfig) -> IParachute:
+    def _create_parachute_from_config(self, config: ParachuteConfig) -> Parachute:
         """Create parachute from configuration."""
         parachute_dict = {
             'name': config.name,
@@ -789,7 +789,7 @@ def create_wind_model(
 
 def create_parachute(
     parachute_config: Optional[Dict[str, Any]] = None
-) -> Optional[IParachute]:
+) -> Optional[Parachute]:
     """
     Create a parachute from configuration.
     
@@ -807,7 +807,7 @@ def create_parachute(
             - Other drogue-specific parameters
     
     Returns:
-        Optional[IParachute]: Configured parachute, or None if config is None
+        Optional[Parachute]: Configured parachute, or None if config is None
     """
     if parachute_config is None:
         return None
@@ -905,6 +905,21 @@ def create_rocket_from_config(
     # Get reference area from config or use provided
     ref_area = reference_area if reference_area is not None else rocket_config.get('reference_area', 0.01)
     
+    # Get gravity turn parameters from config if not provided
+    gravity_turn_config = rocket_config.get('gravity_turn', {})
+    if 'enable_gravity_turn' in locals():
+        # Use provided parameters
+        gt_enabled = enable_gravity_turn
+        gt_rotation_rate = gravity_turn_rotation_rate
+        gt_min_velocity = gravity_turn_min_velocity
+        gt_use_relative = gravity_turn_use_relative_velocity
+    else:
+        # Use config file parameters
+        gt_enabled = gravity_turn_config.get('enabled', False)
+        gt_rotation_rate = gravity_turn_config.get('rotation_rate', 20.0)
+        gt_min_velocity = gravity_turn_config.get('min_velocity', 10.0)
+        gt_use_relative = gravity_turn_config.get('use_relative_velocity', False)
+    
     # Create rocket with dependency injection
     rocket = NewRocket(
         r_enu_0=r_enu_0,
@@ -921,10 +936,10 @@ def create_rocket_from_config(
         parachute=parachute,
         propellant_mass=propellant_mass,
         # Gravity turn parameters
-        enable_gravity_turn=enable_gravity_turn,
-        gravity_turn_rotation_rate=gravity_turn_rotation_rate,
-        gravity_turn_min_velocity=gravity_turn_min_velocity,
-        gravity_turn_use_relative_velocity=gravity_turn_use_relative_velocity
+        enable_gravity_turn=gt_enabled,
+        gravity_turn_rotation_rate=gt_rotation_rate,
+        gravity_turn_min_velocity=gt_min_velocity,
+        gravity_turn_use_relative_velocity=gt_use_relative
     )
     
     # Create aerodynamics (requires rocket data and mass props)

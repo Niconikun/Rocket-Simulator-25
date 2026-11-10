@@ -316,7 +316,7 @@ class Rocket:
         q_rotation = np.array([x, y, z, w])
         
         # Apply rotation to current attitude: new_q = q_rotation * current_q
-        new_q = Mat.q_mult(q_rotation, self.state.q_enu2b)
+        new_q = Mat.hamilton(q_rotation, self.state.q_enu2b)
         
         # Normalize quaternion
         new_q = new_q / np.linalg.norm(new_q)
