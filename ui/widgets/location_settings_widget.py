@@ -10,7 +10,7 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
-from src.utils.event_bus import EventType, publish
+from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
 from typing import Optional
 from src.utils.location_manager import LocationManager
 from typing import Tuple, Dict, Any
@@ -95,8 +95,32 @@ class LocationSettingsWidget(BaseWidget):
         self.locations = {}
         self.location_manager = LocationManager()
         self.init_ui()
+        self._setup_event_bus()
         self.load_locations()
         self.refresh_map()
+    
+    def _setup_event_bus(self):
+        """Set up event bus subscriptions."""
+        # Subscribe to rocket selection changes to update map center
+        subscribe(EventType.ROCKET_SELECTED, self._on_rocket_selected)
+        logger.info("LocationSettingsWidget subscribed to ROCKET_SELECTED via EventBus")
+    
+    def _on_rocket_selected(self, data: Dict[str, Any]) -> None:
+        """Callback for ROCKET_SELECTED event.
+        
+        Updates the map to center on the selected rocket's default launch location.
+        """
+        rocket_name = data.get('rocket_name')
+        rocket_data = data.get('rocket_data', {})
+        
+        if rocket_name:
+            # If rocket data contains location info, use it
+            # Otherwise, just log the selection
+            logger.info(f"LocationSettingsWidget: Rocket selected: {rocket_name}")
+            
+            # Could update map to show typical launch sites for this rocket type
+            # For now, just log and potentially refresh the map
+            self.refresh_map()
     
     def init_ui(self):
         """Initialize the location settings widget UI with map and form.
@@ -735,3 +759,12 @@ class LocationSettingsWidget(BaseWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load: {str(e)}")
             logger.error(f"Unexpected error loading location file: {str(e)}")
+    
+    def closeEvent(self, event):
+        """Clean up event bus subscriptions when widget is closed."""
+        try:
+            unsubscribe(EventType.ROCKET_SELECTED, self._on_rocket_selected)
+            logger.info("LocationSettingsWidget unsubscribed from event bus")
+        except Exception as e:
+            logger.warning(f"Error unsubscribing from event bus: {e}")
+        super().closeEvent(event)

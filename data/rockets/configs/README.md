@@ -24,6 +24,7 @@ This directory contains pre-configured rocket configuration files in JSON format
 ### 2. **Campanil 1-A**
 - **Category**: High Power Rocket
 - **Description**: Small high-power rocket with parabolic nosecone
+- **Filename**: `campanil_1a.json`
 - **Initial Mass**: 7.8 kg
 - **Propellant Mass**: 1.5 kg
 - **Total Length**: 1.19 m
@@ -38,6 +39,7 @@ This directory contains pre-configured rocket configuration files in JSON format
 
 ### 3. **Campanil 1-A Experimental**
 - **Category**: High Power Rocket
+- **Filename**: `campanil_1a_experimental.json`
 - **Description**: Campanil 1-A variant with experimental thrust curve from load cell data
 - **Initial Mass**: 7.8 kg
 - **Propellant Mass**: 1.5 kg

@@ -1,0 +1,228 @@
+# =============================================================================
+# Pre-commit Configuration for Rocket Simulator Pro
+# =============================================================================
+#
+# This file configures git hooks to run before commits.
+#
+# Install pre-commit hooks:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually on all files:
+#   pre-commit run --all-files
+#
+# More information: https://pre-commit.com
+#
+# =============================================================================
+
+repos:
+  # Black - Code formatting
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        name: black
+        description: "Run Black code formatter"
+        language_version: python3.12
+        args:
+          - --line-length=120
+          - --skip-string-normalization
+          - --exclude="(build|dist|__pycache__|.venv)"
+        types_or: [python, pyi]
+
+  # Flake8 - Linting
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.1.0
+    hooks:
+      - id: flake8
+        name: flake8
+        description: "Run Flake8 linter"
+        language_version: python3.12
+        args:
+          - --max-line-length=120
+          - --count
+          - --select=E9,F63,F7,F82,B,C4,E,W
+          - --ignore=E203,W503  # Conflicts with Black
+          - --exclude="(build|dist|__pycache__|.venv)"
+        types: [python]
+
+  # isort - Import sorting
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: isort
+        description: "Sort Python imports"
+        language_version: python3.12
+        args:
+          - --profile=black
+          - --line-length=120
+          - --skip-glob="*(build|dist|__pycache__|.venv)*"
+        types: [python]
+
+  # mypy - Static type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.12.0
+    hooks:
+      - id: mypy
+        name: mypy
+        description: "Run mypy type checker"
+        language_version: python3.12
+        args:
+          - --ignore-missing-imports
+          - --exclude="(build|dist|__pycache__|.venv)"
+        types: [python]
+        additional_dependencies:
+          - numpy>=1.26.0
+          - scipy>=1.11.0
+          - pandas>=2.1.0
+
+  # pydocstyle - Docstring checking
+  - repo: https://github.com/PyCQA/pydocstyle
+    rev: 6.3.0
+    hooks:
+      - id: pydocstyle
+        name: pydocstyle
+        description: "Check docstring style"
+        language_version: python3.12
+        args:
+          - --convention=google
+          - --add-ignore=D100,D104,D105,D107,D202,D212,D400,D401,D413,D415,D417
+          - --exclude="(build|dist|__pycache__|.venv|tests)"
+        types: [python]
+
+  # Trailing whitespace
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: trailing-whitespace
+        description: "Trim trailing whitespace"
+        args:
+          - --markdown-linebreak-ext=md
+        exclude: "(\.gitignore|\.gitkeep|CHANGELOG\.md|README\.md|CONTRIBUTING\.md|CODE_OF_CONDUCT\.md)"
+
+  # End of file fixer
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+        name: end-of-file-fixer
+        description: "Ensure files end with a newline"
+        exclude: "(\.lock|\.json|\.yaml|\.yml|\.toml)"
+
+  # Check for added large files
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        name: check-added-large-files
+        description: "Check for large files added to git"
+        args:
+          - --maxkb=10000  # 10MB limit
+
+  # Check for merge conflicts
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+        name: check-merge-conflict
+        description: "Check for merge conflict markers"
+
+  # Check for case conflicts
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-case-conflict
+        name: check-case-conflict
+        description: "Check for case-insensitive filename conflicts"
+
+  # Check YAML syntax
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+        name: check-yaml
+        description: "Check YAML syntax"
+        args:
+          - --allow-multiple-documents
+
+  # Check JSON syntax
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-json
+        name: check-json
+        description: "Check JSON syntax"
+
+  # Pretty format JSON
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: pretty-format-json
+        name: pretty-format-json
+        description: "Format JSON files"
+        args:
+          - --autofix
+          - --indent=4
+          - --no-sort-keys
+        exclude: "(node_modules|\.vscode|\.idea)"
+
+  # Check for broken symlinks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-symlinks
+        name: check-symlinks
+        description: "Check for broken symlinks"
+
+  # Detect private keys
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
+        name: detect-private-key
+        description: "Detect private keys in files"
+
+  # Check for AWS credentials
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-aws-credentials
+        name: detect-aws-credentials
+        description: "Detect AWS credentials"
+        args:
+          - --allow-missing
+
+  # Shell script formatting (if any shell scripts are added)
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        description: "Check shell scripts"
+        types: [shell]
+        exclude: "(build|dist)"
+
+  # Markdown formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        name: prettier
+        description: "Format markdown and other files"
+        types_or: [markdown, yaml, json, html, css, scss, less]
+        args:
+          - --print-width=120
+          - --single-quote
+          - --trailing-comma=all
+          - --end-of-line=lf
+        additional_dependencies:
+          - prettier-plugin-organize-imports
+
+# =============================================================================
+# Custom hooks for Rocket Simulator Pro
+# =============================================================================
+
+# Note: For project-specific hooks, you can add them here or create
+# a custom hook repository.

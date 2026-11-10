@@ -1,0 +1,103 @@
+# =============================================================================
+# EditorConfig for Rocket Simulator Pro
+# =============================================================================
+#
+# This file helps maintain consistent coding styles across different
+# editors and IDEs.
+#
+# Place this file in the root directory of your project.
+#
+# More information: https://editorconfig.org
+#
+# =============================================================================
+
+# Default settings for all files
+root = true
+
+# All files
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Python files
+[*.py]
+indent_style = space
+indent_size = 4
+tab_width = 4
+max_line_length = 120
+
+# Markdown files
+[*.md]
+max_line_length = off
+trim_trailing_whitespace = false
+
+# JSON files
+[*.json]
+indent_style = space
+indent_size = 4
+
+# YAML files
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# Configuration files
+[*.{txt,cfg,ini,yml,yaml,toml,json,xml,html,css,js}]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Shell scripts
+[*.{sh,bash,zsh}]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+# Makefile
+[Makefile]
+indent_style = tab
+
+# C/C++ files (for any extensions or integrations)
+[*.{c,h,cpp,hpp,cc}]
+indent_style = space
+indent_size = 4
+tab_width = 4
+
+# Qt files
+[*.{ui,qrc}]
+charset = utf-8
+end_of_line = lf
+
+# Python test files
+[tests/**/*.py]
+indent_style = space
+indent_size = 4
+tab_width = 4
+max_line_length = 120
+
+# Documentation files
+[docs/**/*.{md,rst,txt}]
+max_line_length = off
+trim_trailing_whitespace = false
+
+# Configuration directory
+[.github/**/*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# IDE-specific overrides
+[.vscode/**]
+charset = utf-8
+end_of_line = lf
+
+[.idea/**]
+charset = utf-8
+end_of_line = lf
+
+# Exclude patterns
+[{__pycache__/*,*.pyc,*.pyo,*.pyd,.pytest_cache/*,.mypy_cache/*}]
+charset = unset
+end_of_line = unset

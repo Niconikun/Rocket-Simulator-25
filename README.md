@@ -108,15 +108,54 @@ python main.py
 
 El proyecto utiliza un **Event Bus** para la comunicación desacoplada entre widgets y componentes. Este sistema permite que diferentes partes de la aplicación se comuniquen sin dependencias directas, utilizando el patrón Pub/Sub.
 
+### Event Bus - Implementación Completa ✅
+
+El Event Bus está **completamente implementado** con:
+
+- **22 tipos de eventos estandarizados** en 8 categorías (simulación, configuración, cohete, ubicación, viento, paracaídas, Monte Carlo, UI)
+- **6 widgets suscritos** a eventos con 8 suscripciones totales
+- **7 widgets publicando** eventos con 13 tipos de eventos diferentes
+- **Métricas completas** para monitoreo de uso
+- **Pruebas unitarias completas** con 27 tests
+
+#### Componentes Principales
 - **EventBus**: Singleton que gestiona suscripciones y publicación de eventos
-- **EventType**: Enum con tipos de eventos estandarizados (simulación, configuración, cohete, ubicación, viento, paracaídas, Monte Carlo, UI)
+- **EventType**: Enum con 22 tipos de eventos estandarizados
+- **EventMetrics**: Clase para seguimiento de métricas de uso
 - **subscribe()**: Suscribir un callback a un tipo de evento
 - **unsubscribe()**: Eliminar un callback de un tipo de evento
 - **publish()**: Publicar un evento con datos a todos los suscriptores
+- **get_metrics()**: Obtener métricas de uso del Event Bus
+- **reset_metrics()**: Reiniciar métricas
 
-El Event Bus utiliza referencias débiles (weak references) para los suscriptores, evitando fugas de memoria. Los eventos son thread-safe gracias a que internamente usa señales de PyQt6.
+#### Comunicación Cross-Widget Implementada
 
-**Documentación completa**: [EVENT_BUS.md](docs/EVENT_BUS.md)
+| Publicador | Evento | Suscriptores |
+|------------|--------|--------------|
+| MainWindow | TAB_CHANGED | DashboardWidget |
+| LocationSettings | LOCATION_CHANGED | RocketSettingsWidget |
+| RocketSettings | ROCKET_SELECTED | LocationSettings, WindSettings, ParachuteSettings, MonteCarloWidget |
+| WindSettings | WIND_SETTINGS_CHANGED | MonteCarloWidget |
+| SimulationWidget | SIMULATION_COMPLETED | DashboardWidget, MonteCarloWidget |
+| SimulationWidget | SIMULATION_STARTED | DashboardWidget |
+| SimulationWidget | SIMULATION_ERROR | DashboardWidget |
+
+#### Características Avanzadas
+- **Referencias débiles (weak references)**: Evitan fugas de memoria
+- **Thread-safe**: Usa señales de PyQt6 para entrega segura entre threads
+- **Manejo de errores**: Callbacks individuales que fallan no afectan a otros
+- **Métricas y monitoreo**: EventBus Metrics widget para visualización en tiempo real
+- **Logging**: Todos los eventos se registran en nivel DEBUG
+
+El Event Bus permite que los widgets se comuniquen sin dependencias directas. Por ejemplo:
+- Cuando se selecciona un cohete, LocationSettings, WindSettings y ParachuteSettings se actualizan automáticamente
+- Cuando una simulación se completa, DashboardWidget y MonteCarloWidget reciben los resultados
+- Cuando cambia la pestaña activa, DashboardWidget se actualiza si es necesario
+
+**Documentación completa**: 
+- [EVENT_BUS.md](docs/EVENT_BUS.md) - Especificación original
+- [IMPLEMENTATION_EVENT_BUS_STATUS.md](docs/IMPLEMENTATION_EVENT_BUS_STATUS.md) - Estado detallado
+- [EVENT_BUS_IMPLEMENTATION_SUMMARY.md](docs/EVENT_BUS_IMPLEMENTATION_SUMMARY.md) - Resumen de implementación
 
 ## Estructura del Proyecto
 

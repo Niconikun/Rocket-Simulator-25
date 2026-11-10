@@ -10,7 +10,7 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
-from src.utils.event_bus import EventType, publish
+from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
 from typing import Optional
 import logging
 import json
@@ -40,7 +40,30 @@ class ParachuteSettingsWidget(BaseWidget):
         self.parachute_configs = {}
         self.current_parachute = None
         self.init_ui()
+        self._setup_event_bus()
         self.load_parachute_configs()
+    
+    def _setup_event_bus(self):
+        """Set up event bus subscriptions."""
+        # Subscribe to rocket selection changes to adjust parachute settings
+        subscribe(EventType.ROCKET_SELECTED, self._on_rocket_selected)
+        logger.info("ParachuteSettingsWidget subscribed to ROCKET_SELECTED via EventBus")
+    
+    def _on_rocket_selected(self, data: Dict[str, Any]) -> None:
+        """Callback for ROCKET_SELECTED event.
+        
+        Updates parachute settings based on selected rocket's requirements.
+        Different rockets may need different parachute configurations.
+        """
+        rocket_name = data.get('rocket_name')
+        rocket_data = data.get('rocket_data', {})
+        
+        if rocket_name:
+            logger.info(f"ParachuteSettingsWidget: Rocket selected: {rocket_name}")
+            
+            # Could adjust parachute settings based on rocket mass, size, etc.
+            # For now, just log and allow for future enhancements
+            # where parachute configs are rocket-specific
     
     def init_ui(self):
         """Initialize the parachute settings widget UI."""
@@ -583,3 +606,12 @@ class ParachuteSettingsWidget(BaseWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self.parachute_enabled_check.setChecked(False)
             logger.warning("Parachute deployment aborted")
+    
+    def closeEvent(self, event):
+        """Clean up event bus subscriptions when widget is closed."""
+        try:
+            unsubscribe(EventType.ROCKET_SELECTED, self._on_rocket_selected)
+            logger.info("ParachuteSettingsWidget unsubscribed from event bus")
+        except Exception as e:
+            logger.warning(f"Error unsubscribing from event bus: {e}")
+        super().closeEvent(event)

@@ -1,21 +1,12 @@
 # =============================================================================
-# Rocket Simulator Pro - Git Ignore Rules
+# Rocket Simulator Pro - Git Ignore
 # =============================================================================
 
-# -----------------------------------------------------------------------------
 # Python
-# -----------------------------------------------------------------------------
-# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# -----------------------------------------------------------------------------
-# Packaging & Distribution
-# -----------------------------------------------------------------------------
 .Python
 build/
 develop-eggs/
@@ -29,152 +20,89 @@ parts/
 sdist/
 var/
 wheels/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Qt
+*.qm
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local configuration
+last_session.json
+rocket_simulator.log
+
+# Build artifacts
+*.exe
+*.dll
+*.pyd
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# Data cache
+data/logs/
+data/temp/
+data/monte_carlo/
+data/exports/
+data/scenarios/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Compiled translations (generated from .ts files)
+*.qm
 
 # PyInstaller
 *.manifest
 *.spec
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# Installer
+*.msi
+*.dmg
+*.pkg
 
-# -----------------------------------------------------------------------------
-# Testing & Coverage
-# -----------------------------------------------------------------------------
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
+# Conda
+conda-meta/
 
-# -----------------------------------------------------------------------------
-# Translations
-# -----------------------------------------------------------------------------
-*.mo
-*.pot
-
-# -----------------------------------------------------------------------------
-# Web Frameworks
-# -----------------------------------------------------------------------------
-# Django
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask
-instance/
-.webassets-cache
-
-# Scrapy
-.scrapy
-
-# -----------------------------------------------------------------------------
-# Documentation
-# -----------------------------------------------------------------------------
-# Sphinx
-docs/_build/
-
-# PyBuilder
-target/
-
-# -----------------------------------------------------------------------------
-# Jupyter & IPython
-# -----------------------------------------------------------------------------
-.ipynb_checkpoints
-profile_default/
-ipython_config.py
-
-# -----------------------------------------------------------------------------
-# Virtual Environments & Environment Managers
-# -----------------------------------------------------------------------------
-# pyenv
-.python-version
-
-# pipenv
-# According to pypa/pipenv#598, include Pipfile.lock in version control
-#Pipfile.lock
-
-# PEP 582 (e.g. github.com/David-OConnor/pyflow)
-__pypackages__/
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# -----------------------------------------------------------------------------
-# IDE & Editor Settings
-# -----------------------------------------------------------------------------
-# Spyder
-.spyderproject
-.spyproject
-
-# Rope
-.ropeproject
-
-# mkdocs
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# JetBrains IDEs
-.idea/*
-
-# VS Code
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# -----------------------------------------------------------------------------
-# Logs
-# -----------------------------------------------------------------------------
-*.log
-rocket_simulator.log
-build_debug.log
-build_output.log
-
-# -----------------------------------------------------------------------------
-# OS & System
-# -----------------------------------------------------------------------------
-.DS_Store
-Thumbs.db
-
-# -----------------------------------------------------------------------------
-# Temporary & Cache Files
-# -----------------------------------------------------------------------------
-*.tmp
-*.temp
-.cache/
+# Jupyter
+.ipynb_checkpoints/

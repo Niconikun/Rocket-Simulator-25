@@ -83,10 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Rocket Configuration Presets**: Fixed unit consistency issues across all preset configurations
-  - Converted all geometry dimensions from millimeters to meters in: `test_rocket.json`, `Campanil 1-A.json`, `Campanil 1-A experimental.json`, `rayo.json`
+  - Converted all geometry dimensions from millimeters to meters in: `test_rocket.json`, `campanil_1a.json`, `campanil_1a_experimental.json`, `rayo.json`
   - Standardized field names across all configs (removed duplicate fields with spaces: `length nosecone fins` → `length_nosecone_fins`, `total length` → `total_length`)
-  - Removed duplicate configuration file: `campanil_1-a_experimental.json` (kept `Campanil 1-A experimental.json`)
+  - Removed duplicate configuration file: `campanil_1-a_experimental.json` (kept `campanil_1a_experimental.json`)
   - Added missing `description` fields to presets for better documentation
+  - Renamed files with spaces to use underscores: `Campanil 1-A.json` → `campanil_1a.json`, `Campanil 1-A experimental.json` → `campanil_1a_experimental.json`
 
 ### Testing
 - Added comprehensive test suite for RocketSettingsWidget: 19 tests covering instantiation, tabs, UI elements, data loading, validation, and saving

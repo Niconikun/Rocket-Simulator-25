@@ -16,7 +16,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
-from src.utils.event_bus import EventType, publish
+from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
 from typing import Optional
 from src.config import Constants
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
@@ -102,7 +102,30 @@ class WindSettingsWidget(BaseWidget):
         super().__init__(state=state, parent=parent)
         self.wind_model = None
         self.init_ui()
+        self._setup_event_bus()
         self.load_wind_settings()
+    
+    def _setup_event_bus(self):
+        """Set up event bus subscriptions."""
+        # Subscribe to rocket selection changes to adjust wind profile
+        subscribe(EventType.ROCKET_SELECTED, self._on_rocket_selected)
+        logger.info("WindSettingsWidget subscribed to ROCKET_SELECTED via EventBus")
+    
+    def _on_rocket_selected(self, data: Dict[str, Any]) -> None:
+        """Callback for ROCKET_SELECTED event.
+        
+        Updates wind settings based on selected rocket's typical requirements.
+        Different rockets may need different wind profiles.
+        """
+        rocket_name = data.get('rocket_name')
+        rocket_data = data.get('rocket_data', {})
+        
+        if rocket_name:
+            logger.info(f"WindSettingsWidget: Rocket selected: {rocket_name}")
+            
+            # Could adjust wind settings based on rocket type
+            # For now, just log and refresh display
+            # This allows for future enhancements where wind profiles are rocket-specific
     
     def init_ui(self):
         """Initialize the wind settings widget UI."""
@@ -624,3 +647,12 @@ class WindSettingsWidget(BaseWidget):
             
             logger.info("Wind settings reset to defaults")
             self.wind_changed.emit()
+    
+    def closeEvent(self, event):
+        """Clean up event bus subscriptions when widget is closed."""
+        try:
+            unsubscribe(EventType.ROCKET_SELECTED, self._on_rocket_selected)
+            logger.info("WindSettingsWidget unsubscribed from event bus")
+        except Exception as e:
+            logger.warning(f"Error unsubscribing from event bus: {e}")
+        super().closeEvent(event)

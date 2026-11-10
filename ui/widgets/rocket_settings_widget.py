@@ -11,7 +11,7 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
-from src.utils.event_bus import EventType, publish
+from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
 from typing import Optional
 import json
 import os
@@ -112,7 +112,31 @@ class RocketSettingsWidget(BaseWidget):
         self.current_rocket = None
         self.thrust_curve_data = None  # Store loaded thrust curve
         self.init_ui()
+        self._setup_event_bus()
         self.load_rocket_configs()
+    
+    def _setup_event_bus(self):
+        """Set up event bus subscriptions."""
+        # Subscribe to location changes to update default launch site
+        subscribe(EventType.LOCATION_CHANGED, self._on_location_changed)
+        logger.info("RocketSettingsWidget subscribed to LOCATION_CHANGED via EventBus")
+    
+    def _on_location_changed(self, data: Dict[str, Any]) -> None:
+        """Callback for LOCATION_CHANGED event.
+        
+        Updates the rocket's default launch location reference.
+        """
+        location_name = data.get('location_name')
+        location_data = data.get('location_data', {})
+        
+        if location_name and location_data:
+            # Update state with new location
+            self.state.set(Constants.StateKeys.SIM_LOCATION, location_name)
+            self.state.set(Constants.StateKeys.LAUNCH_LATITUDE, location_data.get('latitude', 0.0))
+            self.state.set(Constants.StateKeys.LAUNCH_LONGITUDE, location_data.get('longitude', 0.0))
+            self.state.set(Constants.StateKeys.LAUNCH_ELEVATION, location_data.get('elevation', 0.0))
+            
+            logger.info(f"RocketSettingsWidget: Location changed to {location_name}, updated state")
     
     def init_ui(self):
         """Initialize the UI with rocket selection and tabbed editing."""
@@ -2137,3 +2161,12 @@ class RocketSettingsWidget(BaseWidget):
             except Exception as e:
                 logger.error(f"Error deleting rocket: {e}")
                 QMessageBox.critical(self, "Error", f"Failed to delete: {str(e)}")
+    
+    def closeEvent(self, event):
+        """Clean up event bus subscriptions when widget is closed."""
+        try:
+            unsubscribe(EventType.LOCATION_CHANGED, self._on_location_changed)
+            logger.info("RocketSettingsWidget unsubscribed from event bus")
+        except Exception as e:
+            logger.warning(f"Error unsubscribing from event bus: {e}")
+        super().closeEvent(event)

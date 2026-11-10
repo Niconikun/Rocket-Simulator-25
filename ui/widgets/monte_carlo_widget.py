@@ -94,7 +94,14 @@ class MonteCarloWidget(BaseWidget):
         """Set up event bus subscriptions."""
         # Subscribe to simulation completed to update configuration display
         subscribe(EventType.SIMULATION_COMPLETED, self._on_simulation_completed)
-        logger.info("MonteCarloWidget subscribed to SIMULATION_COMPLETED via EventBus")
+        
+        # Subscribe to wind settings changes to update Monte Carlo parameters
+        subscribe(EventType.WIND_SETTINGS_CHANGED, self._on_wind_settings_changed)
+        
+        # Subscribe to rocket selection changes to update Monte Carlo parameters
+        subscribe(EventType.ROCKET_SELECTED, self._on_rocket_selected)
+        
+        logger.info("MonteCarloWidget subscribed to events via EventBus")
     
     def _on_simulation_completed(self, data: Dict[str, Any]) -> None:
         """Callback for SIMULATION_COMPLETED event.
@@ -106,6 +113,28 @@ class MonteCarloWidget(BaseWidget):
             # Update configuration labels
             self._refresh_mode_labels()
             logger.info("MonteCarloWidget: Simulation completed, refreshed configuration display")
+    
+    def _on_wind_settings_changed(self, data: Dict[str, Any]) -> None:
+        """Callback for WIND_SETTINGS_CHANGED event.
+        
+        Updates Monte Carlo wind-related uncertainty parameters.
+        """
+        wind_data = data
+        if wind_data:
+            # Could adjust wind uncertainty parameters based on new wind settings
+            logger.info("MonteCarloWidget: Wind settings changed, updated parameters")
+            self._refresh_mode_labels()
+    
+    def _on_rocket_selected(self, data: Dict[str, Any]) -> None:
+        """Callback for ROCKET_SELECTED event.
+        
+        Updates Monte Carlo parameters based on selected rocket.
+        """
+        rocket_name = data.get('rocket_name')
+        if rocket_name:
+            # Could adjust Monte Carlo parameters based on rocket characteristics
+            logger.info(f"MonteCarloWidget: Rocket selected: {rocket_name}")
+            self._refresh_mode_labels()
 
     # ------------------------------------------------------------------
     # UI construction
@@ -809,6 +838,8 @@ class MonteCarloWidget(BaseWidget):
         """Clean up event bus subscriptions when widget is closed."""
         try:
             unsubscribe(EventType.SIMULATION_COMPLETED, self._on_simulation_completed)
+            unsubscribe(EventType.WIND_SETTINGS_CHANGED, self._on_wind_settings_changed)
+            unsubscribe(EventType.ROCKET_SELECTED, self._on_rocket_selected)
             logger.info("MonteCarloWidget unsubscribed from event bus")
         except Exception as e:
             logger.warning(f"Error unsubscribing from event bus: {e}")

@@ -85,7 +85,11 @@ class DashboardWidget(BaseWidget):
         subscribe(EventType.SIMULATION_STARTED, self._on_simulation_started)
         subscribe(EventType.SIMULATION_COMPLETED, self._on_simulation_completed)
         subscribe(EventType.SIMULATION_ERROR, self._on_simulation_error)
-        logger.info("DashboardWidget subscribed to simulation events via EventBus")
+        
+        # Subscribe to tab changes to refresh when dashboard becomes visible
+        subscribe(EventType.TAB_CHANGED, self._on_tab_changed)
+        
+        logger.info("DashboardWidget subscribed to simulation and tab events via EventBus")
     
     def _on_simulation_started(self, data: Dict[str, Any]) -> None:
         """Callback for SIMULATION_STARTED event."""
@@ -125,6 +129,20 @@ class DashboardWidget(BaseWidget):
             f"Simulation failed at {timestamp}:\n{error_msg}"
         )
     
+    def _on_tab_changed(self, data: Dict[str, Any]) -> None:
+        """Callback for TAB_CHANGED event.
+        
+        Refreshes the dashboard when it becomes the active tab.
+        """
+        tab_name = data.get('tab_name', '')
+        index = data.get('index', -1)
+        
+        # Check if dashboard tab is now active (index 6 based on main_window)
+        # Dashboard is typically at index 6 in the tab widget
+        if tab_name == "📊 Dashboard" or index == 6:
+            logger.info("Dashboard tab activated, refreshing data")
+            self.load_simulation_history()
+    
     def _clear_display(self) -> None:
         """Clear the dashboard display."""
         # Clear metric labels
@@ -151,6 +169,7 @@ class DashboardWidget(BaseWidget):
             unsubscribe(EventType.SIMULATION_STARTED, self._on_simulation_started)
             unsubscribe(EventType.SIMULATION_COMPLETED, self._on_simulation_completed)
             unsubscribe(EventType.SIMULATION_ERROR, self._on_simulation_error)
+            unsubscribe(EventType.TAB_CHANGED, self._on_tab_changed)
             logger.info("DashboardWidget unsubscribed from event bus")
         except Exception as e:
             logger.warning(f"Error unsubscribing from event bus: {e}")

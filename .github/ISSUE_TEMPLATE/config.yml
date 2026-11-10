@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/Niconikun/Rocket-Simulator---GUI/discussions
+    about: Please use Discussions for general questions and help requests
+  - name: Feature Request
+    url: https://github.com/Niconikun/Rocket-Simulator---GUI/issues/new/choose
+    about: Request a new feature or enhancement
+  - name: Bug Report
+    url: https://github.com/Niconikun/Rocket-Simulator---GUI/issues/new/choose
+    about: Report a bug or issue
+  - name: Documentation Request
+    url: https://github.com/Niconikun/Rocket-Simulator---GUI/issues/new/choose
+    about: Request documentation improvements

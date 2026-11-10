@@ -1,0 +1,8 @@
+# This file ensures the translations directory is tracked by git
+# even when empty of compiled .qm files
+
+# To compile translations, run:
+# python scripts/compile_translations.py
+
+# Or manually using Qt tools:
+# lrelease-6 data/translations/rocket_simulator_es.ts -qm data/translations/rocket_simulator_es.qm

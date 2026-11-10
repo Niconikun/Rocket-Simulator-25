@@ -8,9 +8,10 @@ __author__ = "Rocket Simulator Team"
 __license__ = "MIT"
 
 # Version components for easy access
+# Synchronized with __version__ above
 VERSION_MAJOR = 2
-VERSION_MINOR = 3
-VERSION_PATCH = 1
+VERSION_MINOR = 0
+VERSION_PATCH = 4
 
 def get_version_string():
     """Get full version string."""
