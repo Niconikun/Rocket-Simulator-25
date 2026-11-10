@@ -158,3 +158,28 @@ class MatTools:
         q3 = -left_quat[1] * right_quat[0] + left_quat[0] * right_quat[1] + left_quat[3] * right_quat[2] + left_quat[2] * right_quat[3]
         q4 = -left_quat[0] * right_quat[0] - left_quat[1] * right_quat[1] - left_quat[2] * right_quat[2] + left_quat[3] * right_quat[3]
         return np.array([q1, q2, q3, q4])
+
+    @staticmethod
+    def q_to_euler(quat, degrees=False):
+        """Convierte cuaternión a ángulos de Euler (yaw, pitch, roll) en secuencia 3-2-1.
+        
+        Args:
+            quat: Cuaternión [q1, q2, q3, q4]
+            degrees: Si True, devuelve ángulos en grados; si False, en radianes (default: False)
+        
+        Returns:
+            Array numpy con ángulos [yaw, pitch, roll]
+        """
+        dcm = MatTools.quat2mat(quat)
+        
+        # Extraer ángulos de Euler en secuencia 3-2-1 (yaw, pitch, roll)
+        pitch = np.arcsin(-dcm[2, 0])
+        roll = np.arctan2(dcm[2, 1], dcm[2, 2])
+        yaw = np.arctan2(dcm[1, 0], dcm[0, 0])
+        
+        if degrees:
+            yaw = yaw * MatTools.rad2deg
+            pitch = pitch * MatTools.rad2deg
+            roll = roll * MatTools.rad2deg
+        
+        return np.array([yaw, pitch, roll])

@@ -339,7 +339,7 @@ class MonteCarloAggregator:
         """
         import matplotlib.pyplot as plt
         import matplotlib.patches as mpatches
-        from matplotlib.patches import Ellipse
+        from matplotlib.patches import Circle, Ellipse
 
         ix, iy = self.impact_arrays()
         fig, ax = plt.subplots(figsize=(6, 5), tight_layout=True)
@@ -370,9 +370,9 @@ class MonteCarloAggregator:
 
         # CEP circle
         cep_val = self.cep()
-        circle = plt.Circle((mu_x, mu_y), cep_val, fill=False,
-                              linestyle="--", color="#03A9F4", linewidth=1.2,
-                              label=f"CEP = {cep_val:.0f} m")
+        circle = Circle((float(mu_x), float(mu_y)), float(cep_val), fill=False,
+                        linestyle="--", color="#03A9F4", linewidth=1.2,
+                        label=f"CEP = {cep_val:.0f} m")
         ax.add_patch(circle)
         ax.set_aspect("equal", adjustable="datalim")
 
@@ -431,17 +431,23 @@ class MonteCarloAggregator:
             return fig
 
         fig, ax = plt.subplots(figsize=(max(6, len(data) * 1.4), 4), tight_layout=True)
-        bp = ax.boxplot(data, labels=labels, patch_artist=True,
+        bp = ax.boxplot(data, patch_artist=True,
                         medianprops=dict(color="#F44336", linewidth=2))
+        ax.set_xticklabels(labels)
         for patch in bp["boxes"]:
             patch.set_facecolor("#2196F3")
             patch.set_alpha(0.7)
 
+        ax.set_xlabel("Metric")
+        ax.set_ylabel("Value")
         ax.set_title(title)
+
         fig.patch.set_facecolor("#1e1e1e")
         ax.set_facecolor("#2d2d2d")
         for spine in ax.spines.values():
             spine.set_edgecolor("#555")
         ax.tick_params(colors="white")
+        ax.xaxis.label.set_color("white")
+        ax.yaxis.label.set_color("white")
         ax.title.set_color("white")
         return fig

@@ -308,8 +308,8 @@ class ThrustCurveProcessor:
                 "after cleaning non-numeric rows."
             )
 
-        time_raw   = df[time_col].values.copy()
-        thrust_raw = df[thrust_col].values.copy()
+        time_raw   = np.asarray(df[time_col].values.copy(), dtype=np.float64)
+        thrust_raw = np.asarray(df[thrust_col].values.copy(), dtype=np.float64)
 
         # 4. Structural validations (B03)
         cls._check_time_monotonic(time_raw, source)
@@ -372,7 +372,7 @@ class ThrustCurveProcessor:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _check_time_monotonic(time_array: np.ndarray, source: str) -> None:
+    def _check_time_monotonic(time_array: np.ndarray[np.float64], source: str) -> None:
         diffs = np.diff(time_array)
         bad = np.where(diffs <= 0)[0]
         if len(bad):
@@ -385,7 +385,7 @@ class ThrustCurveProcessor:
             )
 
     @staticmethod
-    def _check_positive_duration(time_array: np.ndarray, source: str) -> None:
+    def _check_positive_duration(time_array: np.ndarray[np.float64], source: str) -> None:
         duration = time_array[-1] - time_array[0]
         if duration <= 0:
             raise ThrustCurveError(
@@ -395,7 +395,7 @@ class ThrustCurveProcessor:
 
     @staticmethod
     def _check_thrust_floor(
-        thrust_array: np.ndarray, source: str, unit: str
+        thrust_array: np.ndarray[np.float64], source: str, unit: str
     ) -> None:
         """Validate minimum raw thrust value before unit conversion."""
         # Convert floor to declared unit for comparison

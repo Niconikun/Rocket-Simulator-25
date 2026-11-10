@@ -420,12 +420,12 @@ class RocketDynamics:
         
         # Calculate Mach number
         if self._v_sonic > 0 and v_rel_norm > 0:
-            self._mach = v_rel_norm / self._v_sonic
+            self._mach = float(v_rel_norm / self._v_sonic)
         else:
             self._mach = 0.0
         
         # Calculate dynamic pressure
-        self._dynamic_pressure = 0.5 * self._density * (v_rel_norm ** 2)
+        self._dynamic_pressure = float(0.5 * self._density * (v_rel_norm ** 2))
         
         # Calculate angle of attack (simplified: angle between velocity and X-axis in body frame)
         # This is a simplified calculation; real implementation would use relative velocity
@@ -435,7 +435,7 @@ class RocketDynamics:
             # Angle of attack: angle between velocity vector and body X-axis
             v_x = v_b[0]
             v_z = v_b[2]
-            self._alpha = np.degrees(np.arctan2(v_z, v_x))
+            self._alpha = float(np.degrees(np.arctan2(v_z, v_x)))
         else:
             self._alpha = 0.0
     

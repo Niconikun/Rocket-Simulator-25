@@ -179,7 +179,7 @@ def get_wind_effect_metrics(rocket_velocity_enu: np.ndarray,
         if rocket_axis_enu is not None
         else None
     )
-    q_dyn = calculate_dynamic_pressure(np.linalg.norm(v_rel), air_density)
+    q_dyn = calculate_dynamic_pressure(float(np.linalg.norm(v_rel)), air_density)
     
     # Calculate wind impact percentage
     if rocket_speed > 1e-6:

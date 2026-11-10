@@ -478,7 +478,6 @@ class IMassProperties(ABC):
     
     Implementations:
         - MassProperties: Interpolated mass properties from before/after burn states
-        - ConstantMassProperties: Fixed mass properties (for testing)
     """
     
     @abstractmethod
@@ -517,6 +516,19 @@ class IMassProperties(ABC):
         
         Returns:
             np.ndarray: Moments of inertia [Ixx, Iyy, Izz] in body frame [kg·m²]
+        """
+        pass
+    
+    @abstractmethod
+    def get_burn_fraction(self, current_mass: float) -> float:
+        """
+        Calculate burn fraction from current mass.
+        
+        Args:
+            current_mass: Current total mass [kg]
+        
+        Returns:
+            float: Burn fraction (0.0 to 1.0) [-]
         """
         pass
 

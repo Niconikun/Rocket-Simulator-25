@@ -152,6 +152,8 @@ class AerodynamicsConfig:
     nosecone: Dict[str, Any] = field(default_factory=dict)
     rear_section: Dict[str, Any] = field(default_factory=dict)
     fins: Dict[str, Any] = field(default_factory=dict)
+    inertia_before: Dict[str, float] = field(default_factory=lambda: {'x': 0.1, 'y': 0.1, 'z': 0.05})
+    inertia_after: Dict[str, float] = field(default_factory=lambda: {'x': 0.1, 'y': 0.1, 'z': 0.05})
 
 
 # =============================================================================
@@ -534,8 +536,8 @@ class RocketBuilder:
             mass_props={
                 'CoM_before_burn': config.fuselage if config.fuselage else {'x': 0.5, 'y': 0, 'z': 0},
                 'CoM_after_burn': config.fuselage if config.fuselage else {'x': 0.6, 'y': 0, 'z': 0},
-                'I_before_burn': config.inertia_before if hasattr(config, 'inertia_before') else {'x': 0.1, 'y': 0.1, 'z': 0.05},
-                'I_after_burn': config.inertia_after if hasattr(config, 'inertia_after') else {'x': 0.1, 'y': 0.1, 'z': 0.05}
+                'I_before_burn': config.inertia_before,
+                'I_after_burn': config.inertia_after
             }
         )
     

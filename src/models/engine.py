@@ -26,6 +26,7 @@ import logging
 logger = logging.getLogger(__name__)
 import os
 from math import sqrt, exp, sin, pi
+from typing import cast
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -217,11 +218,11 @@ class EnhancedEngine(IEngine):
         # (update_engine / simulation startup) sees the problem immediately.
         if has_file:
             curve_data = ThrustCurveProcessor.from_csv(
-                self.thrust_curve_file, unit=self.thrust_curve_unit
+                cast(str, self.thrust_curve_file), unit=self.thrust_curve_unit
             )
         else:
             curve_data = ThrustCurveProcessor.from_dict(
-                self.thrust_curve_data, unit=self.thrust_curve_unit
+                cast(dict, self.thrust_curve_data), unit=self.thrust_curve_unit
             )
 
         # Build interpolator from validated SI data
@@ -231,7 +232,7 @@ class EnhancedEngine(IEngine):
             time_arr, thrust_arr,
             kind='linear',
             bounds_error=False,
-            fill_value=(thrust_arr[0], 0.0),
+            fill_value=(float(thrust_arr[0]), 0.0),  # type: ignore[arg-type]
         )
 
         # Align burn_time with the curve if they diverge significantly

@@ -259,6 +259,7 @@ class StateKeyConstants:
     SELECTED_ROCKET = 'selected_rocket'
     
     # Parachute keys
+    SELECTED_PARACHUTE = 'selected_parachute'
     PARACHUTE_ENABLED = 'parachute_enabled'
     PARACHUTE_DEPLOYMENT_ALTITUDE = 'parachute_deployment_altitude'
     PARACHUTE_DIAMETER = 'parachute_diameter'

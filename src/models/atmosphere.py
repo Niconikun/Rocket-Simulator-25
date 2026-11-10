@@ -33,17 +33,14 @@ Examples:
 
 # Imports
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Any
 import logging
 import numpy as np
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from fluids import Atmosphere as FluidsAtmosphere
-
-from fluids import ATMOSPHERE_1976 as atmos76
+from fluids.atmosphere import ATMOSPHERE_1976 as atmos76
 from src.models.interfaces import IAtmosphere
 
 class Atmosphere(IAtmosphere):
@@ -96,7 +93,7 @@ class Atmosphere(IAtmosphere):
 
     @staticmethod
     @lru_cache(maxsize=128)
-    def _get_atmosphere_data(height: float, offset: float) -> 'FluidsAtmosphere':
+    def _get_atmosphere_data(height: float, offset: float) -> Any:
         """
         Get atmosphere data from US Standard Atmosphere 1976 model with caching.
         
@@ -258,22 +255,4 @@ class Atmosphere(IAtmosphere):
         
         return float(np.sqrt(gamma * R * temp))
     
-    def give_pressure(self, height: float) -> float:
-        """
-        Get atmospheric pressure at a given height.
-        
-        This is the primary method for pressure retrieval, implementing the
-        IAtmosphere interface contract. For backward compatibility, give_press()
-        is also available but deprecated.
-        
-        Args:
-            height: Altitude above sea level [m]
-        
-        Returns:
-            Pressure [Pa]
-        """
-        if not isinstance(height, (int, float)):
-            raise TypeError(f"height must be a number, got {type(height).__name__}")
-        
-        self.atmosphere = self._get_atmosphere_data(float(height), self.offset)
-        return float(self.atmosphere.P)
+

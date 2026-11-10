@@ -9,11 +9,16 @@ synchronous, self-contained computation happens here.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# For type checking only - at runtime, we use duck typing
+# This avoids importing PyQt6-heavy modules during process pool bootstrap
+if TYPE_CHECKING:
+    from src.models.state import StateProvider
 
 
 class _FrozenState:
@@ -21,6 +26,10 @@ class _FrozenState:
 
     Implements the StateProvider interface for compatibility with StateProxy.
     Used by SimulationWorker/StateProxy for Monte Carlo simulations.
+    
+    Note: This class implements the StateProvider protocol via duck typing.
+    At runtime, it has all the required methods (get, set, get_all, reset).
+    For type checking, we document that it's compatible with StateProvider.
     """
 
     def __init__(self, data: dict):
@@ -33,9 +42,13 @@ class _FrozenState:
         # Worker processes never write back to the GUI's ApplicationState.
         self._state[key] = value
     
-    def get_all(self) -> dict:
+    def get_all(self) -> dict[str, Any]:
         """Get the entire state dictionary."""
         return self._state.copy()
+    
+    def reset(self) -> None:
+        """Reset all state to empty."""
+        self._state.clear()
 
 
 def extract_impact_position(result: dict) -> tuple[float, float]:
@@ -86,7 +99,7 @@ def run_single_montecarlo(
         logging.getLogger().setLevel(logging.WARNING)
 
         state = _FrozenState(dict(base_state_dict))
-        worker = SimulationWorker(state, use_cache=use_cache)
+        worker = SimulationWorker(state, use_cache=use_cache)  # type: ignore[arg-type]
         result = worker.run_with_params(overrides)
 
         metrics = result.get("metrics", {})

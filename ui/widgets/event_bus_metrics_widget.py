@@ -11,6 +11,7 @@ from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.utils.event_bus import EventType, get_metrics, reset_metrics, EventMetrics
 from typing import Optional, Dict, Any, List, Tuple
+from enum import Enum
 import logging
 import json
 from datetime import datetime
@@ -274,7 +275,7 @@ class EventBusMetricsWidget(BaseWidget):
         except Exception as e:
             logger.error(f"Error refreshing event bus metrics: {e}")
     
-    def _update_table(self, table: QTableWidget, data: Dict[EventType, int], column_title: str):
+    def _update_table(self, table: QTableWidget, data: Dict[Enum, int], column_title: str):
         """Update a table with event type statistics."""
         try:
             # Sort by count (descending)

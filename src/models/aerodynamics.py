@@ -167,9 +167,8 @@ class Aerodynamics(IAerodynamics):
             reference_area: Reference area [m²] (for simple mode)
         """
         # Determine if we're using enhanced mode (geometry-based) or simple mode
-        self._use_geometry = (rocket_data is not None)
-        
-        if self._use_geometry:
+        if rocket_data is not None:
+            self._use_geometry = True
             # Enhanced mode: Initialize with geometry data
             self._initialize_from_geometry(
                 mach=mach or 0.0,
@@ -180,6 +179,7 @@ class Aerodynamics(IAerodynamics):
                 mass_props=mass_props or {}
             )
         else:
+            self._use_geometry = False
             # Simple mode: Use constant coefficients
             self._initialize_simple(
                 cd=cd or 0.5,

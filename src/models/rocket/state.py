@@ -44,7 +44,7 @@ Usage:
 import numpy as np
 from typing import Optional
 from src.utils.numerical_utils import QuaternionUtils, StateValidator
-from src.utils.simulation_errors import InputValidationError, NumericalStabilityError
+from src.utils.simulation_errors import InputValidationError
 from src.utils.simulation_constants import SimulationConstants as SIM_CONST
 
 

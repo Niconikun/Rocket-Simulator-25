@@ -201,8 +201,8 @@ class SimulationWorker(QThread):
         launch_roll = self.state.get('launch_roll', 0.0)  # degrees
             
         # Get launch date/time
-        launch_date = self.state.get('sim_date')
-        launch_time = self.state.get('sim_time')
+        launch_date = self.state.get('sim_date', datetime.now().date())
+        launch_time = self.state.get('sim_time', datetime.now().time())
             
         # Initialize physics models
         logger.info(f"Initializing physics models for {rocket_name}")
@@ -210,7 +210,7 @@ class SimulationWorker(QThread):
         # Create time reference
         sim_datetime = datetime.combine(launch_date, launch_time)
         date = np.array([sim_datetime.year, sim_datetime.month, sim_datetime.day,
-                        sim_datetime.hour, sim_datetime.minute, sim_datetime.second])
+                sim_datetime.hour, sim_datetime.minute, sim_datetime.second])
             
         julian_date = Clock().julian_day(date)
         gmst_0 = Clock().gmst(julian_date, 1)
@@ -389,8 +389,8 @@ class SimulationWorker(QThread):
                     # Apogee-triggered drogue
                     is_descending = current_altitude < prev_altitude
                     if (is_descending and parachute.drogue_enabled
-                            and not parachute.drogue_deployed):
-                        parachute.drogue_deployed = True
+                            and not parachute._drogue_deployed):
+                        parachute._drogue_deployed = True
                         parachute.drogue_deployment_time = t
                         parachute.drogue_deployment_altitude_actual = current_altitude
                         logger.info(
@@ -530,11 +530,11 @@ class SimulationWorker(QThread):
         # In new architecture, we access engine through rocket.engine
         if rocket.engine is not None:
             metrics['propulsion'] = {
-                'thrust_source': rocket.engine.thrust_source if hasattr(rocket.engine, 'thrust_source') else 'analytical',
-                'propellant_consumed': rocket.engine.total_mass_flow if hasattr(rocket.engine, 'total_mass_flow') else 0.0,
-                'remaining_propellant': rocket.engine.propellant_mass - (rocket.engine.total_mass_flow if hasattr(rocket.engine, 'total_mass_flow') else 0.0),
-                'total_impulse_delivered': rocket.engine.total_impulse if hasattr(rocket.engine, 'total_impulse') else 0.0,
-                'burnout_reached': hasattr(rocket.engine, 'burnout_reached') and rocket.engine.burnout_reached,
+                'thrust_source': getattr(rocket.engine, 'thrust_source', 'analytical'),
+                'propellant_consumed': getattr(rocket.engine, 'total_mass_flow', 0.0),
+                'remaining_propellant': getattr(rocket.engine, 'propellant_mass', 0.0) - getattr(rocket.engine, 'total_mass_flow', 0.0),
+                'total_impulse_delivered': getattr(rocket.engine, 'total_impulse', 0.0),
+                'burnout_reached': getattr(rocket.engine, 'burnout_reached', False),
                 'configured_propellant_mass': rocket_config['engine'].get('propellant_mass', 0.0),
                 'configured_burn_time': rocket_config['engine'].get('burn_time', 0.0),
             }
@@ -599,7 +599,6 @@ class SimulationWorker(QThread):
                 history_data = {}
             else:
                 # Convert numpy arrays to lists for JSON serialization
-                import numpy as np
                 times_list = hist_times.tolist() if hasattr(hist_times, 'tolist') else list(hist_times)
                 
                 # Extract altitude from positions (z-component of r_enu)
@@ -616,7 +615,6 @@ class SimulationWorker(QThread):
                 masses_list = [float(m) for m in hist_masses]
                 
                 # Convert quaternions to Euler angles (yaw, pitch, roll) in degrees
-                from src.utils.mattools import MatTools as Mat
                 yaw_list = []
                 pitch_list = []
                 roll_list = []
@@ -812,7 +810,7 @@ class SimulationWorker(QThread):
             logger.error(f"Error loading rocket config: {e}")
             return None
     
-    def _validate_and_fix_config(self, config: dict, rocket_name: str) -> dict:
+    def _validate_and_fix_config(self, config: dict, rocket_name: str) -> dict | None:
         """Validate and fix rocket configuration (shared logic for cached and new configs)."""
         # Create a deep copy to avoid modifying cached config
         config = copy.deepcopy(config)

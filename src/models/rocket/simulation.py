@@ -262,20 +262,8 @@ class RocketSimulation:
         
         # Get mass properties for inertia
         if self.dynamics.mass_properties is not None:
-            # Calculate burn_fraction based on mass properties
-            # Check if mass_properties has mass_before/mass_after for burn fraction calculation
-            if hasattr(self.dynamics.mass_properties, 'mass_before') and hasattr(self.dynamics.mass_properties, 'mass_after'):
-                mass_range = self.dynamics.mass_properties.mass_before - self.dynamics.mass_properties.mass_after
-                if mass_range > 0:
-                    burn_fraction = (self.dynamics.mass_properties.mass_before - mass) / mass_range
-                    burn_fraction = np.clip(burn_fraction, 0.0, 1.0)
-                else:
-                    burn_fraction = 0.5
-            else:
-                # For SimpleMassProperties or other implementations without mass range,
-                # use a default burn_fraction of 0.5
-                burn_fraction = 0.5
-            
+            # Calculate burn_fraction from current mass
+            burn_fraction = self.dynamics.mass_properties.get_burn_fraction(mass)
             inertia_b = self.dynamics.mass_properties.get_inertia(burn_fraction)
         else:
             # Default inertia

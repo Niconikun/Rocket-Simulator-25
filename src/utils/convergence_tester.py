@@ -135,10 +135,12 @@ class ConvergenceTester:
         }
         
         # Display convergence table
-        logger.info(f"\n{'Metric':<20} {'TS='+f'{timesteps[0]}':<15}", end="")
+        header_parts = [f"{'Metric':<20}", f"{'TS='+f'{timesteps[0]}':<15}"]
         for ts in timesteps[1:]:
-            logger.info(f" {'TS='+f'{ts:.6f}':<15}", end="")
-        logger.info(f" {'Error %':<12}")
+            header_parts.append(f"{'TS='+f'{ts:.6f}':<15}")
+        header_parts.append(f"{'Error %':<12}")
+        logger.info("")
+        logger.info("".join(header_parts))
         logger.info("-" * 100)
         
         for metric in metrics_keys:
@@ -148,10 +150,10 @@ class ConvergenceTester:
             if any(v is None for v in values):
                 continue
             
-            # Display values
-            logger.info(f"{metric:<20}", end="")
+            # Build row string
+            row_parts = [f"{metric:<20}"]
             for v in values:
-                logger.info(f" {v:<14.4f}", end="")
+                row_parts.append(f" {v:<14.4f}")
             
             # Calculate error (relative to finest timestep)
             finest_value = values[-1]
@@ -162,7 +164,8 @@ class ConvergenceTester:
             else:
                 error = 0
             
-            logger.info(f" {error:<11.2f}%")
+            row_parts.append(f" {error:<11.2f}%")
+            logger.info("".join(row_parts))
             
             convergence_data[metric]['error_percent'] = error
             self.report['convergence'][metric] = {
@@ -213,10 +216,10 @@ class ConvergenceTester:
     def summary(self) -> str:
         """Return human-readable summary"""
         if self.report.get('status') == 'COMPLETE':
+            convergence = self.report.get('convergence', {})
             converged = self.report.get('all_converged', False)
-            conv_count = sum(1 for m in self.report.get('convergence', {}).values() 
-                           if m.get('converged'))
-            total = len(self.report.get('convergence', {}))
+            conv_count = sum(1 for m in convergence.values() if m.get('converged'))
+            total = len(convergence)
             
             return (
                 f"Convergence: {'PASS' if converged else 'FAIL'} "

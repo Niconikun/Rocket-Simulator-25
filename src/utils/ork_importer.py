@@ -673,12 +673,13 @@ class OrkExporter:
         fuselage = self.config.get("fuselage", {})
         fus_length = fuselage.get("length", 0.0)
         fus_diameter = fuselage.get("diameter", 0.0)
+        nosecone_length = self.config.get("nosecone", {}).get("length", 0.0)
         if fus_length > 0 and fus_diameter > 0:
             bt_elem = self._create_body_tube_element(
                 "Body Tube", 
                 fus_length, 
                 fus_diameter,
-                nosecone_elem.get("length", 0.0) if nosecone_elem else 0.0
+                nosecone_length
             )
             subcomponents.append(bt_elem)
         
@@ -691,7 +692,7 @@ class OrkExporter:
                 "Rear Section",
                 rear_length,
                 rear_diameter,
-                fus_length + (nosecone_elem.get("length", 0.0) if nosecone_elem else 0.0)
+                fus_length + nosecone_length
             )
             subcomponents.append(bt_elem)
         

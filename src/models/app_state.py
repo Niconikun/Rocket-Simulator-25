@@ -14,19 +14,13 @@ import json
 import os
 import threading
 from datetime import datetime, date, time
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, cast
 import logging
 
 from src.models.state import StateProvider
 
 from src.utils.simulation_constants import RocketConstants as RC
 logger = logging.getLogger(__name__)
-
-# Default session file name
-DEFAULT_SESSION_FILE = "last_session.json"
-
-# Valid types for state values
-_VALID_STATE_TYPES = (bool, int, float, str, type(None), date, datetime, time, dict, list)
 
 # Default session file name
 DEFAULT_SESSION_FILE = "last_session.json"
@@ -155,7 +149,7 @@ class ApplicationState(StateProvider):
         """Get or create the singleton instance."""
         if ApplicationState._instance is None:
             ApplicationState()
-        return ApplicationState._instance
+        return cast(ApplicationState, ApplicationState._instance)
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get a state value by key (thread-safe)."""
@@ -220,7 +214,7 @@ class ApplicationState(StateProvider):
         logger.info("ApplicationState singleton reset and recreated")
         return new_instance
     
-    def save_to_file(self, filepath: str = None) -> bool:
+    def save_to_file(self, filepath: Optional[str] = None) -> bool:
         """Save state to a JSON file.
         
         Args:
@@ -260,7 +254,7 @@ class ApplicationState(StateProvider):
             logger.error(f"Failed to save state to {filepath}: {e}")
             return False
     
-    def load_from_file(self, filepath: str = None) -> bool:
+    def load_from_file(self, filepath: Optional[str] = None) -> bool:
         """Load state from a JSON file.
         
         Args:
@@ -372,15 +366,15 @@ class ApplicationState(StateProvider):
                 result.append(item)
         return result
     
-    def save_session(self, filepath: str = None) -> bool:
+    def save_session(self, filepath: Optional[str] = None) -> bool:
         """Save current session to file (alias for save_to_file)."""
         return self.save_to_file(filepath)
     
-    def load_session(self, filepath: str = None) -> bool:
+    def load_session(self, filepath: Optional[str] = None) -> bool:
         """Load session from file (alias for load_from_file)."""
         return self.load_from_file(filepath)
     
-    def auto_save(self, filepath: str = None) -> bool:
+    def auto_save(self, filepath: Optional[str] = None) -> bool:
         """Auto-save state with timestamp backup."""
         if filepath is None:
             filepath = DEFAULT_SESSION_FILE

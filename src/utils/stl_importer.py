@@ -9,6 +9,9 @@ Uses ``trimesh`` (optional dependency) to load an STL mesh and compute:
 If ``trimesh`` is not installed, :func:`is_available` returns ``False`` and
 an :class:`ImportError` is raised when attempting to load a mesh.
 
+Install trimesh with: pip install trimesh
+Or with optional dependencies: pip install rocket-simulator-pro[stl]
+
 Usage::
 
     from src.utils.stl_importer import StlImporter, is_available
@@ -23,7 +26,15 @@ Usage::
 import logging
 import math
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+if TYPE_CHECKING:
+    try:
+        import trimesh
+    except ImportError:
+        trimesh = None  # type: ignore[assignment]
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +97,6 @@ class StlImporter:
         and returns the area of the 2-D convex hull of that projection. This
         is a silhouette area, not a sampled area of individual cross-sections.
         """
-        import numpy as np
-
         # Project vertices onto the plane normal to `axis`
         axes = [i for i in range(3) if i != axis]
         pts_2d = mesh.vertices[:, axes]
@@ -118,8 +127,6 @@ class StlImporter:
         trimesh.inertia.mass_properties returns the inertia tensor for
         unit density. We scale by (mass / volume) to get the correct values.
         """
-        import numpy as np
-
         volume = mesh.volume
         if volume <= 0:
             volume = mesh.convex_hull.volume
@@ -166,8 +173,7 @@ class StlImporter:
         ValueError
             If trimesh cannot load the file.
         """
-        import os
-        if not os.path.exists(self.filepath):
+        if not Path(self.filepath).exists():
             raise FileNotFoundError(f"STL file not found: {self.filepath}")
 
         mesh = self._load_mesh()

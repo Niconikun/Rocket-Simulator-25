@@ -34,7 +34,7 @@ import numpy as np
 import logging
 from src.utils.mattools import MatTools as Mat
 from src.utils.simulation_constants import GravitationalConstants as GC
-from src.utils.simulation_errors import InputValidationError, PhysicsCalculationError
+from src.utils.simulation_errors import InputValidationError
 
 # Use constants from GravitationalConstants
 MU_EARTH = GC.MU_EARTH

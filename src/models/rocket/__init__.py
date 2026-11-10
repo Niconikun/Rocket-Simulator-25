@@ -56,7 +56,7 @@ from src.models.atmosphere import Atmosphere
 from src.models.parachute import Parachute
 from src.models.clock import Clock
 from src.models.planet import Planet
-from src.models.mass_properties import MassProperties, SimpleMassProperties
+from src.models.mass_properties import MassProperties
 from src.models.interfaces import (
     IEngine, IAerodynamics, IParachute, IAtmosphere, IMassProperties
 )
@@ -81,7 +81,6 @@ __all__ = [
     'Clock',
     'Planet',
     'MassProperties',
-    'SimpleMassProperties',
     'IEngine',
     'IAerodynamics',
     'IParachute',

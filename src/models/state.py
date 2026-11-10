@@ -92,7 +92,7 @@ class StateProvider(ABC):
         """
         pass
     
-    def load_from_file(self, filepath: str = None) -> bool:
+    def load_from_file(self, filepath: Optional[str] = None) -> bool:
         """
         Load state from a JSON file.
         
@@ -107,7 +107,7 @@ class StateProvider(ABC):
         """
         return False
     
-    def save_to_file(self, filepath: str = None) -> bool:
+    def save_to_file(self, filepath: Optional[str] = None) -> bool:
         """
         Save state to a JSON file.
         
