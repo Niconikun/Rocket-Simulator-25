@@ -23,6 +23,7 @@ Proyecto iniciado por Jorge Orozco (Universidad de Concepción, 2022) para la pr
 - Integración numérica **RK4**
 - Cuaterniones para representación de rotación
 - Conservación de masa y energía; flujo másico variable
+- **Gravity Turn pasivo**: Alineación automática del eje X del cohete con el vector de velocidad, permitiendo que la gravedadincline naturalmente el cohete durante el ascenso (sin sistemas de control activo)
 
 ### Aerodinámica
 - Coeficientes de arrastre por componentes (fricción, presión, base, onda)
@@ -41,6 +42,15 @@ Proyecto iniciado por Jorge Orozco (Universidad de Concepción, 2022) para la pr
 - Estadísticas: media, desviación, percentiles (P5/P50/P95), máximo
 - CEP (Circular Error Probable) y elipse de dispersión
 - Visualizaciones: histograma de apogeo, scatter de impacto, boxplot
+
+### Gravity Turn (NUEVO)
+- **Gravity Turn pasivo**: Alineación automática del eje X del cuerpo con el vector de velocidad
+- Parámetros configurables:
+  - `enable_gravity_turn`: Activar/desactivar gravity turn
+  - `gravity_turn_rotation_rate`: Tasa máxima de rotación [°/s]
+  - `gravity_turn_min_velocity`: Velocidad mínima para activar [m/s]
+  - `gravity_turn_use_relative_velocity`: Usar velocidad relativa al aire (para viento)
+- **Documentación completa**: [GRAVITY_TURN_IMPLEMENTATION.md](GRAVITY_TURN_IMPLEMENTATION.md)
 
 ### Editor de Cohetes
 - Pestañas: Propiedades, Inercia & CoM, Motor, Geometría, Nariz, Aletas, Curvas de Empuje
