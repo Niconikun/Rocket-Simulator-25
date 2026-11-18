@@ -255,7 +255,7 @@ pressure distribution `Cp(x, θ)`, which is the entry point for thermodynamics.
 - **README**: new "Panel method aerodynamics" section documenting the method, its
   validity envelope (transonic gap), and the thermodynamics outputs.
 
-### Phase 4 — Thermodynamics enabled by the panel method
+### Phase 4 — Thermodynamics enabled by the panel method ✅ implemented
 
 New module `src/utils/thermodynamics.py`, fed by `get_surface_pressure()`:
 
@@ -270,9 +270,22 @@ New module `src/utils/thermodynamics.py`, fed by `get_surface_pressure()`:
 - Stagnation point: modified-Newtonian `Cp,max → 2` limit / Fay–Riddell engineering
   correlation for the nose tip.
 - Integration over the mesh → **total heat load Q(t), max q̇ and its location,
-  stagnation temperature history** — the outputs the dashboard plots and the
-  worker records. These size thermal protection and feed temperature-dependent
-  material limits.
+  stagnation temperature history** — implemented and wired end-to-end:
+  - worker (`simulation_worker.py`): when `thermo_enabled` + panel method,
+    computes per-stored-point `max_heat_flux` / `stagnation_temperature` /
+    cumulative `heat_load`, plus `metrics['max_heat_flux']`,
+    `metrics['max_stagnation_temperature']`, `metrics['total_heat_load_kJ']`,
+    `metrics['cp_profile_max_q']` and `metrics['cp_map_max_q']` (Cp(x) and the
+    unwrapped Cp(x,θ) map at max-q). Monte Carlo inherits via shared state.
+  - dashboard: "Heat Flux" and "Stagnation Temp" chart tabs (q̇(t), T0(t)),
+    "Cp Profile (max-q)" and "Cp Map (max-q)" tabs, and two new Flight Metrics
+    boxes (Max Heat Flux, Max Stag Temp).
+  - Monte Carlo widget: thermo metrics appear automatically in the stats table
+    (pretty labels + kW/m² scaling added).
+- Tests: `tests/test_utils/test_thermodynamics.py` (10 tests: isentropic Mach
+  inversion incl. stagnation limit, recovery/Eckert/stagnation relations,
+  Sutherland, per-panel heating on campanil at M=0.5–3, Mach and altitude
+  trends, None for the Barrowman model).
 
 ### 5. What else the panel method unlocks (beyond thermo)
 

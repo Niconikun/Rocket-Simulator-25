@@ -34,6 +34,11 @@ from src.models.engine import EnhancedEngine
 from src.utils.mattools import MatTools as Mat
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
 from src.utils.simulation_validator import SimulationValidator
+try:
+    from src.utils.thermodynamics import surface_heating
+    HAS_THERMO = True
+except ImportError:
+    HAS_THERMO = False
 from workers.simulation_cache import get_cache, SimulationCache
 import logging
 import json
@@ -293,6 +298,22 @@ class SimulationWorker(QThread):
         aero_method_name = getattr(aerodynamics, 'get_method_name', lambda: 'barrowman')()
         logger.info(f"Aerodynamics model in use: {aero_method_name}")
         
+        # ===== THERMO (Phase 4): aerodynamic heating from the panel Cp map =====
+        thermo_enabled = (
+            HAS_THERMO
+            and bool(self.state.get('thermo_enabled', False))
+            and callable(getattr(aerodynamics, 'get_surface_pressure', None))
+        )
+        heat_load_joules = 0.0
+        prev_thermo_t = 0.0
+        prev_thermo_qdot = 0.0
+        max_heat_flux = 0.0
+        max_stag_temp = 0.0
+        cp_profile_max_q = None
+        cp_map_max_q = None
+        if thermo_enabled:
+            logger.info("Aerodynamic heating (thermo) enabled with panel method")
+        
         # Use cached atmosphere if available
         if self._cache is not None:
             rocket.set_atmosphere(atmosphere)
@@ -499,6 +520,39 @@ class SimulationWorker(QThread):
                         aero_alpha = float(getattr(rocket.dynamics, '_alpha', 0.0))
                     except Exception:
                         aero_cd, aero_cl, aero_xcp, aero_alpha = 0.0, 0.0, 0.0, 0.0
+                    # Aerodynamic heating at this point (panel method + thermo enabled)
+                    point_heat_flux = 0.0
+                    point_stag_temp = 0.0
+                    if thermo_enabled:
+                        try:
+                            T_inf = float(atmosphere.give_temp(absolute_altitude))
+                            p_inf = float(atmosphere.give_pressure(absolute_altitude))
+                            thermo = surface_heating(aerodynamics, mach=mach, height=absolute_altitude,
+                                                     T_inf=T_inf, p_inf=p_inf, T_wall=300.0)
+                            if thermo is not None:
+                                point_heat_flux = thermo['max_heat_flux']
+                                point_stag_temp = thermo['stagnation_temperature']
+                                qdot = thermo['total_heat_load_rate'] or 0.0
+                                # trapezoidal integration of total heat load over the interval
+                                heat_load_joules += 0.5 * (prev_thermo_qdot + qdot) * (t - prev_thermo_t)
+                                prev_thermo_qdot = qdot
+                                prev_thermo_t = t
+                                if point_heat_flux > max_heat_flux:
+                                    max_heat_flux = point_heat_flux
+                                    max_stag_temp = point_stag_temp
+                                    cp_profile_max_q = {
+                                        'x': [float(v) for v in thermo['x']],
+                                        'cp_mean': [float(v) for v in thermo['Cp'].mean(axis=1)],
+                                        'mach': mach,
+                                    }
+                                    cp_map_max_q = {
+                                        'x': [float(v) for v in thermo['x']],
+                                        'az': [float(v) for v in thermo['az']],
+                                        'Cp': [[float(v) for v in row] for row in thermo['Cp']],
+                                        'mach': mach,
+                                    }
+                        except Exception as thermo_err:
+                            logger.debug(f"Thermo computation skipped at t={t}: {thermo_err}")
                     trajectory.append({
                         'time': t,
                         'altitude': current_altitude,
@@ -509,6 +563,9 @@ class SimulationWorker(QThread):
                         'cd': aero_cd,
                         'cl': aero_cl,
                         'x_cp': aero_xcp,
+                        'max_heat_flux': point_heat_flux,
+                        'stagnation_temperature': point_stag_temp,
+                        'heat_load': heat_load_joules,
                     })
                     
                 prev_altitude = current_altitude
@@ -552,6 +609,19 @@ class SimulationWorker(QThread):
             
         # Final metrics
         metrics['flight_duration'] = t
+        
+        # ===== THERMO METRICS (Phase 4) =====
+        if thermo_enabled:
+            metrics['max_heat_flux'] = max_heat_flux            # [W/m^2]
+            metrics['max_stagnation_temperature'] = max_stag_temp  # [K]
+            metrics['total_heat_load_kJ'] = heat_load_joules / 1000.0
+            if cp_profile_max_q is not None:
+                metrics['cp_profile_max_q'] = cp_profile_max_q
+            if cp_map_max_q is not None:
+                metrics['cp_map_max_q'] = cp_map_max_q
+            logger.info(f"Thermo: max heat flux {max_heat_flux/1000:.1f} kW/m^2, "
+                        f"max stagnation T {max_stag_temp:.0f} K, "
+                        f"heat load {heat_load_joules/1000:.1f} kJ")
         
         # Get propulsion metrics from engine
         # In new architecture, we access engine through rocket.engine

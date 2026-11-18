@@ -600,7 +600,12 @@ class MonteCarloWidget(BaseWidget):
             "flight_duration": "Flight Duration (s)",
             "apogee_time":     "Apogee Time (s)",
             "max_accel_g":     "Max Accel (g)",
+            "max_heat_flux":   "Max Heat Flux (kW/m²)",
+            "max_stagnation_temperature": "Max Stagnation T (K)",
+            "total_heat_load_kJ": "Heat Load (kJ)",
         }
+        # Scale W/m^2 metrics to kW/m^2 for readability
+        SCALE = {"max_heat_flux": 1000.0}
 
         for key, stats in all_stats.items():
             if not stats:
@@ -608,9 +613,10 @@ class MonteCarloWidget(BaseWidget):
             row = self.results_table.rowCount()
             self.results_table.insertRow(row)
             self.results_table.setItem(row, 0, QTableWidgetItem(LABELS.get(key, key)))
+            scale = SCALE.get(key, 1.0)
             for col, stat_key in enumerate(["mean", "std", "min", "p05", "median", "p95", "max"], start=1):
                 val = stats.get(stat_key, float("nan"))
-                self.results_table.setItem(row, col, QTableWidgetItem(f"{val:.2f}"))
+                self.results_table.setItem(row, col, QTableWidgetItem(f"{val / scale:.2f}"))
 
         if cep > 0:
             row = self.results_table.rowCount()
