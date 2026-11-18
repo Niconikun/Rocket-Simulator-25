@@ -165,10 +165,10 @@ pressure distribution `Cp(x, θ)`, which is the entry point for thermodynamics.
    and a run of the existing suite (`tests/models/test_aerodynamics.py`,
    `test_factory.py`, `test_rocket_dynamics.py`) to prove no regression.
 
-### Phase 2 — Config, state keys, worker plumbing
+### Phase 2 — Config, state keys, worker plumbing ✅ implemented
 
 - Rocket JSONs gain an optional section (schema update in
-  `data/schemas/rocket.schema.json`, validation in `src/utils/simulation_validator.py`):
+  `data/schemas/rocket.schema.json`, example in `campanil_1a.json`):
   ```json
   "aerodynamics": {
     "method": "barrowman | panel",
@@ -179,11 +179,18 @@ pressure distribution `Cp(x, θ)`, which is the entry point for thermodynamics.
   }
   ```
 - `src/config/constants.py` `StateKeyConstants`: `AERO_METHOD`, `AERO_PANEL_N_AXIAL`,
-  `AERO_PANEL_N_THETA`, `AERO_INCLUDE_FINS`, `THERMO_ENABLED`.
-- `workers/simulation_worker.py`: read the keys from state, pass `aero_method` into
-  `create_rocket_from_config`, and when thermo is active append per-step
-  `max_heat_flux`, `stagnation_temperature`, `integrated_heat_load` to the trajectory
-  record and metrics dict (Monte Carlo inherits this automatically).
+  `AERO_PANEL_N_THETA`, `AERO_INCLUDE_FINS`, `AERO_VISCOUS_CROSSFLOW`, `THERMO_ENABLED`.
+- `src/models/rocket/factory.py`: `validate_aerodynamics_section()` (config errors)
+  and `aero_selection_from_state()` (state → `(method, options)`; `'default'` =
+  use the rocket file). `create_aerodynamics` merges the file section with overrides.
+- `workers/simulation_worker.py`: reads the keys via `aero_selection_from_state`,
+  passes `aero_method`/`aero_options` into `create_rocket_from_config`, validates the
+  `aerodynamics` section in `_validate_rocket_config`, and records
+  `metrics['aero_method']` / `metrics['thermo_enabled']`. Monte Carlo inherits this
+  automatically (MC workers delegate to `SimulationWorker` with the shared state).
+- Per-step thermo fields (`max_heat_flux`, ...) are appended in Phase 4.
+- Tests: `tests/models/test_aero_plumbing.py` (section validation, state plumbing,
+  schema subschema, state-overrides-file precedence).
 
 ### Phase 3 — GUI (PyQt6)
 

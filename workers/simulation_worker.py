@@ -20,7 +20,11 @@ Migration Status: Phase 4 - Migrated to new architecture
 from PyQt6.QtCore import QThread, pyqtSignal
 from models.app_state import ApplicationState
 from src.models.state import StateProvider, StateProxy
-from src.models.rocket.factory import create_rocket_from_config
+from src.models.rocket.factory import (
+    create_rocket_from_config,
+    aero_selection_from_state,
+    validate_aerodynamics_section,
+)
 from src.models.rocket.rocket import Rocket as NewRocket
 from src.models.planet import Planet
 from src.models.atmosphere import Atmosphere
@@ -267,6 +271,12 @@ class SimulationWorker(QThread):
         # ========================================================================
         # PHASE 4: Use factory to create new architecture rocket
         # ========================================================================
+        # Aerodynamics method selection: app state overrides the rocket file
+        # ('default' = use rocket_config['aerodynamics']['method'], else barrowman)
+        aero_method, aero_options = aero_selection_from_state(self.state)
+        if aero_method:
+            logger.info(f"Aerodynamics method from state: {aero_method} (options={aero_options})")
+        
         # Create rocket using factory with dependency injection
         rocket, rocket_config, engine, aerodynamics, atm = create_rocket_from_config(
             r_enu_0=r_enu_0,
@@ -276,8 +286,12 @@ class SimulationWorker(QThread):
             initial_mass=initial_mass,
             rocket_name=rocket_name,
             temperature=temperature,
-            reference_area=reference_area
+            reference_area=reference_area,
+            aero_method=aero_method,
+            aero_options=aero_options or None
         )
+        aero_method_name = getattr(aerodynamics, 'get_method_name', lambda: 'barrowman')()
+        logger.info(f"Aerodynamics model in use: {aero_method_name}")
         
         # Use cached atmosphere if available
         if self._cache is not None:
@@ -317,6 +331,8 @@ class SimulationWorker(QThread):
             'launch_time': str(sim_datetime),
             'rocket': rocket_name,
             'location': location_name,
+            'aero_method': aero_method_name,
+            'thermo_enabled': bool(self.state.get('thermo_enabled', False)),
         }
             
         # Phase 1: Diagnostic tracking
@@ -864,6 +880,17 @@ class SimulationWorker(QThread):
         }
         
         try:
+            # ===== Aerodynamics section (method + panel options) =====
+            aero_cfg = config.get('aerodynamics', {}) or {}
+            aero_report = validate_aerodynamics_section(aero_cfg)
+            report['errors'].extend(aero_report['errors'])
+            report['warnings'].extend(aero_report['warnings'])
+            if aero_report['errors']:
+                report['valid'] = False
+            report['diagnostics']['aerodynamics'] = {
+                'method': str(aero_cfg.get('method', 'barrowman')).lower() if isinstance(aero_cfg, dict) else 'barrowman'
+            }
+            
             # Extract key parameters
             total_mass = config.get('initial_mass', config.get('total_mass_initial', 0))
             propellant_mass = config.get('propellant_mass', 0)

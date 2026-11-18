@@ -64,6 +64,7 @@ import numpy as np
 from src.models.rocket.rocket import Rocket as NewRocket
 from src.models.rocket.state import RocketState
 from src.models.atmosphere import Atmosphere
+from src.config.constants import Constants
 from src.utils.simulation_constants import RocketConstants as RC
 from src.models.engine import EnhancedEngine
 from src.models.aerodynamics import Aerodynamics
@@ -770,6 +771,84 @@ def create_aerodynamics(
     return aero
 
 
+VALID_AERO_METHODS = ('barrowman', 'panel')
+
+
+def validate_aerodynamics_section(aero_cfg: Optional[Dict[str, Any]]) -> Dict[str, list]:
+    """
+    Validate the optional 'aerodynamics' section of a rocket configuration.
+
+    Args:
+        aero_cfg: Value of rocket_config['aerodynamics'] (may be None/empty)
+
+    Returns:
+        {'errors': [...], 'warnings': [...]} - errors invalidate the config
+    """
+    report: Dict[str, list] = {'errors': [], 'warnings': []}
+    if not aero_cfg:
+        return report
+    if not isinstance(aero_cfg, dict):
+        report['errors'].append(f"'aerodynamics' must be an object, got {type(aero_cfg).__name__}")
+        return report
+    method = str(aero_cfg.get('method', 'barrowman')).lower()
+    if method not in VALID_AERO_METHODS:
+        report['errors'].append(
+            f"Invalid aerodynamics.method {aero_cfg.get('method')!r}: "
+            f"must be one of {VALID_AERO_METHODS}"
+        )
+    for key in ('n_axial', 'n_theta'):
+        if key in aero_cfg:
+            v = aero_cfg[key]
+            if isinstance(v, bool) or not isinstance(v, int) or v < 8:
+                report['errors'].append(f"aerodynamics.{key} must be an integer >= 8, got {v!r}")
+    for key in ('include_fins', 'viscous_crossflow', 'thermo_enabled'):
+        if key in aero_cfg and not isinstance(aero_cfg[key], bool):
+            report['errors'].append(f"aerodynamics.{key} must be a boolean, got {aero_cfg[key]!r}")
+    if method == 'panel' and 'thermo_enabled' in aero_cfg and aero_cfg['thermo_enabled']:
+        report['warnings'].append(
+            "aerodynamics.thermo_enabled=true requires the panel method at runtime; "
+            "heating metrics are only produced when method='panel'"
+        )
+    return report
+
+
+def aero_selection_from_state(getter) -> Tuple[Optional[str], Dict[str, Any]]:
+    """
+    Read the aerodynamics method and panel options from application state.
+
+    Args:
+        getter: Any object with .get(key, default) (StateProvider, dict, ...)
+
+    Returns:
+        (method, options): method is None to use the rocket config file default
+        ('barrowman' unless the file says otherwise), otherwise 'barrowman' or
+        'panel'. options holds panel settings (n_axial, n_theta, include_fins,
+        viscous_crossflow) for options explicitly set in the state.
+    """
+    method = getter.get(Constants.StateKeys.AERO_METHOD, 'default')
+    if method in (None, '', 'default'):
+        method = None
+    else:
+        method = str(method).lower()
+        if method not in VALID_AERO_METHODS:
+            logger.warning(f"Unknown aero_method {method!r} in state; using rocket file default")
+            method = None
+    options: Dict[str, Any] = {}
+    n_ax = getter.get(Constants.StateKeys.AERO_PANEL_N_AXIAL, None)
+    if n_ax is not None:
+        options['n_axial'] = int(n_ax)
+    n_th = getter.get(Constants.StateKeys.AERO_PANEL_N_THETA, None)
+    if n_th is not None:
+        options['n_theta'] = int(n_th)
+    inc = getter.get(Constants.StateKeys.AERO_INCLUDE_FINS, None)
+    if inc is not None:
+        options['include_fins'] = bool(inc)
+    vc = getter.get(Constants.StateKeys.AERO_VISCOUS_CROSSFLOW, None)
+    if vc is not None:
+        options['viscous_crossflow'] = bool(vc)
+    return method, options
+
+
 def create_mass_properties(
     initial_mass: float,
     propellant_mass: float,
@@ -1131,6 +1210,9 @@ __all__ = [
     'load_rocket_config',
     'create_engine',
     'create_aerodynamics',
+    'validate_aerodynamics_section',
+    'aero_selection_from_state',
+    'VALID_AERO_METHODS',
     'create_mass_properties',
     'create_wind_model',
     'create_parachute',
