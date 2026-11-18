@@ -492,12 +492,23 @@ class SimulationWorker(QThread):
                     
                 # Store trajectory point
                 if i % max(1, int(0.1 / timestep)) == 0:  # Store every 0.1 seconds
+                    # Aerodynamic state at this point (works for both aero methods)
+                    try:
+                        aero_cd, aero_cl = rocket.aerodynamics.get_coefficients()
+                        aero_xcp = float(rocket.aerodynamics.get_center_of_pressure()[0])
+                        aero_alpha = float(getattr(rocket.dynamics, '_alpha', 0.0))
+                    except Exception:
+                        aero_cd, aero_cl, aero_xcp, aero_alpha = 0.0, 0.0, 0.0, 0.0
                     trajectory.append({
                         'time': t,
                         'altitude': current_altitude,
                         'velocity': current_velocity,
                         'range': current_range,
                         'mach': mach,
+                        'alpha': aero_alpha,
+                        'cd': aero_cd,
+                        'cl': aero_cl,
+                        'x_cp': aero_xcp,
                     })
                     
                 prev_altitude = current_altitude
@@ -695,9 +706,24 @@ class SimulationWorker(QThread):
                     mach_dict = dict(zip(traj_times, traj_machs))
                     mach_list = [mach_dict.get(t, 0.0) for t in times_list]
                 
-                # Aerodynamic coefficients
+                # Aerodynamic coefficients (mapped from trajectory points by time)
                 drag_coeff_list = [0.0] * history_length
                 lift_coeff_list = [0.0] * history_length
+                alpha_list = [0.0] * history_length
+                xcp_list = [0.0] * history_length
+                if len(trajectory) > 0:
+                    t_cd = dict(zip([p.get('time', 0) for p in trajectory],
+                                    [p.get('cd', 0.0) for p in trajectory]))
+                    t_cl = dict(zip([p.get('time', 0) for p in trajectory],
+                                    [p.get('cl', 0.0) for p in trajectory]))
+                    t_al = dict(zip([p.get('time', 0) for p in trajectory],
+                                    [p.get('alpha', 0.0) for p in trajectory]))
+                    t_xcp = dict(zip([p.get('time', 0) for p in trajectory],
+                                     [p.get('x_cp', 0.0) for p in trajectory]))
+                    drag_coeff_list = [t_cd.get(tt, 0.0) for tt in times_list]
+                    lift_coeff_list = [t_cl.get(tt, 0.0) for tt in times_list]
+                    alpha_list = [t_al.get(tt, 0.0) for tt in times_list]
+                    xcp_list = [t_xcp.get(tt, 0.0) for tt in times_list]
                 
                 # Center of mass and center of pressure
                 cm_b_list = [[0.0, 0.0, 0.0] for _ in range(history_length)]
@@ -726,6 +752,8 @@ class SimulationWorker(QThread):
                     'hist_mach': mach_list,
                     'hist_drag_coeff': drag_coeff_list,
                     'hist_lift_coeff': lift_coeff_list,
+                    'hist_alpha': alpha_list,
+                    'hist_x_cp': xcp_list,
                     'hist_cm_b': cm_b_list,
                     'hist_cp_b': cp_b_list,
                     # Raw simulation data for backward compatibility

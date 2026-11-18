@@ -504,6 +504,10 @@ class DashboardWidget(BaseWidget):
         # Event 1: Ignition (always at t=0)
         events.append(("🔥 Ignition", 0.0, 0.0, 0.0))
         
+        # Aero model used for this run (barrowman / panel)
+        aero_method = metrics.get('aero_method', 'barrowman') if isinstance(metrics, dict) else 'barrowman'
+        events.append((f"🌬️ Aero model: {aero_method}", 0.0, 0.0, 0.0))
+        
         if isinstance(history, dict) and history:
             times = np.array(history.get('hist_time', []))
             altitudes = np.array(history.get('hist_alt', []))
@@ -780,19 +784,28 @@ class DashboardWidget(BaseWidget):
             plot8 = self._create_pyqtgraph_placeholder("Atmosphere")
         self._add_pyqtgraph_as_tab(plot8, "Atmosphere")
         
-        # Chart 9: Aerodynamic Coefficients
+        # Chart 9: Aerodynamic Coefficients (+ alpha, x_cp when available)
         try:
             times = np.array(history.get('hist_time', []))
             drag_coeff = np.array(history.get('hist_drag_coeff', []))
             lift_coeff = np.array(history.get('hist_lift_coeff', []))
             mach = np.array(history.get('hist_mach', []))
+            alpha = np.array(history.get('hist_alpha', []))
+            x_cp = np.array(history.get('hist_x_cp', []))
             
             if len(times) > 0:
+                series, labels, colors = [drag_coeff, lift_coeff, mach], ['Cd', 'Cl', 'Mach'], ['brown', 'pink', 'gray']
+                if len(alpha) == len(times) and np.any(alpha != 0):
+                    series.append(alpha)
+                    labels.append('Alpha [deg]')
+                    colors.append('orange')
+                if len(x_cp) == len(times) and np.any(x_cp != 0):
+                    series.append(x_cp)
+                    labels.append('x_cp [m]')
+                    colors.append('purple')
                 plot9 = self._create_pyqtgraph_plot(
                     "Aerodynamic Coefficients",
-                    times, [drag_coeff, lift_coeff, mach],
-                    ['Cd', 'Cl', 'Mach'],
-                    ['brown', 'pink', 'gray']
+                    times, series, labels, colors
                 )
             else:
                 plot9 = self._create_pyqtgraph_placeholder("Aero Coefficients")

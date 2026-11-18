@@ -61,6 +61,16 @@ FALLBACK_TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # Simulation Widget
         'Simulation Parameters': 'Parámetros de Simulación',
+        'Aerodynamics': 'Aerodinámica',
+        'Rocket file default': 'Por defecto del archivo',
+        'Barrowman': 'Barrowman',
+        'Panel method': 'Método de paneles',
+        'Aero Method:': 'Método Aero:',
+        'Panel axial strips:': 'Divisiones axiales del panel:',
+        'Panel azimuth divisions:': 'Divisiones azimutales del panel:',
+        'Include fins': 'Incluir aletas',
+        'Viscous crossflow (Allen)': 'Flujo cruzado viscoso (Allen)',
+        'Aerodynamic heating (thermo)': 'Calentamiento aerodinámico (termo)',
         'Simulation Runtime:': 'Tiempo de Ejecución:',
         ' seconds': ' segundos',
         'Time Step:': 'Paso de Tiempo:',

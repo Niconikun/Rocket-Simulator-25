@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox,
     QPushButton, QComboBox, QGroupBox, QFormLayout, QMessageBox, QTabWidget,
-    QFileDialog, QScrollArea, QSpinBox, QTextEdit
+    QFileDialog, QScrollArea, QSpinBox, QTextEdit, QCheckBox
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
@@ -63,6 +63,13 @@ try:
     HAS_STABILITY = True
 except ImportError:
     HAS_STABILITY = False
+
+# Aerodynamics analysis helpers (Barrowman vs panel method curves)
+try:
+    from src.utils.aero_analysis import analyze_aero_curves, cp_profile
+    HAS_AERO_ANALYSIS = True
+except ImportError:
+    HAS_AERO_ANALYSIS = False
 
 logger = logging.getLogger(__name__)
 
@@ -215,11 +222,15 @@ class RocketSettingsWidget(BaseWidget):
         self.tab_fins = self._create_fins_tab()
         self.tabs.addTab(self.tab_fins, "Fins")
         
-        # Tab 7: Stability Visualization
+        # Tab 7: Aerodynamics (Barrowman vs panel method)
+        self.tab_aero = self._create_aerodynamics_tab()
+        self.tabs.addTab(self.tab_aero, "Aerodynamics")
+        
+        # Tab 8: Stability Visualization
         self.tab_stability = self._create_stability_tab()
         self.tabs.addTab(self.tab_stability, "Stability")
         
-        # Tab 8: Thrust Curves
+        # Tab 9: Thrust Curves
         self.tab_thrust = self._create_thrust_curves_tab()
         self.tabs.addTab(self.tab_thrust, "Thrust Curves")
         
@@ -719,6 +730,151 @@ class RocketSettingsWidget(BaseWidget):
         widget.setLayout(main_layout)
         return widget
     
+    def _create_aerodynamics_tab(self):
+        """Create the Aerodynamics tab: method selection, panel options and analysis plots."""
+        tab = QWidget()
+        layout = QVBoxLayout()
+
+        # ===== MODEL SELECTION =====
+        method_group = QGroupBox("Aerodynamics Model")
+        form = QFormLayout()
+
+        self.aero_method_combo = QComboBox()
+        self.aero_method_combo.addItem("Barrowman (default)", 'barrowman')
+        self.aero_method_combo.addItem("Panel method", 'panel')
+        self.aero_method_combo.setCurrentIndex(0)
+        self.aero_method_combo.setToolTip(
+            "Barrowman: analytic slender-body method (current default). "
+            "Panel method: surface panel solution with Cp(x,theta) distribution."
+        )
+        form.addRow("Method:", self.aero_method_combo)
+
+        self.aero_n_axial = QSpinBox()
+        self.aero_n_axial.setRange(8, 200)
+        self.aero_n_axial.setValue(48)
+        form.addRow("Panel axial strips:", self.aero_n_axial)
+
+        self.aero_n_theta = QSpinBox()
+        self.aero_n_theta.setRange(8, 64)
+        self.aero_n_theta.setValue(16)
+        form.addRow("Panel azimuth divisions:", self.aero_n_theta)
+
+        self.aero_include_fins = QCheckBox("Include fins")
+        self.aero_include_fins.setChecked(True)
+        form.addRow(self.aero_include_fins)
+
+        self.aero_viscous_crossflow = QCheckBox("Viscous crossflow (Allen)")
+        self.aero_viscous_crossflow.setChecked(True)
+        form.addRow(self.aero_viscous_crossflow)
+
+        self.aero_thermo_enabled = QCheckBox("Enable aerodynamic heating metrics (thermo)")
+        self.aero_thermo_enabled.setChecked(False)
+        form.addRow(self.aero_thermo_enabled)
+
+        method_group.setLayout(form)
+        layout.addWidget(method_group)
+
+        # ===== ANALYSIS =====
+        analyze_button = QPushButton("📈 Analyze Aerodynamics (Barrowman vs Panel)")
+        analyze_button.setToolTip(
+            "Compute CD, C_Nalpha, x_cp and stability margin vs Mach for both "
+            "methods, plus the panel Cp(x) pressure profile"
+        )
+        analyze_button.clicked.connect(self.run_aero_analysis)
+        layout.addWidget(analyze_button)
+
+        if HAS_MATPLOTLIB and HAS_AERO_ANALYSIS:
+            self.aero_figure = Figure(figsize=(10, 10), dpi=100)
+            self.aero_canvas = FigureCanvas(self.aero_figure)
+            layout.addWidget(self.aero_canvas)
+        else:
+            layout.addWidget(QLabel(
+                "Analysis requires matplotlib and src.utils.aero_analysis."
+            ))
+
+        layout.addStretch()
+        tab.setLayout(layout)
+        return tab
+
+    def _aero_panel_options(self) -> dict:
+        """Panel options from the Aerodynamics tab widgets."""
+        return {
+            'n_axial': self.aero_n_axial.value(),
+            'n_theta': self.aero_n_theta.value(),
+            'include_fins': self.aero_include_fins.isChecked(),
+            'viscous_crossflow': self.aero_viscous_crossflow.isChecked(),
+        }
+
+    def _aero_section_dict(self) -> dict:
+        """The 'aerodynamics' section written into the rocket JSON."""
+        return {
+            'method': self.aero_method_combo.currentData() or 'barrowman',
+            'n_axial': self.aero_n_axial.value(),
+            'n_theta': self.aero_n_theta.value(),
+            'include_fins': self.aero_include_fins.isChecked(),
+            'viscous_crossflow': self.aero_viscous_crossflow.isChecked(),
+            'thermo_enabled': self.aero_thermo_enabled.isChecked(),
+        }
+
+    def run_aero_analysis(self):
+        """Run the Barrowman-vs-panel comparison and plot the curves."""
+        if not (HAS_MATPLOTLIB and HAS_AERO_ANALYSIS):
+            QMessageBox.warning(
+                self, "Unavailable",
+                "Aero analysis requires matplotlib and src.utils.aero_analysis."
+            )
+            return
+        rocket_config = self._build_rocket_data_dict()
+        panel_options = self._aero_panel_options()
+        try:
+            curves = analyze_aero_curves(
+                rocket_config, alpha_deg=5.0,
+                methods=('barrowman', 'panel'),
+                panel_options=panel_options,
+            )
+        except Exception as e:
+            logger.exception("Aero analysis failed")
+            QMessageBox.warning(self, "Analysis failed", str(e))
+            return
+
+        self.aero_figure.clear()
+        axes = self.aero_figure.subplots(3, 2)
+        style = {'barrowman': ('--', 'Barrowman'), 'panel': ('-', 'Panel')}
+
+        ax_cd, ax_cna = axes[0, 0], axes[0, 1]
+        ax_xcp, ax_stab = axes[1, 0], axes[1, 1]
+        ax_cp, ax_empty = axes[2, 0], axes[2, 1]
+        ax_empty.axis('off')
+
+        for method, data in curves.items():
+            ls, label = style.get(method, ('-', method))
+            ax_cd.plot(data['mach'], data['cd'], ls, label=label)
+            ax_cna.plot(data['mach'], data['c_nalpha'], ls, label=label)
+            ax_xcp.plot(data['mach'], data['x_cp'], ls, label=label)
+            ax_stab.plot(data['mach'], data['stability'], ls, label=label)
+
+        ax_cd.set_title("Drag coefficient CD vs Mach (α=5°)")
+        ax_cd.set_xlabel("Mach"); ax_cd.set_ylabel("CD"); ax_cd.legend(); ax_cd.grid(True, alpha=0.3)
+        ax_cna.set_title("C_Nα vs Mach (α=5°)")
+        ax_cna.set_xlabel("Mach"); ax_cna.set_ylabel("C_Nα [1/rad]"); ax_cna.legend(); ax_cna.grid(True, alpha=0.3)
+        ax_xcp.set_title("Center of pressure x_cp vs Mach [m]")
+        ax_xcp.set_xlabel("Mach"); ax_xcp.set_ylabel("x_cp [m]"); ax_xcp.legend(); ax_xcp.grid(True, alpha=0.3)
+        ax_stab.set_title("Static stability margin vs Mach [calibers]")
+        ax_stab.set_xlabel("Mach"); ax_stab.set_ylabel("Margin [cal]"); ax_stab.legend(); ax_stab.grid(True, alpha=0.3)
+
+        # Panel Cp(x) at subsonic and supersonic Mach
+        for m, color in ((0.3, 'tab:blue'), (2.0, 'tab:red')):
+            prof = cp_profile(rocket_config, mach=m, alpha_deg=5.0, panel_options=panel_options)
+            if prof is not None:
+                x, cp_mean, cp_suction = prof
+                ax_cp.plot(x, cp_mean, color=color, label=f"Cp mean, M={m}")
+                ax_cp.plot(x, cp_suction, color=color, ls=':', label=f"Cp suction, M={m}")
+        ax_cp.set_title("Panel surface pressure Cp(x), α=5°")
+        ax_cp.set_xlabel("x from nose tip [m]"); ax_cp.set_ylabel("Cp"); ax_cp.legend(); ax_cp.grid(True, alpha=0.3)
+
+        self.aero_figure.tight_layout()
+        self.aero_canvas.draw()
+
     def _create_stability_tab(self):
         """Create Stability tab with visual CP/CoM representation.
         
@@ -1041,6 +1197,16 @@ class RocketSettingsWidget(BaseWidget):
         self.gravity_turn_rotation_rate.setValue(gravity_turn.get('rotation_rate', 20.0))
         self.gravity_turn_min_velocity.setValue(gravity_turn.get('min_velocity', 10.0))
         self.gravity_turn_use_relative_velocity.setCurrentIndex(1 if gravity_turn.get('use_relative_velocity', False) else 0)
+        
+        # Aerodynamics section (method + panel options)
+        aero = rocket_data.get('aerodynamics', {}) or {}
+        method = str(aero.get('method', 'barrowman')).lower()
+        self.aero_method_combo.setCurrentIndex(1 if method == 'panel' else 0)
+        self.aero_n_axial.setValue(int(aero.get('n_axial', 48)))
+        self.aero_n_theta.setValue(int(aero.get('n_theta', 16)))
+        self.aero_include_fins.setChecked(bool(aero.get('include_fins', True)))
+        self.aero_viscous_crossflow.setChecked(bool(aero.get('viscous_crossflow', True)))
+        self.aero_thermo_enabled.setChecked(bool(aero.get('thermo_enabled', False)))
         
         # Inertia & CoM - Before Burn
         i_before = rocket_data.get('I_before_burn', {})
@@ -1459,45 +1625,9 @@ class RocketSettingsWidget(BaseWidget):
             QMessageBox.critical(self, "Error", f"Failed to load CSV: {str(e)}")
             logger.error(f"Error loading thrust curve: {e}")
     
-    def save_rocket_config(self):
-        """Save rocket configuration to JSON file.
-        
-        Validates rocket name for filesystem safety and configuration data
-        before saving. Prompts user on validation errors.
-        
-        Raises:
-            OSError: If file operations fail
-            JSONDecodeError: If data serialization fails
-        """
-        # Validate rocket name first
-        rocket_name = self.name_edit.text()
-        is_name_valid, name_error = self.validate_rocket_name(rocket_name)
-        
-        if not is_name_valid:
-            QMessageBox.critical(
-                self, "Invalid Rocket Name",
-                f"Rocket name validation failed:\n{name_error}"
-            )
-            return
-        
-        # Validate configuration
-        is_valid, errors, warnings = self.validate_rocket_config()
-        
-        if not is_valid:
-            reply = QMessageBox.question(
-                self, "Validation Errors",
-                f"Configuration has {len(errors)} error(s):\n\n" +
-                "\n".join(errors) + "\n\n"
-                f"Save anyway?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.No:
-                return
-        
-        configs_path = 'data/rockets/configs'
-        os.makedirs(configs_path, exist_ok=True)
-        
-        rocket_data = {
+    def _build_rocket_data_dict(self) -> dict:
+        """Assemble the rocket configuration dict from the current UI fields."""
+        return {
             'name': self.name_edit.text(),
             Constants.StateKeys.INITIAL_MASS: self.initial_mass_spinbox.value(),
             'propellant_mass': self.propellant_mass.value(),
@@ -1575,8 +1705,49 @@ class RocketSettingsWidget(BaseWidget):
                 'chord_tip': self.fin_chord_tip.value(),
                 'mid_chord': self.fin_mid_chord.value(),
                 'sweep_angle': self.fin_sweep_angle.value()
-            }
+            },
+            'aerodynamics': self._aero_section_dict()
         }
+
+    def save_rocket_config(self):
+        """Save rocket configuration to JSON file.
+        
+        Validates rocket name for filesystem safety and configuration data
+        before saving. Prompts user on validation errors.
+        
+        Raises:
+            OSError: If file operations fail
+            JSONDecodeError: If data serialization fails
+        """
+        # Validate rocket name first
+        rocket_name = self.name_edit.text()
+        is_name_valid, name_error = self.validate_rocket_name(rocket_name)
+        
+        if not is_name_valid:
+            QMessageBox.critical(
+                self, "Invalid Rocket Name",
+                f"Rocket name validation failed:\n{name_error}"
+            )
+            return
+        
+        # Validate configuration
+        is_valid, errors, warnings = self.validate_rocket_config()
+        
+        if not is_valid:
+            reply = QMessageBox.question(
+                self, "Validation Errors",
+                f"Configuration has {len(errors)} error(s):\n\n" +
+                "\n".join(errors) + "\n\n"
+                f"Save anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
+        
+        configs_path = 'data/rockets/configs'
+        os.makedirs(configs_path, exist_ok=True)
+        
+        rocket_data = self._build_rocket_data_dict()
         
         # Add thrust curve info if available
         if self.thrust_curve_data:

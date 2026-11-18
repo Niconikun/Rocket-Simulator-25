@@ -192,24 +192,32 @@ pressure distribution `Cp(x, θ)`, which is the entry point for thermodynamics.
 - Tests: `tests/models/test_aero_plumbing.py` (section validation, state plumbing,
   schema subschema, state-overrides-file precedence).
 
-### Phase 3 — GUI (PyQt6)
+### Phase 3 — GUI (PyQt6) ✅ implemented
 
+- **`src/utils/aero_analysis.py`** (new, Qt-free, unit-tested): `analyze_aero_curves()`
+  (CD / C_Nα / x_cp / stability vs Mach for both methods) and `cp_profile()`
+  (panel Cp(x) at a given Mach/α).
 - **`ui/widgets/rocket_settings_widget.py`** — new **"Aerodynamics"** tab between
   Fins and Stability: method combo (Barrowman / Panel method), panel resolution
   spin boxes, `include_fins` and thermo checkboxes, and an **"Analyze"** button that
   runs the panel solver at sea level and plots, inline (matplotlib canvas already
   used by the Stability tab): `Cp(x)` distribution, `C_Nα` and `x_cp` vs Mach, and
   `CD(M)` — side-by-side with the Barrowman values from `stability_calculator` for
-  comparison. Saved into the rocket JSON `aerodynamics` section by
-  `save_rocket_config` (line 1462).
+  comparison. Saved into the rocket JSON `aerodynamics` section via the extracted
+  `_build_rocket_data_dict()` (used by both save and the analyzer); loaded in
+  `load_rocket_data`.
 - **`ui/widgets/simulation_widget.py`** — new "Aerodynamics" group in the parameters
-  panel: method combo (Rocket file default / Barrowman / Panel) + thermo toggle,
-  bound to the new `StateKeys`.
-- **`ui/widgets/dashboard_widget.py`** — new "Aero & Thermal" section: heat-flux and
-  stagnation-temperature vs time, max-q marker, integrated heat load, and an
-  unwrapped `Cp(x, θ)` surface map when the panel method is active.
-- **Translations**: new label keys in `src/config/translations.py` (en/es),
-  compiled via `scripts/compile_translations.py`.
+  panel: method combo (Rocket file default / Barrowman / Panel), panel resolution
+  spin boxes, fins / viscous-crossflow / thermo checkboxes, bound to the new
+  `StateKeys`.
+- **`ui/widgets/dashboard_widget.py`** — "Aero Coefficients" chart tab extended with
+  α(t) and x_cp(t) series (worker now records per-step `alpha`/`cd`/`cl`/`x_cp` in
+  trajectory points and `hist_alpha`/`hist_x_cp` in history); aero method shown in
+  the flight-events list. The "Aero & Thermal" section (heat flux vs time,
+  stagnation temperature vs time with max-q marker, unwrapped `Cp(x, θ)` map) lands
+  in Phase 4 with the thermo metrics.
+- **Translations**: new keys in `src/config/translations.py` (es fallbacks).
+- Tests: `tests/test_utils/test_aero_analysis.py` (5 tests).
 
 #### GUI display rundown
 
