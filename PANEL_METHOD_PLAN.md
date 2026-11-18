@@ -113,25 +113,30 @@ pressure distribution `Cp(x, θ)`, which is the entry point for thermodynamics.
 ### Phase 1 — Core solver in `src/models` (no GUI)
 
 1. **New module `src/models/panel_method.py`:**
-   - `build_body_mesh(rocket_data, n_axial, n_theta)` — axisymmetric mesh from
+   - `BodyOfRevolutionMesh(rocket_data, n_axial, n_theta)` — axisymmetric mesh from
      `nosecone` (profile equations for conical / parabolic / ogive (Von Kármán) /
-     ellipsoidal), `fuselage` cylinder, `rear_section` boat-tail; panel corners,
-     centroids, unit normals, areas. Optional flat fin panels from `fins`
-     (span, chords, sweep, N_fins, position at `length_nosecone_fins`).
-   - Influence coefficients: ring-source closed form + doublet panels (Hess–Smith);
-     assemble and LU-factorize `A` once; precompute solutions for unit axial and
-     unit crossflow.
+     ellipsoidal / power), `fuselage` cylinder, `rear_section` boat-tail; strip
+     centroids, meridian normals, areas, azimuth quadrature.
+   - **Phase 1 solver (implemented):** axial flow via a source line on the body
+     axis (no-penetration solved once at construction, `numpy.linalg.lstsq`);
+     crossflow via the per-station 2D doublet (cylinder) field plus the
+     slender-body (Munk) normal force `C_N = 2 sin α cos α S_base/S_ref` with
+     `x_cp` from the `dS/dx` distribution — exact for slender bodies (cone
+     `C_Nα = 2`, `x_cp = 2L/3`; verified in tests). A full Hess–Smith surface
+     doublet solve (better for blunt bodies) is the accuracy follow-up; flat fin
+     panels likewise follow (Phase 1 uses the Barrowman fin add-on).
    - `class PanelMethodAerodynamics(IAerodynamics)` — same constructor signature as
      `Aerodynamics` (mach, angle_attack, height, atmosphere, rocket_data,
      mass_props) plus `n_axial`, `n_theta`, `include_fins`, `viscous_crossflow`.
      Implements the full interface: `update`, `get_coefficients` (CD = pressure/wave
      + skin friction + base; CL = normal force projected), `get_center_of_pressure`,
      `get_stability_margin`, `get_aerodynamic_forces`. Mach handling: Prandtl–
-     Glauert (M<0.8), existing transonic blend (0.8–1.2), Woodward supersonic panels
-     (M>1.2). Per-`(mach, α)` result caching.
+     Glauert (M<0.8), transonic blend (0.8–1.2), Ackeret linearized supersonic
+     panels (M>1.2, geometry-based wave drag). Per-`(mach, u)` result caching.
    - Extended duck-typed API (not on the ABC, to avoid breaking other impls):
-     `get_force_moment_coefficients() -> (CX, CY, CZ, Cl, Cm, Cn)` and
-     `get_surface_pressure() -> (x, theta, Cp)`.
+     `accepts_v_rel_body` + `update(..., v_rel_body=...)` (full body-frame relative
+     velocity, sideslip preserved), `get_force_moment_body(q, S, cm_b) -> (F, M)`,
+     and `get_surface_pressure() -> (x, theta, Cp)`.
 2. **Factory seam** in `src/models/rocket/factory.py`:
    - `create_aerodynamics(..., method: str = "barrowman", panel_options: dict | None)` —
      reads `rocket_config["aerodynamics"]["method"]` by default, returns
