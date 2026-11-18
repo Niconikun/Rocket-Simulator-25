@@ -143,6 +143,17 @@ pressure distribution `Cp(x, θ)`, which is the entry point for thermodynamics.
    6-DOF body-frame force/moment vector (adds pitch damping `C_mq`, roll `C_lp`,
    fin rolling moment); otherwise keep the current scalar cd/cl/cp path. Fully
    backward compatible.
+   - **Caveat (must be handled here):** dynamics currently reduces the air-relative
+     velocity to a single scalar angle of attack, `alpha = arctan2(v_z, v_x)`
+     (`dynamics.py:434-437`), discarding sideslip `beta`. Wind itself is upstream
+     (`v_rel = v_enu - wind`, `dynamics.py:411`), so the panel model stays
+     wind-agnostic — but the aero handoff must pass the **full relative-velocity
+     vector in the body frame** (or both `alpha` and `beta`) so the panel solver
+     can decompose the freestream into axial + crossflow in *both* planes.
+     Concretely: extend the `update` call with an optional `v_rel_body` argument
+     (duck-typed; defaults to the current scalar-alpha behavior) and have
+     `PanelMethodAerodynamics` superpose the unit axial solution plus two unit
+     crossflow solutions (`+y` and `+z`) instead of one.
 4. **Tests** `tests/models/test_panel_method.py`: analytic benchmarks (cone
    `C_Nα=2`, `x_cp=2L/3`; cylinder crossflow), panel-vs-Barrowman agreement on
    `campanil_1a.json` within tolerance, interface conformance, factory switching,
@@ -187,6 +198,40 @@ pressure distribution `Cp(x, θ)`, which is the entry point for thermodynamics.
   unwrapped `Cp(x, θ)` surface map when the panel method is active.
 - **Translations**: new label keys in `src/config/translations.py` (en/es),
   compiled via `scripts/compile_translations.py`.
+
+#### GUI display rundown
+
+- **Dashboard** (`ui/widgets/dashboard_widget.py`): results arrive via the
+  `simulation_completed` event and are stored in `StateKeys.SIMULATION_RESULTS`
+  (lines 100-108). Two display surfaces:
+  - *Flight Metrics grid* (lines 219-243): six `QGroupBox` labels fed from the
+    `metrics` dict — add **Max Heat Flux [W/m²]**, **Max Stagnation Temp [K]**, and
+    **Total Heat Load [kJ]** as new label boxes, populated from the new metric keys.
+  - *Charts tab bar* (`generate_performance_charts`, line 611): pyqtgraph
+    `PlotWidget`s in a `QTabWidget` — Altitude & Velocity (dual axis), Flight Path,
+    Mach vs time — plus placeholder tabs from `_generate_advanced_charts`
+    (Forces, Attitude, Atmosphere, lines 668-781). Add an **"Aero & Thermal"** tab:
+    heat flux vs time and stagnation temperature vs time with an `InfiniteLine`
+    marking max-q, `Cp(x)` along the body at the max-q instant, and an unwrapped
+    `Cp(x, θ)` heatmap (`pyqtgraph.ImageItem`). Data comes from per-step fields the
+    worker appends to each trajectory point (`heat_flux`, `stagnation_temp`,
+    `cp_profile`) and from `history`.
+- **Monte Carlo** (`ui/widgets/monte_carlo_widget.py`): three tabs — Config,
+  Landing Zone, Flight Performance (line 157). Per-run metrics arrive via
+  `run_completed(idx, metrics)` (line 525) and the batch via `finished(summary)`
+  (line 539).
+  - *Flight Performance tab* (`_populate_stats_table`, line 586): a `QTableWidget`
+    with columns Metric / Mean / Std / Min / P05 / Median / P95 / Max, driven by
+    `MonteCarloAggregator.from_runs(runs).all_scalar_stats()` — new thermo metrics
+    (`max_heat_flux`, `max_stagnation_temperature`, `heat_load`) appear
+    automatically as rows once the worker emits them; just add pretty names to the
+    `LABELS` dict. CEP row stays appended at the bottom.
+  - *Landing Zone tab* (lines 630-785): matplotlib figures from the aggregator
+    (`plot_apogee_histogram`, `plot_impact_scatter` — cartopy map or local km
+    scatter with dispersion ellipse). Add a **thermal dispersion figure**:
+    histogram of per-run max heat flux and a scatter of max-q altitude vs Mach,
+    so the spread of the heating environment across the ensemble is visible;
+    optionally color the impact scatter by per-run heat load.
 - **README**: new "Panel method aerodynamics" section documenting the method, its
   validity envelope (transonic gap), and the thermodynamics outputs.
 
