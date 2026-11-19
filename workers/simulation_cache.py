@@ -49,6 +49,20 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Keys that actually determine the wind model built by
+# src.utils.wind_utils.create_wind_model_from_state().  The cache key is
+# computed from these only, so unrelated state (e.g. simulation_results with
+# full history) neither changes the key nor makes hashing expensive.
+_WIND_CONFIG_KEYS = frozenset({
+    'wind_enabled', 'wind_speed', 'wind_speed_ref', 'wind_direction',
+    'model_type', 'wind_model_type', 'base_wind_model',
+    'wind_reference_height', 'wind_roughness_length', 'wind_exponent',
+    'wind_gust_intensity', 'wind_gust_length_scale', 'random_seed',
+    'shear_direction_change', 'shear_altitude_range',
+    'vertical_wind', 'vertical_wind_speed',
+    'launch_elevation', 'launch_altitude',
+})
+
 
 @dataclass
 class CacheStats:
@@ -253,33 +267,33 @@ class SimulationCache:
     # -------------------------------------------------------------------------
     
     def get_planet(self, latitude: float, longitude: float, gmst_0: float) -> Any:
-        """Get or create a Planet object with caching."""
+        """Get a Planet object for this run.
+
+        Planet is mutable (its GMST advances on every update()), so the cache
+        stores only the initial parameters and hands out a fresh instance per
+        call — sharing one instance across Monte Carlo runs would leak each
+        run's accumulated rotation into the next run.
+        """
         cache_key = _make_hash(latitude, longitude, gmst_0)
-        
+
         with self._cache_lock:
             if cache_key in self._planet_cache:
                 self._stats.hits += 1
-                logger.debug(f"Cache hit: Planet({latitude}, {longitude}, {gmst_0})")
-                return self._planet_cache[cache_key]
-            
-            self._stats.misses += 1
-            
-            # Import here to avoid circular imports
-            from src.models.planet import Planet
-            
-            planet = Planet(gmst_0)
-            
-            # Evict if at capacity
-            if len(self._planet_cache) >= self._max_planets:
-                oldest_key = next(iter(self._planet_cache))
-                del self._planet_cache[oldest_key]
-                self._stats.planets -= 1
-            
-            self._planet_cache[cache_key] = planet
-            self._stats.planets += 1
-            logger.debug(f"Cache miss: created Planet({latitude}, {longitude}, {gmst_0})")
-            
-            return planet
+                gmst = self._planet_cache[cache_key]
+            else:
+                self._stats.misses += 1
+                if len(self._planet_cache) >= self._max_planets:
+                    oldest_key = next(iter(self._planet_cache))
+                    del self._planet_cache[oldest_key]
+                    self._stats.planets -= 1
+                self._planet_cache[cache_key] = gmst_0
+                self._stats.planets += 1
+                gmst = gmst_0
+                logger.debug(f"Cache miss: Planet params ({latitude}, {longitude}, {gmst_0})")
+
+        from src.models.planet import Planet
+
+        return Planet(gmst)
     
     # -------------------------------------------------------------------------
     # Atmosphere Cache
@@ -396,8 +410,13 @@ class SimulationCache:
     # -------------------------------------------------------------------------
     
     def get_wind_model(self, wind_config: Dict[str, Any]) -> Any:
-        """Get or create a Wind model object with caching."""
-        cache_key = _make_hash(wind_config)
+        """Get or create a Wind model object with caching.
+
+        The cache key is derived only from the wind-relevant keys of
+        ``wind_config`` (see ``_WIND_CONFIG_KEYS``).
+        """
+        wind_key_config = {k: wind_config[k] for k in _WIND_CONFIG_KEYS if k in wind_config}
+        cache_key = _make_hash(wind_key_config)
         
         with self._cache_lock:
             if cache_key in self._wind_cache:

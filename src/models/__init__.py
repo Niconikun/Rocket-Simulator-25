@@ -32,6 +32,7 @@ from .atmosphere import Atmosphere
 from .state import StateProvider, StateProxy, MockStateProvider, ReadOnlyStateProvider
 from .clock import Clock
 from .aerodynamics import Aerodynamics, SimpleAerodynamics
+from .panel_method import PanelMethodAerodynamics
 from .engine import EnhancedEngine
 from .gravitational import g_accel, g_torque
 from .parachute import Parachute
@@ -62,6 +63,7 @@ __all__ = [
     # Aerodynamics
     'Aerodynamics',
     'SimpleAerodynamics',
+    'PanelMethodAerodynamics',
     # Engine
     'EnhancedEngine',
     # Gravity

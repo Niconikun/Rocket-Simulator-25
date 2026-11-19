@@ -26,6 +26,10 @@ Supported distribution types
 - ``'uniform'``          – Uniform on [low, high]
 - ``'fixed'``            – Always returns the nominal value (useful to pin a parameter)
 
+Any distribution can additionally set ``wrap`` (e.g. ``wrap=360.0``) to wrap the
+sampled value into ``[0, wrap)`` — use this for angular parameters such as
+azimuth or wind direction instead of truncating at the 0/360 boundary.
+
 Predefined rocket parameter sets
 ---------------------------------
 Call ``MonteCarloSampler.from_state(state)`` to build a sampler from an
@@ -40,6 +44,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Literal, Optional
 
 import numpy as np
+
+from src.config.constants import EnvironmentalConstants, MonteCarloConstants
 
 logger = logging.getLogger(__name__)
 
@@ -61,30 +67,65 @@ class ParameterConfig:
         Central / expected value. Required for ``'normal'`` and ``'fixed'``; used
         as the mean for ``'truncated_normal'``.
     sigma:
-        Standard deviation. Required for ``'normal'`` and ``'truncated_normal'``.
+        Standard deviation (absolute). Required for ``'normal'`` and
+        ``'truncated_normal'`` unless ``sigma_rel`` is given.
+    sigma_rel:
+        Relative standard deviation (fraction of ``nominal``), e.g. ``0.05``
+        for 5%. Used when ``sigma`` is ``None``; effective sigma =
+        ``abs(nominal) * sigma_rel``. Handy for mass/thrust-type parameters.
     low:
         Lower bound. For ``'uniform'``: left edge. For ``'normal'`` / ``'truncated_normal'``:
         hard floor (samples below this are clipped / rejected). ``None`` = no floor.
     high:
         Upper bound. For ``'uniform'``: right edge. For ``'normal'`` / ``'truncated_normal'``:
         hard ceiling. ``None`` = no ceiling.
+    wrap:
+        If set (e.g. ``360.0``), the sampled value is wrapped into ``[0, wrap)``
+        via modulo — for angular parameters. ``None`` = no wrapping.
     """
 
     distribution: DistributionType = 'normal'
     nominal: Optional[float] = None
     sigma: Optional[float] = None
+    sigma_rel: Optional[float] = None
     low: Optional[float] = None
     high: Optional[float] = None
+    wrap: Optional[float] = None
 
     def __post_init__(self) -> None:
+        if self.wrap is not None and self.wrap <= 0:
+            raise ValueError(f"wrap must be > 0, got {self.wrap}")
         if self.distribution in ('normal', 'truncated_normal'):
-            if self.nominal is None or self.sigma is None:
+            if self.nominal is None or (self.sigma is None and self.sigma_rel is None):
                 raise ValueError(
-                    f"'normal'/'truncated_normal' distributions require both "
-                    f"'nominal' and 'sigma'. Got nominal={self.nominal}, sigma={self.sigma}"
+                    f"'normal'/'truncated_normal' distributions require 'nominal' and "
+                    f"'sigma' (or 'sigma_rel'). Got nominal={self.nominal}, "
+                    f"sigma={self.sigma}, sigma_rel={self.sigma_rel}"
                 )
-            if self.sigma < 0:
+            if self.sigma is not None and self.sigma < 0:
                 raise ValueError(f"sigma must be >= 0, got {self.sigma}")
+            if self.sigma_rel is not None and self.sigma_rel < 0:
+                raise ValueError(f"sigma_rel must be >= 0, got {self.sigma_rel}")
+
+        if self.distribution == 'uniform':
+            if self.low is None or self.high is None:
+                raise ValueError("'uniform' distribution requires both 'low' and 'high'.")
+            if self.low >= self.high:
+                raise ValueError(
+                    f"'uniform' requires low < high, got low={self.low}, high={self.high}"
+                )
+
+        if self.distribution == 'fixed':
+            if self.nominal is None:
+                raise ValueError("'fixed' distribution requires 'nominal'.")
+
+    def effective_sigma(self) -> Optional[float]:
+        """Absolute sigma: ``sigma`` if set, else ``abs(nominal) * sigma_rel``."""
+        if self.sigma is not None:
+            return self.sigma
+        if self.sigma_rel is not None and self.nominal is not None:
+            return abs(self.nominal) * self.sigma_rel
+        return None
 
         if self.distribution == 'uniform':
             if self.low is None or self.high is None:
@@ -162,6 +203,14 @@ class MonteCarloSampler:
         """
         return [self.sample() for _ in range(n)]
 
+    def draw_seed(self) -> int:
+        """Draw a non-negative 31-bit integer from the same RNG stream.
+
+        Useful for per-run seeds of stochastic sub-models (e.g. wind gusts):
+        keeps the whole batch reproducible from the sampler seed.
+        """
+        return int(self._rng.integers(0, 2**31 - 1))
+
     def reset(self, seed: Optional[int] = None) -> None:
         """Re-seed the RNG and reset the run counter."""
         self._rng = np.random.default_rng(seed)
@@ -185,12 +234,15 @@ class MonteCarloSampler:
                 bounds = ""
                 if cfg.low is not None or cfg.high is not None:
                     bounds = f", clipped [{cfg.low}, {cfg.high}]"
+                if cfg.wrap is not None:
+                    bounds += f", wrapped mod {cfg.wrap}"
+                sigma_txt = f"σ={cfg.sigma}" if cfg.sigma is not None else f"σ={cfg.sigma_rel:.3f}·nominal"
                 lines.append(
-                    f"  {key}: Normal(μ={cfg.nominal}, σ={cfg.sigma}){bounds}"
+                    f"  {key}: Normal(μ={cfg.nominal}, {sigma_txt}){bounds}"
                 )
             elif cfg.distribution == 'truncated_normal':
                 lines.append(
-                    f"  {key}: TruncatedNormal(μ={cfg.nominal}, σ={cfg.sigma}, "
+                    f"  {key}: TruncatedNormal(μ={cfg.nominal}, σ={cfg.effective_sigma()}, "
                     f"[{cfg.low}, {cfg.high}])"
                 )
             elif cfg.distribution == 'uniform':
@@ -228,38 +280,42 @@ class MonteCarloSampler:
 
         Default uncertainty budget
         --------------------------
+        All sigmas are absolute values taken from ``MonteCarloConstants``
+        (wind speed sigma is absolute m/s, not relative to the nominal).
+        Angles wrap modulo 360 instead of being truncated at the boundary.
+
         ======================= =============================== ============
-        Parameter               Distribution                    Justification
+        Parameter               Distribution                    Default sigma
         ======================= =============================== ============
-        launch_elevation_angle  Normal, σ=1°, floor 5°         Launch-rod alignment
-        launch_azimuth          Normal, σ=2°, full wrap [0,360] Compass heading error
-        launch_roll             Normal, σ=1°                    Roll at ignition
-        average_temperature     Normal, σ=2°C                   Forecast uncertainty
-        wind_speed_ref          TruncNormal, σ=20% of nominal   Anemometer error
-        wind_direction          Normal, σ=10°                   Wind vane uncertainty
-        parachute_deployment_altitude  Normal, σ=10 m, floor 50 m   Altimeter error
-        parachute_cd            Normal, σ=5%, floor 0.5         Manufacturing spread
+        launch_elevation_angle  TruncNormal [5°, 90°]          1°
+        launch_azimuth          Normal, wrapped mod 360         2°
+        launch_roll             Normal, clipped [-180°, 180°]  1°
+        average_temperature     Normal, clipped to env. range   2 °C
+        wind_speed_ref          TruncNormal, floor 0            1 m/s
+        wind_direction          Normal, wrapped mod 360         10°
+        parachute_deployment_altitude  TruncNormal, floor 50 m 10 m
+        parachute_cd            TruncNormal, floor 0.5          0.075
         ======================= =============================== ============
         """
         configs: Dict[str, ParameterConfig] = {}
+        mc = MonteCarloConstants
 
         # ---- Launch geometry ----
         elev = float(state.get('launch_elevation_angle', 85.0))
         configs['launch_elevation_angle'] = ParameterConfig(
             distribution='truncated_normal',
             nominal=elev,
-            sigma=1.0,
+            sigma=mc.DEFAULT_SIGMA_ELEVATION,
             low=5.0,
             high=90.0,
         )
 
         azimuth = float(state.get('launch_azimuth', 0.0))
         configs['launch_azimuth'] = ParameterConfig(
-            distribution='truncated_normal',
+            distribution='normal',
             nominal=azimuth,
-            sigma=2.0,
-            low=0.0,
-            high=360.0,
+            sigma=mc.DEFAULT_SIGMA_AZIMUTH,
+            wrap=360.0,
         )
 
         roll = float(state.get('launch_roll', 0.0))
@@ -276,30 +332,28 @@ class MonteCarloSampler:
         configs['average_temperature'] = ParameterConfig(
             distribution='normal',
             nominal=temp,
-            sigma=2.0,
-            low=-50.0,
-            high=50.0,
+            sigma=mc.DEFAULT_SIGMA_TEMPERATURE,
+            low=EnvironmentalConstants.MIN_TEMPERATURE,
+            high=EnvironmentalConstants.MAX_TEMPERATURE,
         )
 
         # ---- Wind ----
         if state.get('wind_enabled', False):
-            wind_speed = float(state.get('wind_speed_ref', 5.0))
-            wind_sigma = max(0.5, wind_speed * 0.20)   # 20% of nominal, min 0.5 m/s
+            wind_speed = float(state.get('wind_speed_ref', state.get('wind_speed', 5.0)))
             configs['wind_speed_ref'] = ParameterConfig(
                 distribution='truncated_normal',
                 nominal=wind_speed,
-                sigma=wind_sigma,
+                sigma=mc.DEFAULT_SIGMA_WIND_SPEED,
                 low=0.0,
                 high=None,
             )
 
             wind_dir = float(state.get('wind_direction', 180.0))
             configs['wind_direction'] = ParameterConfig(
-                distribution='truncated_normal',
+                distribution='normal',
                 nominal=wind_dir,
-                sigma=10.0,
-                low=0.0,
-                high=360.0,
+                sigma=mc.DEFAULT_SIGMA_WIND_DIRECTION,
+                wrap=360.0,
             )
 
         # ---- Parachute ----
@@ -308,7 +362,7 @@ class MonteCarloSampler:
             configs['parachute_deployment_altitude'] = ParameterConfig(
                 distribution='truncated_normal',
                 nominal=deploy_alt,
-                sigma=10.0,
+                sigma=mc.DEFAULT_SIGMA_PARACHUTE_ALTITUDE,
                 low=50.0,
                 high=None,
             )
@@ -317,7 +371,7 @@ class MonteCarloSampler:
             configs['parachute_cd'] = ParameterConfig(
                 distribution='truncated_normal',
                 nominal=para_cd,
-                sigma=para_cd * 0.05,   # 5% spread
+                sigma=mc.DEFAULT_SIGMA_PARACHUTE_CD,
                 low=0.5,
                 high=None,
             )
@@ -335,27 +389,35 @@ class MonteCarloSampler:
     def _draw(self, key: str, cfg: ParameterConfig) -> float:
         """Sample a single value from the given distribution."""
         if cfg.distribution == 'fixed':
-            return float(cfg.nominal)  # type: ignore[arg-type]
+            value = float(cfg.nominal)  # type: ignore[arg-type]
+            return self._apply_wrap(value, cfg)
 
         if cfg.distribution == 'uniform':
             assert cfg.low is not None and cfg.high is not None
-            return float(self._rng.uniform(cfg.low, cfg.high))
+            return self._apply_wrap(float(self._rng.uniform(cfg.low, cfg.high)), cfg)
 
         if cfg.distribution == 'normal':
-            # Type narrowing: __post_init__ guarantees nominal and sigma are not None for normal
-            assert cfg.nominal is not None and cfg.sigma is not None
-            value = float(self._rng.normal(cfg.nominal, cfg.sigma))
+            assert cfg.nominal is not None
+            sigma = cfg.effective_sigma()
+            assert sigma is not None
+            value = float(self._rng.normal(cfg.nominal, sigma))
             # Soft clip
             if cfg.low is not None:
                 value = max(value, cfg.low)
             if cfg.high is not None:
                 value = min(value, cfg.high)
-            return value
+            return self._apply_wrap(value, cfg)
 
         if cfg.distribution == 'truncated_normal':
-            return self._truncated_normal(key, cfg)
+            return self._apply_wrap(self._truncated_normal(key, cfg), cfg)
 
         raise ValueError(f"Unknown distribution '{cfg.distribution}' for parameter '{key}'")
+
+    @staticmethod
+    def _apply_wrap(value: float, cfg: ParameterConfig) -> float:
+        if cfg.wrap is not None:
+            return value % cfg.wrap
+        return value
 
     def _truncated_normal(self, key: str, cfg: ParameterConfig) -> float:
         """Rejection-sampling implementation of truncated normal.
@@ -364,12 +426,14 @@ class MonteCarloSampler:
         to prevent infinite loops for very tight bounds.
         """
         # Type narrowing: __post_init__ guarantees nominal and sigma are not None for truncated_normal
-        assert cfg.nominal is not None and cfg.sigma is not None
+        assert cfg.nominal is not None
+        sigma = cfg.effective_sigma()
+        assert sigma is not None
         low = cfg.low if cfg.low is not None else -np.inf
         high = cfg.high if cfg.high is not None else np.inf
 
         for attempt in range(self._max_attempts):
-            value = float(self._rng.normal(cfg.nominal, cfg.sigma))
+            value = float(self._rng.normal(cfg.nominal, sigma))
             if low <= value <= high:
                 return value
 
@@ -377,7 +441,7 @@ class MonteCarloSampler:
         logger.warning(
             "Truncated normal for '%s' (μ=%.3f, σ=%.3f, [%.3f, %.3f]) did not converge "
             "in %d attempts. Clipping to bounds.",
-            key, cfg.nominal, cfg.sigma, low, high, self._max_attempts,
+            key, cfg.nominal, sigma, low, high, self._max_attempts,
         )
-        value = float(self._rng.normal(cfg.nominal, cfg.sigma))
+        value = float(self._rng.normal(cfg.nominal, sigma))
         return float(np.clip(value, low, high))

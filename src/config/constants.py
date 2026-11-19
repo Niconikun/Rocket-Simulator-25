@@ -26,7 +26,7 @@ class SimulationConstants:
     DEFAULT_TIMESTEP = 0.001
     
     # Launch parameters
-    DEFAULT_LAUNCH_ANGLE = 85.0  # degrees from vertical
+    DEFAULT_LAUNCH_ANGLE = 85.0  # degrees above horizon (90 = vertical)
     MIN_LAUNCH_ANGLE = 5.0
     MAX_LAUNCH_ANGLE = 90.0
     
@@ -184,14 +184,23 @@ class MonteCarloConstants:
     MAX_WORKERS = 32
     DEFAULT_WORKERS = 4
     
-    # Uncertainty ranges (1 sigma)
+    # Uncertainty ranges (1 sigma) — wind speed sigma is absolute (m/s),
+    # not relative to the nominal wind speed
     DEFAULT_SIGMA_ELEVATION = 1.0  # degrees
     DEFAULT_SIGMA_AZIMUTH = 2.0  # degrees
     DEFAULT_SIGMA_TEMPERATURE = 2.0  # Celsius
-    DEFAULT_SIGMA_WIND_SPEED = 1.0  # m/s
+    DEFAULT_SIGMA_WIND_SPEED = 1.0  # m/s (absolute)
     DEFAULT_SIGMA_WIND_DIRECTION = 10.0  # degrees
     DEFAULT_SIGMA_PARACHUTE_ALTITUDE = 10.0  # meters
     DEFAULT_SIGMA_PARACHUTE_CD = 0.075
+    DEFAULT_SIGMA_DROGUE_ALTITUDE = 15.0  # meters
+    DEFAULT_SIGMA_DROGUE_CD = 0.075
+
+    # Relative sigmas (fraction of nominal) for rocket/engine parameters
+    DEFAULT_SIGMA_REL_MASS = 0.02       # 2% of initial mass
+    DEFAULT_SIGMA_REL_PROPELLANT = 0.02  # 2% of propellant mass
+    DEFAULT_SIGMA_REL_THRUST = 0.05     # 5% of mean thrust
+    DEFAULT_SIGMA_REL_BURN_TIME = 0.02  # 2% of burn time
 
 
 class StateKeyConstants:
@@ -283,6 +292,8 @@ class StateKeyConstants:
     MONTE_CARLO_RUNS = 'monte_carlo_runs'
     MONTE_CARLO_WORKERS = 'monte_carlo_workers'
     MONTE_CARLO_RESULTS = 'monte_carlo_results'
+    MONTE_CARLO_SEED = 'monte_carlo_seed'
+    MONTE_CARLO_SIGMAS = 'monte_carlo_sigmas'  # dict of per-parameter sigma overrides
     
     # Theme/UI keys
     DARK_MODE_ENABLED = 'dark_mode_enabled'
@@ -338,6 +349,15 @@ class StateKeyConstants:
     MEAN_CHAMBER_PRESSURE = 'mean_chamber_pressure'
     MAX_CHAMBER_PRESSURE = 'max_chamber_pressure'
     THRUST_TO_WEIGHT = 'thrust_to_weight'
+    
+    # Aerodynamics keys
+    # AERO_METHOD: 'default' (use rocket file), 'barrowman' or 'panel'
+    AERO_METHOD = 'aero_method'
+    AERO_PANEL_N_AXIAL = 'aero_panel_n_axial'
+    AERO_PANEL_N_THETA = 'aero_panel_n_theta'
+    AERO_INCLUDE_FINS = 'aero_include_fins'
+    AERO_VISCOUS_CROSSFLOW = 'aero_viscous_crossflow'
+    THERMO_ENABLED = 'thermo_enabled'
 
 
 class Constants:

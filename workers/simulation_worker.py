@@ -20,7 +20,11 @@ Migration Status: Phase 4 - Migrated to new architecture
 from PyQt6.QtCore import QThread, pyqtSignal
 from models.app_state import ApplicationState
 from src.models.state import StateProvider, StateProxy
-from src.models.rocket.factory import create_rocket_from_config
+from src.models.rocket.factory import (
+    create_rocket_from_config,
+    aero_selection_from_state,
+    validate_aerodynamics_section,
+)
 from src.models.rocket.rocket import Rocket as NewRocket
 from src.models.planet import Planet
 from src.models.atmosphere import Atmosphere
@@ -30,6 +34,11 @@ from src.models.engine import EnhancedEngine
 from src.utils.mattools import MatTools as Mat
 from src.utils.wind_utils import create_wind_model_from_state, log_wind_config
 from src.utils.simulation_validator import SimulationValidator
+try:
+    from src.utils.thermodynamics import surface_heating
+    HAS_THERMO = True
+except ImportError:
+    HAS_THERMO = False
 from workers.simulation_cache import get_cache, SimulationCache
 import logging
 import json
@@ -43,6 +52,19 @@ logger = logging.getLogger(__name__)
 
 # Constants
 DEG_TO_RAD = np.pi / 180.0
+STANDARD_G = 9.80665  # m/s^2
+
+
+def _total_accel_magnitude(forces_b: np.ndarray, mass: float, q_enu2b: np.ndarray) -> float:
+    """Total acceleration magnitude [m/s^2] including gravity.
+
+    ``forces_b`` are the non-gravity body-frame forces (as stored in the
+    simulation history); gravity is rotated into the body frame and added.
+    """
+    g_enu = np.array([0.0, 0.0, -STANDARD_G])
+    g_b = Mat.q_rot(g_enu, q_enu2b, 0)
+    a_b = np.asarray(forces_b, dtype=float) / mass + g_b
+    return float(np.linalg.norm(a_b))
 
 
 # Use StateProxy from src.models.state for new code
@@ -173,6 +195,10 @@ class SimulationWorker(QThread):
         rocket_config = self._load_rocket_config(rocket_name)
         if not rocket_config:
             raise ValueError(f"Could not load rocket configuration: {rocket_name}")
+
+        # Apply state overrides (GUI edits and Monte Carlo samples) on top of
+        # the file config — _load_rocket_config returns a deep copy
+        rocket_config = self._apply_state_config_overrides(rocket_config)
             
         # Validate rocket configuration (Option 3)
         validation_report = self._validate_rocket_config(rocket_config, rocket_name)
@@ -267,6 +293,12 @@ class SimulationWorker(QThread):
         # ========================================================================
         # PHASE 4: Use factory to create new architecture rocket
         # ========================================================================
+        # Aerodynamics method selection: app state overrides the rocket file
+        # ('default' = use rocket_config['aerodynamics']['method'], else barrowman)
+        aero_method, aero_options = aero_selection_from_state(self.state)
+        if aero_method:
+            logger.info(f"Aerodynamics method from state: {aero_method} (options={aero_options})")
+        
         # Create rocket using factory with dependency injection
         rocket, rocket_config, engine, aerodynamics, atm = create_rocket_from_config(
             r_enu_0=r_enu_0,
@@ -277,17 +309,37 @@ class SimulationWorker(QThread):
             rocket_name=rocket_name,
             temperature=temperature,
             reference_area=reference_area,
-            launch_elevation=altitude
+            rocket_config_override=rocket_config
+            aero_method=aero_method,
+            aero_options=aero_options or None
         )
-
+        aero_method_name = getattr(aerodynamics, 'get_method_name', lambda: 'barrowman')()
+        logger.info(f"Aerodynamics model in use: {aero_method_name}")
+        
+        # ===== THERMO (Phase 4): aerodynamic heating from the panel Cp map =====
+        thermo_enabled = (
+            HAS_THERMO
+            and bool(self.state.get('thermo_enabled', False))
+            and callable(getattr(aerodynamics, 'get_surface_pressure', None))
+        )
+        heat_load_joules = 0.0
+        prev_thermo_t = 0.0
+        prev_thermo_qdot = 0.0
+        max_heat_flux = 0.0
+        max_stag_temp = 0.0
+        cp_profile_max_q = None
+        cp_map_max_q = None
+        if thermo_enabled:
+            logger.info("Aerodynamic heating (thermo) enabled with panel method")
+        
         # Use cached atmosphere if available
         if self._cache is not None:
             rocket.set_atmosphere(atmosphere)
 
-        # Attach the parachute so its drag is applied inside the dynamics
+        # Attach the parachute so its drag is applied by the dynamics
         if parachute is not None:
             rocket.set_parachute(parachute)
-            
+
         # ===== WIND MODEL INITIALIZATION (Phase 2) =====
         # Use cached wind model if available (Monte Carlo optimization)
         wind_config = self.state.get_all()
@@ -315,6 +367,8 @@ class SimulationWorker(QThread):
             'max_altitude': 0.0,
             'max_velocity': 0.0,
             'max_accel_g': 0.0,
+            'max_q': 0.0,
+            'touchdown_velocity': 0.0,
             'max_mach': 0.0,
             'max_range': 0.0,
             'flight_duration': 0.0,
@@ -322,6 +376,8 @@ class SimulationWorker(QThread):
             'launch_time': str(sim_datetime),
             'rocket': rocket_name,
             'location': location_name,
+            'aero_method': aero_method_name,
+            'thermo_enabled': bool(self.state.get('thermo_enabled', False)),
         }
             
         # Phase 1: Diagnostic tracking
@@ -384,9 +440,9 @@ class SimulationWorker(QThread):
                 
                 # =============================================================
                 # PARACHUTE HANDLING
-                # The parachute is attached to the rocket, so rocket.step()
-                # already ran parachute.update() (descent-gated deployment) and
-                # the dynamics apply the drag force. Here we only track metrics.
+                # The parachute is attached to the rocket (set_parachute), so
+                # rocket.step() updates its deployment state and the dynamics
+                # apply its drag force during integration.
                 # =============================================================
                 if parachute is not None:
                     current_altitude = rocket.state.r_enu[2]
@@ -404,11 +460,19 @@ class SimulationWorker(QThread):
                             current_altitude, t,
                         )
 
-                    # Advance inflation counter
-                    parachute.update_inflation(timestep)
+                    # Altitude-based deployment checks
+                    if parachute.check_deployment(current_altitude, vertical_velocity, t):
+                        logger.info(
+                            "Main parachute deployed: altitude=%.1fm, velocity=%.1fm/s",
+                            current_altitude, vertical_velocity,
+                        )
+                    if parachute.check_drogue_deployment(current_altitude, t):
+                        logger.info(
+                            "Drogue deployed (altitude trigger): %.1fm", current_altitude
+                        )
 
-                    # Track descent metrics
-                    if parachute.is_deployed():
+                    parachute.update_inflation(timestep)
+                    if parachute.deployed:
                         parachute.max_descent_rate = max(
                             parachute.max_descent_rate, vertical_velocity
                         )
@@ -423,22 +487,18 @@ class SimulationWorker(QThread):
                 # Get Mach number from atmosphere
                 mach = current_velocity / atmosphere.give_v_sonic(absolute_altitude) if current_velocity > 0 else 0.0
                 
-                # Get acceleration - from dynamics or state
-                # In new architecture, acceleration is calculated in dynamics
-                # For now, we'll use a simplified calculation or get from history
-                # We can access the acceleration from the last step's forces
+                # Get acceleration from the last step's forces (history stores the
+                # non-gravity body-frame forces, so gravity is added back here)
                 try:
-                    # Net acceleration = F_total/m + g (gravity is added separately
-                    # from the aero/propulsion forces in the integrator)
                     accel_magnitude = 0.0
                     if len(rocket.simulation.history.forces) > 0:
                         last_force_b = rocket.simulation.history.forces[-1]
                         last_q = rocket.simulation.history.attitudes[-1]
                         last_mass = rocket.simulation.history.masses[-1]
                         if last_mass > 0:
-                            f_enu = Mat.q_rot(last_force_b, last_q, 1)
-                            accel_enu = f_enu / last_mass + np.array([0.0, 0.0, -9.80665])
-                            accel_magnitude = float(np.linalg.norm(accel_enu))
+                            accel_magnitude = _total_accel_magnitude(
+                                last_force, last_mass, rocket.state.q_enu2b
+                            )
                 except Exception:
                     accel_magnitude = 0.0
                 
@@ -447,6 +507,11 @@ class SimulationWorker(QThread):
                 metrics['max_mach'] = max(metrics['max_mach'], mach)
                 metrics['max_range'] = max(metrics['max_range'], current_range)
                 metrics['max_accel_g'] = max(metrics['max_accel_g'], accel_magnitude / 9.80665)
+
+                # Max dynamic pressure q = 0.5 * rho * |v_rel|^2
+                v_rel = rocket.state.v_enu - wind_vector_enu
+                q = 0.5 * float(atmosphere.give_dens(absolute_altitude)) * float(np.dot(v_rel, v_rel))
+                metrics['max_q'] = max(metrics['max_q'], q)
                     
                 # Detect apogee
                 if current_altitude < prev_altitude and not apogee_reached:
@@ -455,12 +520,59 @@ class SimulationWorker(QThread):
                     
                 # Store trajectory point
                 if i % max(1, int(0.1 / timestep)) == 0:  # Store every 0.1 seconds
+                    # Aerodynamic state at this point (works for both aero methods)
+                    try:
+                        aero_cd, aero_cl = rocket.aerodynamics.get_coefficients()
+                        aero_xcp = float(rocket.aerodynamics.get_center_of_pressure()[0])
+                        aero_alpha = float(getattr(rocket.dynamics, '_alpha', 0.0))
+                    except Exception:
+                        aero_cd, aero_cl, aero_xcp, aero_alpha = 0.0, 0.0, 0.0, 0.0
+                    # Aerodynamic heating at this point (panel method + thermo enabled)
+                    point_heat_flux = 0.0
+                    point_stag_temp = 0.0
+                    if thermo_enabled:
+                        try:
+                            T_inf = float(atmosphere.give_temp(absolute_altitude))
+                            p_inf = float(atmosphere.give_pressure(absolute_altitude))
+                            thermo = surface_heating(aerodynamics, mach=mach, height=absolute_altitude,
+                                                     T_inf=T_inf, p_inf=p_inf, T_wall=300.0)
+                            if thermo is not None:
+                                point_heat_flux = thermo['max_heat_flux']
+                                point_stag_temp = thermo['stagnation_temperature']
+                                qdot = thermo['total_heat_load_rate'] or 0.0
+                                # trapezoidal integration of total heat load over the interval
+                                heat_load_joules += 0.5 * (prev_thermo_qdot + qdot) * (t - prev_thermo_t)
+                                prev_thermo_qdot = qdot
+                                prev_thermo_t = t
+                                if point_heat_flux > max_heat_flux:
+                                    max_heat_flux = point_heat_flux
+                                    max_stag_temp = point_stag_temp
+                                    cp_profile_max_q = {
+                                        'x': [float(v) for v in thermo['x']],
+                                        'cp_mean': [float(v) for v in thermo['Cp'].mean(axis=1)],
+                                        'mach': mach,
+                                    }
+                                    cp_map_max_q = {
+                                        'x': [float(v) for v in thermo['x']],
+                                        'az': [float(v) for v in thermo['az']],
+                                        'Cp': [[float(v) for v in row] for row in thermo['Cp']],
+                                        'mach': mach,
+                                    }
+                        except Exception as thermo_err:
+                            logger.debug(f"Thermo computation skipped at t={t}: {thermo_err}")
                     trajectory.append({
                         'time': t,
                         'altitude': current_altitude,
                         'velocity': current_velocity,
                         'range': current_range,
                         'mach': mach,
+                        'alpha': aero_alpha,
+                        'cd': aero_cd,
+                        'cl': aero_cl,
+                        'x_cp': aero_xcp,
+                        'max_heat_flux': point_heat_flux,
+                        'stagnation_temperature': point_stag_temp,
+                        'heat_load': heat_load_joules,
                     })
                     
                 prev_altitude = current_altitude
@@ -473,6 +585,7 @@ class SimulationWorker(QThread):
                 # Check termination conditions
                 if current_altitude <= 0 and t > 1.0:
                     termination_reason = "LANDING: Altitude <= 0m"
+                    metrics['touchdown_velocity'] = current_velocity
                     termination_step = i
                     logger.info(f"[TERMINATION] {termination_reason} at t={t:.2f}s (step {i}/{num_steps})")
                     logger.info(f"  Altitude: {current_altitude:.2f}m, Velocity: {current_velocity:.2f}m/s")
@@ -505,6 +618,19 @@ class SimulationWorker(QThread):
             
         # Final metrics
         metrics['flight_duration'] = t
+        
+        # ===== THERMO METRICS (Phase 4) =====
+        if thermo_enabled:
+            metrics['max_heat_flux'] = max_heat_flux            # [W/m^2]
+            metrics['max_stagnation_temperature'] = max_stag_temp  # [K]
+            metrics['total_heat_load_kJ'] = heat_load_joules / 1000.0
+            if cp_profile_max_q is not None:
+                metrics['cp_profile_max_q'] = cp_profile_max_q
+            if cp_map_max_q is not None:
+                metrics['cp_map_max_q'] = cp_map_max_q
+            logger.info(f"Thermo: max heat flux {max_heat_flux/1000:.1f} kW/m^2, "
+                        f"max stagnation T {max_stag_temp:.0f} K, "
+                        f"heat load {heat_load_joules/1000:.1f} kJ")
         
         # Get propulsion metrics from engine
         # In new architecture, we access engine through rocket.engine
@@ -646,12 +772,33 @@ class SimulationWorker(QThread):
                     alt = float(pos[2]) + altitude
                     density_list.append(float(atmosphere.give_dens(alt)))
                     pressure_list.append(float(atmosphere.give_pressure(alt)))
-                    v_sonic_list.append(float(atmosphere.give_v_sonic(alt)))
-
-                mach_list = [
-                    float(v / vs) if vs > 0 else 0.0
-                    for v, vs in zip(v_norm_list, v_sonic_list)
-                ]
+                    mach_list.append(0.0)
+                
+                # Fill mach from trajectory if available
+                if len(trajectory) > 0:
+                    traj_times = [p.get('time', 0) for p in trajectory]
+                    traj_machs = [p.get('mach', 0) for p in trajectory]
+                    mach_dict = dict(zip(traj_times, traj_machs))
+                    mach_list = [mach_dict.get(t, 0.0) for t in times_list]
+                
+                # Aerodynamic coefficients (mapped from trajectory points by time)
+                drag_coeff_list = [0.0] * history_length
+                lift_coeff_list = [0.0] * history_length
+                alpha_list = [0.0] * history_length
+                xcp_list = [0.0] * history_length
+                if len(trajectory) > 0:
+                    t_cd = dict(zip([p.get('time', 0) for p in trajectory],
+                                    [p.get('cd', 0.0) for p in trajectory]))
+                    t_cl = dict(zip([p.get('time', 0) for p in trajectory],
+                                    [p.get('cl', 0.0) for p in trajectory]))
+                    t_al = dict(zip([p.get('time', 0) for p in trajectory],
+                                    [p.get('alpha', 0.0) for p in trajectory]))
+                    t_xcp = dict(zip([p.get('time', 0) for p in trajectory],
+                                     [p.get('x_cp', 0.0) for p in trajectory]))
+                    drag_coeff_list = [t_cd.get(tt, 0.0) for tt in times_list]
+                    lift_coeff_list = [t_cl.get(tt, 0.0) for tt in times_list]
+                    alpha_list = [t_al.get(tt, 0.0) for tt in times_list]
+                    xcp_list = [t_xcp.get(tt, 0.0) for tt in times_list]
                 
                 # Aerodynamic coefficients from history
                 hist_coeffs = getattr(rocket.simulation.history, 'coeffs', [])
@@ -701,6 +848,8 @@ class SimulationWorker(QThread):
                     'hist_mach': mach_list,
                     'hist_drag_coeff': drag_coeff_list,
                     'hist_lift_coeff': lift_coeff_list,
+                    'hist_alpha': alpha_list,
+                    'hist_x_cp': xcp_list,
                     'hist_cm_b': cm_b_list,
                     'hist_cp_b': cp_b_list,
                     # Raw simulation data for backward compatibility
@@ -768,6 +917,34 @@ class SimulationWorker(QThread):
             }
             
         return results
+
+    # State keys applied onto the rocket config when set to a positive number
+    # (ApplicationState defaults them to 0.0, so falsy means "not set")
+    _CONFIG_OVERRIDE_KEYS = ('initial_mass', 'propellant_mass', 'reference_area')
+    _ENGINE_OVERRIDE_KEYS = (
+        'burn_time', 'propellant_mass', 'specific_impulse', 'mean_thrust',
+        'max_thrust', 'mass_flux', 'mean_chamber_pressure', 'max_chamber_pressure',
+        'nozzle_exit_diameter', 'thrust_to_weight_ratio',
+    )
+
+    def _apply_state_config_overrides(self, rocket_config: dict) -> dict:
+        """Overlay positive state values onto the rocket/engine configuration.
+
+        This is what makes GUI edits (initial mass, thrust, ...) effective in
+        the simulation and lets Monte Carlo sample these parameters via the
+        StateProxy overrides. Only positive numbers are applied, since the
+        state defaults for these keys are 0.0.
+        """
+        for key in self._CONFIG_OVERRIDE_KEYS:
+            value = self.state.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+                rocket_config[key] = float(value)
+        engine = rocket_config.setdefault('engine', {})
+        for key in self._ENGINE_OVERRIDE_KEYS:
+            value = self.state.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+                engine[key] = float(value)
+        return rocket_config
 
     def _load_rocket_config(self, rocket_name: str) -> dict | None:
         """Load rocket configuration from JSON file with validation and caching."""
@@ -855,6 +1032,17 @@ class SimulationWorker(QThread):
         }
         
         try:
+            # ===== Aerodynamics section (method + panel options) =====
+            aero_cfg = config.get('aerodynamics', {}) or {}
+            aero_report = validate_aerodynamics_section(aero_cfg)
+            report['errors'].extend(aero_report['errors'])
+            report['warnings'].extend(aero_report['warnings'])
+            if aero_report['errors']:
+                report['valid'] = False
+            report['diagnostics']['aerodynamics'] = {
+                'method': str(aero_cfg.get('method', 'barrowman')).lower() if isinstance(aero_cfg, dict) else 'barrowman'
+            }
+            
             # Extract key parameters
             total_mass = config.get('initial_mass', config.get('total_mass_initial', 0))
             propellant_mass = config.get('propellant_mass', 0)

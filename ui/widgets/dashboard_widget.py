@@ -12,7 +12,7 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
-from typing import Optional
+from typing import Optional, Dict
 from src.utils.simulation_manager import SimulationManager
 from src.utils.event_bus import EventType, subscribe, unsubscribe
 import logging
@@ -223,6 +223,8 @@ class DashboardWidget(BaseWidget):
             ("max_mach", "Max Mach"),
             ("flight_duration", "Flight Time"),
             ("max_accel_g", "Max Acceleration"),
+            ("max_heat_flux", "Max Heat Flux"),
+            ("max_stagnation_temp", "Max Stag Temp"),
         ]
         
         for i, (key, label) in enumerate(metrics):
@@ -439,6 +441,14 @@ class DashboardWidget(BaseWidget):
         self.metric_labels['max_accel_g'].setText(
             f"{metadata.get('max_accel_g', 0):.2f} g"
         )
+        hf = metadata.get('max_heat_flux', sim_metrics.get('max_heat_flux', 0.0))
+        self.metric_labels['max_heat_flux'].setText(
+            f"{hf / 1000.0:.1f} kW/m²" if hf else "—"
+        )
+        ts = metadata.get('max_stagnation_temp', sim_metrics.get('max_stagnation_temperature', 0.0))
+        self.metric_labels['max_stagnation_temp'].setText(
+            f"{ts:.0f} K" if ts else "—"
+        )
         
         # Update info
         self.info_labels['rocket'].setText(metadata.get('rocket', 'N/A'))
@@ -502,6 +512,10 @@ class DashboardWidget(BaseWidget):
         
         # Event 1: Ignition (always at t=0)
         events.append(("🔥 Ignition", 0.0, 0.0, 0.0))
+        
+        # Aero model used for this run (barrowman / panel)
+        aero_method = metrics.get('aero_method', 'barrowman') if isinstance(metrics, dict) else 'barrowman'
+        events.append((f"🌬️ Aero model: {aero_method}", 0.0, 0.0, 0.0))
         
         if isinstance(history, dict) and history:
             times = np.array(history.get('hist_time', []))
@@ -654,9 +668,29 @@ class DashboardWidget(BaseWidget):
             )
             self._add_pyqtgraph_as_tab(plot3, "Mach Number")
             
+            # Charts 3b-3c: Aero & Thermal (present when panel method + thermo enabled)
+            heat_flux = np.array([p.get('max_heat_flux', 0.0) for p in trajectory])
+            stag_temp = np.array([p.get('stagnation_temperature', 0.0) for p in trajectory])
+            if np.any(heat_flux > 0):
+                plot_hf = self._create_pyqtgraph_simple_plot(
+                    "Max Heat Flux",
+                    times, heat_flux / 1000.0, 'Time [s]', 'q [kW/m²]',
+                    color='red', name='Heat Flux'
+                )
+                self._add_pyqtgraph_as_tab(plot_hf, "Heat Flux")
+                plot_st = self._create_pyqtgraph_simple_plot(
+                    "Stagnation Temperature",
+                    times, stag_temp, 'Time [s]', 'T0 [K]',
+                    color='orange', name='Stagnation T'
+                )
+                self._add_pyqtgraph_as_tab(plot_st, "Stagnation Temp")
+            
             # Charts 4-13: Additional performance data if available from history
             # Generate advanced charts from history data using PyQtGraph
             self._generate_advanced_charts(history)
+            
+            # Cp profile / Cp map at max-q (panel method + thermo)
+            self._generate_thermal_charts(sim_data)
             
             logger.info("Performance charts generated successfully with PyQtGraph")
             
@@ -664,6 +698,46 @@ class DashboardWidget(BaseWidget):
             logger.error(f"Error generating charts: {e}")
             QMessageBox.warning(self, "Chart Error", f"Failed to generate charts: {str(e)}")
     
+    def _generate_thermal_charts(self, sim_data):
+        """Cp(x) profile and unwrapped Cp(x, theta) map at max-q (panel + thermo)."""
+        if not HAS_PYQTGRAPH:
+            return
+        metrics = sim_data.get('metrics', {}) if isinstance(sim_data, dict) else {}
+        if not isinstance(metrics, dict):
+            return
+        
+        prof = metrics.get('cp_profile_max_q')
+        if prof:
+            try:
+                x = np.array(prof['x'])
+                cp = np.array(prof['cp_mean'])
+                plot = self._create_pyqtgraph_simple_plot(
+                    f"Cp(x) at max-q (M={prof.get('mach', 0.0):.2f})",
+                    x, cp, 'x from nose [m]', 'Cp', color='purple', name='Cp profile'
+                )
+                self._add_pyqtgraph_as_tab(plot, "Cp Profile (max-q)")
+            except Exception as e:
+                logger.warning(f"Could not create Cp profile chart: {e}")
+        
+        cmap = metrics.get('cp_map_max_q')
+        if cmap:
+            try:
+                Cp = np.array(cmap['Cp'])
+                x = np.array(cmap['x'])
+                az = np.array(cmap['az'])
+                w = PlotWidget()
+                img = pg.ImageItem(image=Cp)
+                w.addItem(img)
+                if len(x) > 1 and len(az) > 1:
+                    img.setRect(float(x[0]), float(az[0]),
+                                float(x[-1] - x[0]), float(az[-1] - az[0]))
+                w.setTitle(f"Cp(x, theta) at max-q (M={cmap.get('mach', 0.0):.2f})")
+                w.setLabel('bottom', 'x from nose [m]')
+                w.setLabel('left', 'theta [rad]')
+                self._add_pyqtgraph_as_tab(w, "Cp Map (max-q)")
+            except Exception as e:
+                logger.warning(f"Could not create Cp map chart: {e}")
+
     def _generate_advanced_charts(self, history):
         """Generate advanced charts (4-13) using PyQtGraph."""
         if not isinstance(history, dict):
@@ -779,19 +853,28 @@ class DashboardWidget(BaseWidget):
             plot8 = self._create_pyqtgraph_placeholder("Atmosphere")
         self._add_pyqtgraph_as_tab(plot8, "Atmosphere")
         
-        # Chart 9: Aerodynamic Coefficients
+        # Chart 9: Aerodynamic Coefficients (+ alpha, x_cp when available)
         try:
             times = np.array(history.get('hist_time', []))
             drag_coeff = np.array(history.get('hist_drag_coeff', []))
             lift_coeff = np.array(history.get('hist_lift_coeff', []))
             mach = np.array(history.get('hist_mach', []))
+            alpha = np.array(history.get('hist_alpha', []))
+            x_cp = np.array(history.get('hist_x_cp', []))
             
             if len(times) > 0:
+                series, labels, colors = [drag_coeff, lift_coeff, mach], ['Cd', 'Cl', 'Mach'], ['brown', 'pink', 'gray']
+                if len(alpha) == len(times) and np.any(alpha != 0):
+                    series.append(alpha)
+                    labels.append('Alpha [deg]')
+                    colors.append('orange')
+                if len(x_cp) == len(times) and np.any(x_cp != 0):
+                    series.append(x_cp)
+                    labels.append('x_cp [m]')
+                    colors.append('purple')
                 plot9 = self._create_pyqtgraph_plot(
                     "Aerodynamic Coefficients",
-                    times, [drag_coeff, lift_coeff, mach],
-                    ['Cd', 'Cl', 'Mach'],
-                    ['brown', 'pink', 'gray']
+                    times, series, labels, colors
                 )
             else:
                 plot9 = self._create_pyqtgraph_placeholder("Aero Coefficients")

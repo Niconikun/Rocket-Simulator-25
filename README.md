@@ -30,6 +30,59 @@ Proyecto iniciado por Jorge Orozco (Universidad de Concepción, 2022) para la pr
 - Cálculo de centro de presión (método **Barrowman**)
 - Correcciones de compresibilidad (Prandtl-Glauert, Karman-Tsien)
 - Análisis de margen de estabilidad estática en calibres
+- **Método de paneles** como alternativa a Barrowman (ver abajo), con mapa de
+  presión `Cp(x, θ)` sobre la superficie
+
+### Método de Paneles (alternativa a Barrowman)
+- Implementado en `src/models/panel_method.py` como `PanelMethodAerodynamics`,
+  una implementación alternativa de `IAerodynamics` (mismo contrato
+  `update(mach, α, altura, densidad)`), seleccionable por cohete o por simulación
+- **Malla** del cuerpo de revolución (ojiva con perfil cónico/parabólico/elipsoidal/
+  Von Kármán/potencia, fuselaje, sección trasera) en franjas anulares con puntos de
+  control en la superficie
+- **Flujo axial**: línea de fuentes en el eje resuelta una vez al inicio
+  (condición de no penetración en los puntos de control)
+- **Flujo cruzado**: campo 2D de doblete por estación + fuerza normal de cuerpo
+  esbelto (Munk) `C_N = 2 sin α cos α · S_base/S_ref`, con `x_cp` de la distribución
+  `dS/dx` (cono: `C_Nα = 2`, `x_cp = 2L/3`)
+- **Regímenes**: Prandtl-Glauert (M < 0.8), transonic 0.8–1.2 (solución incompresible
+  + aumento de arrastre empírico; ningún método de paneles es válido ahí),
+  Ackeret supersónico (M > 1.2) con arrastre de onda desde la geometría
+- Arrastre viscoso (Prandtl-Schlichting), arrastre de base y contribución de aletas
+  (Barrowman) se mantienen como términos empíricos; flujo cruzado viscoso de Allen
+  conmutable
+- El viento se sigue manejando aguas arriba (en `dynamics`): el modelo recibe la
+  velocidad relativa completa en ejes del cuerpo (`v_rel_body`), preservando el
+  ángulo de resbalamiento (sideslip)
+- Salidas extendidas: `get_surface_pressure() → (x, θ, Cp)` y
+  `get_force_moment_body(q, S, cm)` (fuerza y momento 6-DOF sobre el CoM)
+- Selección:
+  - por cohete (JSON): sección opcional `"aerodynamics": {"method": "panel", "n_axial": 48, "n_theta": 16, "include_fins": true, "viscous_crossflow": true, "thermo_enabled": true}`
+  - por simulación (GUI → pestaña Simulación → grupo "Aerodynamics"): método
+    `default` (usa el archivo del cohete) / `barrowman` / `panel`, resolución del
+    panel y toggles; el estado prevalece sobre el archivo
+- GUI: pestaña **"Aerodynamics"** en Rocket Settings con botón de análisis
+  (CD, C_Nα, x_cp y margen de estabilidad vs Mach para ambos métodos, más Cp(x) del
+  panel); el dashboard muestra el método usado y las curvas α(t), x_cp(t)
+- Plan y fundamentos: [PANEL_METHOD_PLAN.md](PANEL_METHOD_PLAN.md)
+
+### Termodinámica — Calentamiento Aerodinámico
+- Habilitado por el mapa de presión del método de paneles
+  (`src/utils/thermodynamics.py`, solo con `method: "panel"` y `thermo_enabled`)
+- Por panel: Mach local desde la inversión isentrópica de `Cp`; régimen de capa
+  límite laminar/turbulento según `Re_x` de referencia con umbral de transición
+  `Re_x ≈ 5×10⁵` (compartido con la fricción del método de paneles,
+  `LAMINAR_TURBULENT_RE`); temperatura de
+  recuperación `T_r = T_e (1 + r (γ−1)/2 M_e²)` (r = Pr^½ laminar, Pr^⅓ turbulento);
+  **temperatura de referencia de Eckert** `T* = 0.5(T_w + T_e) + 0.22(T_r − T_e)` con
+  μ* (Sutherland), ρ* y cp*; Cf local de placa plana; **analogía de Reynolds**
+  `St = Cf/2 · Pr^(−2/3)`, `q̇ = h (T_r − T_w)`
+- Salidas por paso: flujo de calor máximo y su ubicación, temperatura de estancamiento
+  (nariz), carga térmica acumulada Q(t) (integración trapezoidal)
+- GUI: pestañas del dashboard **Heat Flux**, **Stagnation Temp**, **Cp Profile (max-q)**
+  y **Cp Map (max-q)** (mapa Cp(x, θ) desplegado); métricas "Max Heat Flux" y
+  "Max Stag Temp"; en Monte Carlo las métricas térmicas aparecen en la tabla de
+  estadísticas (flujo de calor en kW/m²)
 
 ### Motor
 - Curvas de empuje desde CSV
@@ -53,7 +106,7 @@ Proyecto iniciado por Jorge Orozco (Universidad de Concepción, 2022) para la pr
 - **Documentación completa**: [GRAVITY_TURN_IMPLEMENTATION.md](GRAVITY_TURN_IMPLEMENTATION.md)
 
 ### Editor de Cohetes
-- Pestañas: Propiedades, Inercia & CoM, Motor, Geometría, Nariz, Aletas, Curvas de Empuje
+- Pestañas: Propiedades, Inercia & CoM, Motor, Geometría, Nariz, Aletas, Aerodinámica, Estabilidad, Curvas de Empuje
 - Importar desde **OpenRocket** (`.ork`) sin dependencias adicionales
 - Importar propiedades físicas desde **STL** (`pip install trimesh`)
 - Botón **"⚖️ Check Stability"**: margen de Barrowman antes y después del burn

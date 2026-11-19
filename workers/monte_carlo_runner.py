@@ -48,14 +48,19 @@ from typing import Optional
 import numpy as np
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from src.config import Paths
 from src.utils.monte_carlo_sampler import MonteCarloSampler, ParameterConfig
+from src.utils.monte_carlo_stats import extract_impact_position, compute_cep
 from workers.simulation_worker import SimulationWorker
 from workers.simulation_cache import get_cache, clear_cache, SimulationCache
 
 logger = logging.getLogger(__name__)
 
-# Directory where batch output files are written
-_OUTPUT_DIR = os.path.join("data", "simulations")
+
+def _output_dir() -> str:
+    """Directory where batch output files are written (CWD-independent)."""
+    Paths.ensure_dirs()
+    return str(Paths.MONTE_CARLO_DIR)
 
 
 class MonteCarloRunner(QObject):
@@ -82,6 +87,11 @@ class MonteCarloRunner(QObject):
         Number of OS processes to run simulations in parallel with
         ``concurrent.futures.ProcessPoolExecutor``.  ``1`` (default) keeps the
         original single-process, single-thread behaviour.
+    use_cache:
+        Reuse cached Planet/Atmosphere/wind model objects across runs.
+    clear_cache_before:
+        When ``True`` (default) the global simulation cache — shared with the
+        normal GUI simulation — is cleared at batch start.
     """
 
     # ---- Qt signals -------------------------------------------------------
@@ -154,8 +164,7 @@ class MonteCarloRunner(QObject):
         logger.info(sampler.summary())
 
         # Prepare output file
-        output_path = os.path.join(_OUTPUT_DIR, f"{self._batch_id}.jsonl")
-        os.makedirs(_OUTPUT_DIR, exist_ok=True)
+        output_path = os.path.join(_output_dir(), f"{self._batch_id}.jsonl")
 
         # Batch accumulators
         successful: list[dict] = []
@@ -224,6 +233,23 @@ class MonteCarloRunner(QObject):
         if 'wind_speed_ref' in overrides:
             overrides['wind_speed'] = overrides['wind_speed_ref']
 
+    def _apply_gust_seed(self, sampler: MonteCarloSampler, overrides: dict) -> None:
+        """Give gust wind models a fresh random realization per run, in-place.
+
+        GustWind is stateful (Dryden filter) and would otherwise reuse the
+        same realization for every run when 'random_seed' is fixed in state.
+        The per-run seed also makes the wind cache key unique per run, so no
+        two runs share a wind model object.
+        """
+        if not self._state.get('wind_enabled', False):
+            return
+        if 'random_seed' in overrides:
+            return
+        model_type = self._state.get(
+            'wind_model_type', self._state.get('model_type', 'logarithmic'))
+        if str(model_type).lower() == 'gust':
+            overrides['random_seed'] = sampler.draw_seed()
+
     def _record_result(
         self,
         run_index: int,
@@ -249,12 +275,13 @@ class MonteCarloRunner(QObject):
 
             overrides = sampler.sample()
             self._mirror_wind_speed_override(overrides)
+            self._apply_gust_seed(sampler, overrides)
             logger.debug("Run %d/%d overrides: %s", i + 1, self._n_runs, overrides)
 
             try:
                 result = worker.run_with_params(overrides)
                 metrics = result.get("metrics", {})
-                impact_x, impact_y = self._extract_impact_position(result)
+                impact_x, impact_y = extract_impact_position(result)
                 metrics_out = {
                     "max_altitude":    metrics.get("max_altitude", 0.0),
                     "max_velocity":    metrics.get("max_velocity", 0.0),
@@ -263,8 +290,13 @@ class MonteCarloRunner(QObject):
                     "flight_duration": metrics.get("flight_duration", 0.0),
                     "apogee_time":     metrics.get("apogee_time", 0.0),
                     "max_accel_g":     metrics.get("max_accel_g", 0.0),
+                    "max_q":           metrics.get("max_q", 0.0),
+                    "touchdown_velocity": metrics.get("touchdown_velocity", 0.0),
                     "impact_x":        impact_x,
                     "impact_y":        impact_y,
+                    "landed":          not (np.isnan(impact_x) or np.isnan(impact_y)),
+                    "termination_reason": (metrics.get("runtime_diagnostics", {}) or {}).get(
+                        "termination_reason", ""),
                 }
                 self._record_result(i, metrics_out, overrides, out_file, successful)
             except Exception as run_err:
@@ -301,6 +333,7 @@ class MonteCarloRunner(QObject):
                     return False
                 overrides = sampler.sample()
                 self._mirror_wind_speed_override(overrides)
+                self._apply_gust_seed(sampler, overrides)
                 fut = executor.submit(
                     run_single_montecarlo, submitted, base_state_dict, overrides, self._use_cache
                 )
@@ -341,46 +374,6 @@ class MonteCarloRunner(QObject):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _extract_impact_position(result: dict) -> tuple[float, float]:
-        """Return the (east, north) ENU impact coordinates from a simulation result.
-
-        Prefers the optimised ``history`` arrays; falls back to the last
-        trajectory point.
-        """
-        history = result.get("history", {})
-        if history:
-            # Bug fix: the finalized history dict keys are prefixed with
-            # 'hist_' (e.g. 'hist_east'/'hist_north'/'hist_r_enu'), not 'r_enu'.
-            # Reading the wrong key silently fell through to the range-only
-            # fallback below, collapsing every impact onto north=0 (a straight
-            # line) regardless of azimuth/wind direction.
-            east = history.get("hist_east")
-            north = history.get("hist_north")
-            if east and north:
-                return float(east[-1]), float(north[-1])
-
-            r_enu = history.get("hist_r_enu")
-            if r_enu is not None:
-                try:
-                    arr = np.asarray(r_enu)
-                    if arr.ndim == 2 and arr.shape[1] >= 2:
-                        return float(arr[-1, 0]), float(arr[-1, 1])
-                    elif arr.ndim == 1 and len(arr) >= 2:
-                        return float(arr[0]), float(arr[1])
-                except Exception:
-                    pass
-
-        # Fallback: last trajectory point (lossy - only total horizontal
-        # range is stored there, not the east/north direction)
-        trajectory = result.get("trajectory", [])
-        if trajectory:
-            last = trajectory[-1]
-            range_val = last.get("range", 0.0)
-            return float(range_val), 0.0
-
-        return 0.0, 0.0
-
-    @staticmethod
     def _build_summary(
         batch_id: str,
         n_requested: int,
@@ -416,7 +409,7 @@ class MonteCarloRunner(QObject):
         scalar_keys = [
             "max_altitude", "max_velocity", "max_mach",
             "max_range", "flight_duration", "apogee_time",
-            "max_accel_g",
+            "max_accel_g", "max_q", "touchdown_velocity",
         ]
         stats: dict = {}
         for key in scalar_keys:
@@ -442,7 +435,7 @@ class MonteCarloRunner(QObject):
         iy = impact_y[valid_mask]
 
         if len(ix) >= 2:
-            cep = _compute_cep(ix, iy)
+            cep = compute_cep(ix, iy)
             stats["impact_scatter"] = {
                 "mean_x":  float(np.mean(ix)),
                 "mean_y":  float(np.mean(iy)),
@@ -461,46 +454,3 @@ class MonteCarloRunner(QObject):
 
         summary["statistics"] = stats
         return summary
-
-
-# ---------------------------------------------------------------------------
-# Module-level helpers
-# ---------------------------------------------------------------------------
-
-def _compute_cep(x: np.ndarray, y: np.ndarray) -> float:
-    """Compute the Circular Error Probable (CEP) of an impact scatter.
-
-    CEP is the radius of the circle centred on the mean impact point that
-    contains 50 % of the samples.
-
-    For a bivariate normal distribution with equal variances σ, CEP ≈ 1.1774·σ.
-    For unequal variances we use the approximation:
-
-        CEP ≈ 0.59 · (σ_x + σ_y)
-
-    which is accurate to < 5 % for variance ratios up to ~4:1 (RAND Corp. 1952).
-    When N ≥ 20 we also compute the empirical 50th percentile of radial distances
-    and return the more conservative of the two estimates.
-
-    Parameters
-    ----------
-    x, y:
-        1-D arrays of impact East / North coordinates (metres) relative to the
-        launch pad.
-    """
-    if len(x) < 2:
-        return 0.0
-
-    mu_x, mu_y = np.mean(x), np.mean(y)
-    sigma_x, sigma_y = np.std(x), np.std(y)
-
-    # Analytical approximation
-    cep_approx = 0.59 * (sigma_x + sigma_y)
-
-    if len(x) >= 20:
-        # Empirical 50th percentile of radial error
-        radial_errors = np.sqrt((x - mu_x) ** 2 + (y - mu_y) ** 2)
-        cep_empirical = float(np.percentile(radial_errors, 50))
-        return max(cep_approx, cep_empirical)
-
-    return float(cep_approx)

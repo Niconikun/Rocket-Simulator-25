@@ -174,6 +174,9 @@ package-dir = {"" = "."}
 # Scripts to include
 scripts = ["main.py", "build_exe.py", "add_aero_methods.py"]
 
+# Scripts to include
+scripts = ["main.py", "build_exe.py", "add_aero_methods.py"]
+
 # Include non-Python files
 [tool.setuptools.package-data]
 "" = [
@@ -223,13 +226,6 @@ console_scripts = [
 gui_scripts = [
     "rocket-simulator-gui = main:main",
 ]
-
-
-[tool.setuptools.packages.find]
-# Find packages automatically
-where = [".", "src", "models", "ui", "workers"]
-include = ["*"]
-exclude = ["__pycache__", "*.tests", "*.test"]
 
 
 [tool.black]
@@ -364,8 +360,8 @@ filterwarnings = [
 
 convention = "google"
 add_ignore = ["D100", "D104", "D105", "D107", "D202", "D212", "D400", "D401", "D413", "D415", "D417"]
-match = '^(?!.*(test_|__)).*\.py$'
-match-dir = '^(?!.*(tests|__pycache__)).*$'
+match = "^(?!.*(test_|__)).*\\.py$"
+match-dir = "^(?!.*(tests|__pycache__)).*$"
 
 
 [tool.coverage.run]

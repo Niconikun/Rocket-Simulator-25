@@ -22,15 +22,14 @@ from matplotlib.figure import Figure
 import matplotlib.patches as mpatches
 from scipy.stats import chi2
 from ui.widgets import BaseWidget
-from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
 from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
 from typing import Optional
-from src.utils.simulation_manager import SimulationManager
 from src.utils.monte_carlo_aggregator import MonteCarloAggregator
 from workers.monte_carlo_runner import MonteCarloRunner
 from datetime import datetime
+import json
 import logging
 import os
 import numpy as np
@@ -86,6 +85,7 @@ class MonteCarloWidget(BaseWidget):
         self._thread: QThread | None = None
         self._runner: MonteCarloRunner | None = None
         self._accumulated_runs: list[dict] = []   # grows as runs complete
+        self._failed_count: int = 0
         self._landing_canvas: _PlotCanvas | None = None
         self.init_ui()
         self._setup_event_bus()
@@ -196,7 +196,9 @@ class MonteCarloWidget(BaseWidget):
         self.seed_spinbox = QSpinBox()
         self.seed_spinbox.setSpecialValueText("Random")
         self.seed_spinbox.setRange(0, 999999)
-        self.seed_spinbox.setValue(0)
+        self.seed_spinbox.setValue(self.state.get(Constants.StateKeys.MONTE_CARLO_SEED, 0))
+        self.seed_spinbox.valueChanged.connect(
+            lambda v: self.state.set(Constants.StateKeys.MONTE_CARLO_SEED, v))
         run_form.addRow("RNG Seed (0 = random):", self.seed_spinbox)
 
         self.workers_spinbox = QSpinBox()
@@ -222,15 +224,27 @@ class MonteCarloWidget(BaseWidget):
                 w.setSuffix(f"  {suffix}")
             return w
 
-        self.sigma_elev   = _dspin(1.0, 0, 45, suffix="°")
-        self.sigma_az     = _dspin(2.0, 0, 45, suffix="°")
-        self.sigma_temp   = _dspin(2.0, 0, 20, suffix="°C")
-        self.sigma_wind   = _dspin(1.0, 0, 50, suffix="m/s  (only if wind enabled)")
-        self.sigma_winddir= _dspin(10.0, 0, 90, suffix="°  (only if wind enabled)")
-        self.sigma_para_alt = _dspin(10.0, 0, 200, suffix="m  (only if chute enabled)")
-        self.sigma_para_cd  = _dspin(0.075, 0, 1.0, decimals=3, suffix="(only if chute enabled)")
-        self.sigma_drogue_alt = _dspin(15.0, 0, 300, suffix="m  (only if drogue enabled)")
-        self.sigma_drogue_cd  = _dspin(0.075, 0, 1.0, decimals=3, suffix="(only if drogue enabled)")
+        mc = Constants.MonteCarlo
+        sigmas = self.state.get(Constants.StateKeys.MONTE_CARLO_SIGMAS, {}) or {}
+
+        def _sig_dspin(key, default, lo, hi, decimals=2, suffix=""):
+            w = _dspin(sigmas.get(key, default), lo, hi, decimals, suffix)
+            w.valueChanged.connect(lambda v, k=key: self._persist_sigma(k, v))
+            return w
+
+        self.sigma_elev   = _sig_dspin('elevation', mc.DEFAULT_SIGMA_ELEVATION, 0, 45, suffix="°")
+        self.sigma_az     = _sig_dspin('azimuth', mc.DEFAULT_SIGMA_AZIMUTH, 0, 45, suffix="°")
+        self.sigma_temp   = _sig_dspin('temperature', mc.DEFAULT_SIGMA_TEMPERATURE, 0, 20, suffix="°C")
+        self.sigma_wind   = _sig_dspin('wind_speed', mc.DEFAULT_SIGMA_WIND_SPEED, 0, 50, suffix="m/s  (only if wind enabled)")
+        self.sigma_winddir= _sig_dspin('wind_direction', mc.DEFAULT_SIGMA_WIND_DIRECTION, 0, 90, suffix="°  (only if wind enabled)")
+        self.sigma_para_alt = _sig_dspin('parachute_altitude', mc.DEFAULT_SIGMA_PARACHUTE_ALTITUDE, 0, 200, suffix="m  (only if chute enabled)")
+        self.sigma_para_cd  = _sig_dspin('parachute_cd', mc.DEFAULT_SIGMA_PARACHUTE_CD, 0, 1.0, decimals=3, suffix="(only if chute enabled)")
+        self.sigma_drogue_alt = _sig_dspin('drogue_altitude', mc.DEFAULT_SIGMA_DROGUE_ALTITUDE, 0, 300, suffix="m  (only if drogue enabled)")
+        self.sigma_drogue_cd  = _sig_dspin('drogue_cd', mc.DEFAULT_SIGMA_DROGUE_CD, 0, 1.0, decimals=3, suffix="(only if drogue enabled)")
+        self.sigma_mass   = _sig_dspin('mass', mc.DEFAULT_SIGMA_REL_MASS * 100.0, 0, 50, suffix="% of nominal")
+        self.sigma_prop   = _sig_dspin('propellant', mc.DEFAULT_SIGMA_REL_PROPELLANT * 100.0, 0, 50, suffix="% of nominal")
+        self.sigma_thrust = _sig_dspin('thrust', mc.DEFAULT_SIGMA_REL_THRUST * 100.0, 0, 50, suffix="% of nominal")
+        self.sigma_burn   = _sig_dspin('burn_time', mc.DEFAULT_SIGMA_REL_BURN_TIME * 100.0, 0, 50, suffix="% of nominal")
 
         unc_form.addRow("Launch elevation angle σ:", self.sigma_elev)
         unc_form.addRow("Launch azimuth σ:",          self.sigma_az)
@@ -241,6 +255,10 @@ class MonteCarloWidget(BaseWidget):
         unc_form.addRow("Parachute Cd σ:",            self.sigma_para_cd)
         unc_form.addRow("Drogue deploy altitude σ:",  self.sigma_drogue_alt)
         unc_form.addRow("Drogue Cd σ:",               self.sigma_drogue_cd)
+        unc_form.addRow("Initial mass σ:",            self.sigma_mass)
+        unc_form.addRow("Propellant mass σ:",         self.sigma_prop)
+        unc_form.addRow("Mean thrust σ:",             self.sigma_thrust)
+        unc_form.addRow("Burn time σ:",               self.sigma_burn)
 
         layout.addWidget(unc_group)
 
@@ -310,6 +328,16 @@ class MonteCarloWidget(BaseWidget):
         self.cep_value_label = QLabel("—")
         summary_form.addRow("CEP (50%):", self.cep_value_label)
 
+        self.safety_radius_spin = QDoubleSpinBox()
+        self.safety_radius_spin.setRange(10.0, 100000.0)
+        self.safety_radius_spin.setDecimals(0)
+        self.safety_radius_spin.setValue(500.0)
+        self.safety_radius_spin.setSuffix("  m")
+        summary_form.addRow("Safety zone radius:", self.safety_radius_spin)
+
+        self.p_zone_label = QLabel("—")
+        summary_form.addRow("P(impact in zone):", self.p_zone_label)
+
         self.ellipse_value_label = QLabel("—")
         self.ellipse_value_label.setWordWrap(True)
         summary_form.addRow("95% Landing Area (axes):", self.ellipse_value_label)
@@ -346,11 +374,21 @@ class MonteCarloWidget(BaseWidget):
             header.setStretchLastSection(True)
         layout.addWidget(self.results_table)
 
+        self.sensitivity_label = QLabel("")
+        self.sensitivity_label.setWordWrap(True)
+        layout.addWidget(self.sensitivity_label)
+
         return page
 
     # ------------------------------------------------------------------
     # Flight-mode / landing-zone helpers
     # ------------------------------------------------------------------
+
+    def _persist_sigma(self, key: str, value: float) -> None:
+        """Persist one sigma override into the state dict."""
+        sigmas = dict(self.state.get(Constants.StateKeys.MONTE_CARLO_SIGMAS, {}) or {})
+        sigmas[key] = float(value)
+        self.state.set(Constants.StateKeys.MONTE_CARLO_SIGMAS, sigmas)
 
     def _refresh_mode_labels(self):
         """Reflect the currently configured descent mode and wind model."""
@@ -386,6 +424,7 @@ class MonteCarloWidget(BaseWidget):
             self.landing_point_label, self.distance_value_label,
             self.bearing_value_label, self.cep_value_label,
             self.ellipse_value_label, self.area_value_label,
+            self.p_zone_label,
         ):
             label.setText("—")
 
@@ -410,23 +449,26 @@ class MonteCarloWidget(BaseWidget):
 
         az = float(self.state.get(Constants.StateKeys.LAUNCH_AZIMUTH, 0.0))
         extra[Constants.StateKeys.LAUNCH_AZIMUTH] = ParameterConfig(
-            'truncated_normal', nominal=az,
-            sigma=self.sigma_az.value(), low=0.0, high=360.0)
+            'normal', nominal=az,
+            sigma=self.sigma_az.value(), wrap=360.0)
 
         temp = float(self.state.get(Constants.StateKeys.AVERAGE_TEMPERATURE, 20.0))
         extra[Constants.StateKeys.AVERAGE_TEMPERATURE] = ParameterConfig(
             'normal', nominal=temp,
-            sigma=self.sigma_temp.value(), low=-50.0, high=55.0)
+            sigma=self.sigma_temp.value(),
+            low=Constants.Environmental.MIN_TEMPERATURE,
+            high=Constants.Environmental.MAX_TEMPERATURE)
 
         if self.state.get(Constants.StateKeys.WIND_ENABLED, False):
-            ws = float(self.state.get(Constants.StateKeys.WIND_SPEED_REF, 5.0))
+            ws = float(self.state.get(Constants.StateKeys.WIND_SPEED_REF,
+                                      self.state.get(Constants.StateKeys.WIND_SPEED, 5.0)))
             extra[Constants.StateKeys.WIND_SPEED_REF] = ParameterConfig(
                 'truncated_normal', nominal=ws,
                 sigma=self.sigma_wind.value(), low=0.0)
             wd = float(self.state.get(Constants.StateKeys.WIND_DIRECTION, 180.0))
             extra[Constants.StateKeys.WIND_DIRECTION] = ParameterConfig(
-                'truncated_normal', nominal=wd,
-                sigma=self.sigma_winddir.value(), low=0.0, high=360.0)
+                'normal', nominal=wd,
+                sigma=self.sigma_winddir.value(), wrap=360.0)
 
         if self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False):
             pa = float(self.state.get(Constants.StateKeys.PARACHUTE_DEPLOYMENT_ALTITUDE, 300.0))
@@ -448,8 +490,34 @@ class MonteCarloWidget(BaseWidget):
                     'truncated_normal', nominal=dc,
                     sigma=self.sigma_drogue_cd.value(), low=0.5)
 
+        # ---- Rocket / engine relative uncertainties ----
+        from src.models.rocket.factory import load_rocket_config
+        rocket_name = self.state.get(Constants.StateKeys.SELECTED_ROCKET, 'agni-1')
+        try:
+            rocket_cfg = load_rocket_config(rocket_name) or {}
+        except Exception as load_err:
+            logger.warning("Could not load rocket config for MC nominals: %s", load_err)
+            rocket_cfg = {}
+        engine_cfg = rocket_cfg.get('engine', {}) or {}
+
+        def _rel_extra(state_key, nominal, sigma_pct, floor_frac):
+            if nominal > 0 and sigma_pct > 0:
+                extra[state_key] = ParameterConfig(
+                    'truncated_normal', nominal=nominal,
+                    sigma_rel=sigma_pct / 100.0, low=floor_frac * nominal)
+
+        mass = float(self.state.get(Constants.StateKeys.INITIAL_MASS, 0.0)) or float(rocket_cfg.get('initial_mass', 0.0))
+        _rel_extra(Constants.StateKeys.INITIAL_MASS, mass, self.sigma_mass.value(), 0.5)
+        prop = float(rocket_cfg.get('propellant_mass', 0.0))
+        _rel_extra(Constants.StateKeys.PROPELLANT_MASS, prop, self.sigma_prop.value(), 0.5)
+        thrust = float(engine_cfg.get('mean_thrust', 0.0))
+        _rel_extra(Constants.StateKeys.MEAN_THRUST, thrust, self.sigma_thrust.value(), 0.1)
+        burn = float(engine_cfg.get('burn_time', 0.0))
+        _rel_extra(Constants.StateKeys.BURN_TIME, burn, self.sigma_burn.value(), 0.1)
+
         # Reset accumulators
         self._accumulated_runs.clear()
+        self._failed_count = 0
         self.results_table.setRowCount(0)
         self._clear_landing_zone()
         self._reset_landing_summary()
@@ -509,6 +577,7 @@ class MonteCarloWidget(BaseWidget):
                 self._thread.terminate()
                 self._thread.wait(5000)
         self._accumulated_runs.clear()
+        self._failed_count = 0
         self.progress_bar.setValue(0)
         self.results_table.setRowCount(0)
         self._clear_landing_zone()
@@ -527,11 +596,17 @@ class MonteCarloWidget(BaseWidget):
         n_total = self.runs_spinbox.value()
         self.status_label.setText(
             f"Completed {len(self._accumulated_runs)} / {n_total}  "
-            f"(failed: {idx + 1 - len(self._accumulated_runs)})"
+            f"(failed: {self._failed_count})"
         )
 
     def _on_run_failed(self, idx: int, reason: str):
+        self._failed_count += 1
         logger.warning("Run %d failed: %s", idx, reason)
+        n_total = self.runs_spinbox.value()
+        self.status_label.setText(
+            f"Completed {len(self._accumulated_runs)} / {n_total}  "
+            f"(failed: {self._failed_count})"
+        )
 
     def _on_progress(self, pct: int):
         self.progress_bar.setValue(pct)
@@ -548,6 +623,7 @@ class MonteCarloWidget(BaseWidget):
         if self._accumulated_runs:
             self._populate_stats_table(self._accumulated_runs)
             self._refresh_landing_zone(self._accumulated_runs)
+            self._show_sensitivity(summary)
             self.tabs.setCurrentIndex(1)  # bring the Landing Zone tab (main result) into view
         elif n_ok == 0:
             QMessageBox.warning(self, "Monte Carlo", "No runs completed successfully.")
@@ -600,7 +676,14 @@ class MonteCarloWidget(BaseWidget):
             "flight_duration": "Flight Duration (s)",
             "apogee_time":     "Apogee Time (s)",
             "max_accel_g":     "Max Accel (g)",
+            "max_q":           "Max Q (Pa)",
+            "touchdown_velocity": "Touchdown Vel (m/s)",
+            "max_heat_flux":   "Max Heat Flux (kW/m²)",
+            "max_stagnation_temperature": "Max Stagnation T (K)",
+            "total_heat_load_kJ": "Heat Load (kJ)",
         }
+        # Scale W/m^2 metrics to kW/m^2 for readability
+        SCALE = {"max_heat_flux": 1000.0}
 
         for key, stats in all_stats.items():
             if not stats:
@@ -608,9 +691,10 @@ class MonteCarloWidget(BaseWidget):
             row = self.results_table.rowCount()
             self.results_table.insertRow(row)
             self.results_table.setItem(row, 0, QTableWidgetItem(LABELS.get(key, key)))
+            scale = SCALE.get(key, 1.0)
             for col, stat_key in enumerate(["mean", "std", "min", "p05", "median", "p95", "max"], start=1):
                 val = stats.get(stat_key, float("nan"))
-                self.results_table.setItem(row, col, QTableWidgetItem(f"{val:.2f}"))
+                self.results_table.setItem(row, col, QTableWidgetItem(f"{val / scale:.2f}"))
 
         if cep > 0:
             row = self.results_table.rowCount()
@@ -622,6 +706,24 @@ class MonteCarloWidget(BaseWidget):
         self.stats_label.setText(
             f"{len(runs)} successful runs  |  CEP = {cep:.1f} m"
         )
+
+    def _show_sensitivity(self, summary: dict):
+        """Show the strongest override->max_altitude correlations from the batch JSONL."""
+        self.sensitivity_label.setText("")
+        output_file = summary.get("output_file", "")
+        if not output_file or not os.path.exists(output_file):
+            return
+        from src.utils.monte_carlo_stats import sensitivity_from_records
+        records = []
+        with open(output_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    records.append(json.loads(line))
+        sens = sensitivity_from_records(records, "max_altitude", min_abs_r=0.1)
+        if sens:
+            top = ", ".join(f"{k} (r={v:+.2f})" for k, v in list(sens.items())[:5])
+            self.sensitivity_label.setText(f"Sensitivity of max altitude:  {top}")
 
     # ------------------------------------------------------------------
     # Landing zone (main result)
@@ -668,7 +770,10 @@ class MonteCarloWidget(BaseWidget):
         mode_txt = "Parachute descent" if self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False) else "Ballistic (no parachute)"
 
         if HAS_CARTOPY and has_coords:
-            return self._draw_map_landing_zone(fig, ix, iy, mean_x, mean_y, ellipse, lat0, lon0, mode_txt)
+            try:
+                return self._draw_map_landing_zone(fig, ix, iy, mean_x, mean_y, ellipse, lat0, lon0, mode_txt)
+            except Exception as map_err:
+                logger.warning("Map rendering failed (%s); falling back to local ENU plot", map_err)
         return self._draw_local_landing_zone(fig, ix, iy, mean_x, mean_y, ellipse, mode_txt, has_coords)
 
     def _draw_map_landing_zone(self, fig, ix, iy, mean_x, mean_y, ellipse, lat0, lon0, mode_txt) -> Figure:
@@ -698,14 +803,22 @@ class MonteCarloWidget(BaseWidget):
 
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
         ax.set_extent(extent, crs=ccrs.PlateCarree())
-        ax.add_feature(cfeature.NaturalEarthFeature(
-            'physical', 'land', res, facecolor='#e6dfa8', edgecolor='none'))
-        ax.add_feature(cfeature.NaturalEarthFeature(
-            'physical', 'ocean', res, facecolor='#a8d0e8', edgecolor='none'))
-        ax.add_feature(cfeature.NaturalEarthFeature(
-            'cultural', 'admin_0_countries', res, facecolor='none', edgecolor='#555555', linewidth=0.5))
-        ax.add_feature(cfeature.NaturalEarthFeature(
-            'physical', 'coastline', res, facecolor='none', edgecolor='#333333', linewidth=0.7))
+        features = [
+            cfeature.NaturalEarthFeature(
+                'physical', 'land', res, facecolor='#e6dfa8', edgecolor='none'),
+            cfeature.NaturalEarthFeature(
+                'physical', 'ocean', res, facecolor='#a8d0e8', edgecolor='none'),
+            cfeature.NaturalEarthFeature(
+                'cultural', 'admin_0_countries', res, facecolor='none', edgecolor='#555555', linewidth=0.5),
+            cfeature.NaturalEarthFeature(
+                'physical', 'coastline', res, facecolor='none', edgecolor='#333333', linewidth=0.7),
+        ]
+        # Force download/materialization now so a missing Natural Earth dataset
+        # raises here (caught by the caller) instead of during canvas paint
+        for feature in features:
+            list(feature.geometries())
+        for feature in features:
+            ax.add_feature(feature)
 
         lat_pts, lon_pts = self._enu_to_latlon(ix, iy, lat0, lon0)
         ax.scatter(lon_pts, lat_pts, transform=ccrs.PlateCarree(), s=8, alpha=0.35,
@@ -803,6 +916,7 @@ class MonteCarloWidget(BaseWidget):
                 self.landing_point_label, self.distance_value_label,
                 self.bearing_value_label, self.cep_value_label,
                 self.ellipse_value_label, self.area_value_label,
+                self.p_zone_label,
             ):
                 label.setText("N/A")
             return
@@ -824,6 +938,12 @@ class MonteCarloWidget(BaseWidget):
         self.distance_value_label.setText(f"{distance_m:,.0f} m ({distance_m / 1000.0:.2f} km)")
         self.bearing_value_label.setText(f"{bearing_deg:.1f}°")
         self.cep_value_label.setText(f"{agg.cep():.0f} m")
+
+        pz = agg.probability_inside(self.safety_radius_spin.value())
+        if pz["n"] > 0:
+            self.p_zone_label.setText(f"{pz['p'] * 100:.1f}%  ({pz['inside']}/{pz['n']} runs)")
+        else:
+            self.p_zone_label.setText("N/A")
 
         ellipse = agg.dispersion_ellipse(sigma_level=_CONFIDENCE_95_FACTOR)
         if ellipse:

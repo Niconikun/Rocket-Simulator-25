@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QDoubleSpinBox,
     QPushButton, QProgressBar, QDateEdit, QTimeEdit, QComboBox, QGroupBox,
-    QFormLayout, QMessageBox
+    QFormLayout, QMessageBox, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QDate, QTime
 from datetime import datetime
@@ -154,6 +154,65 @@ class SimulationWidget(BaseWidget):
         
         env_group.setLayout(env_layout)
         main_layout.addWidget(env_group)
+        
+        # ===== AERODYNAMICS GROUP =====
+        aero_group = QGroupBox(tr("Aerodynamics"))
+        aero_layout = QFormLayout()
+        
+        # Aero method: default (rocket file) / barrowman / panel
+        self.aero_method_combo = QComboBox()
+        self.aero_method_combo.addItem(tr("Rocket file default"), 'default')
+        self.aero_method_combo.addItem(tr("Barrowman"), 'barrowman')
+        self.aero_method_combo.addItem(tr("Panel method"), 'panel')
+        current_aero = self.state.get(Constants.StateKeys.AERO_METHOD, 'default')
+        idx = self.aero_method_combo.findData(current_aero)
+        self.aero_method_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.aero_method_combo.currentIndexChanged.connect(
+            lambda i: self.state.set(Constants.StateKeys.AERO_METHOD,
+                                     self.aero_method_combo.itemData(i))
+        )
+        aero_layout.addRow(tr("Aero Method:"), self.aero_method_combo)
+        
+        # Panel resolution
+        self.aero_n_axial_spinbox = QSpinBox()
+        self.aero_n_axial_spinbox.setRange(8, 200)
+        self.aero_n_axial_spinbox.setValue(
+            self.state.get(Constants.StateKeys.AERO_PANEL_N_AXIAL, 48))
+        self.aero_n_axial_spinbox.valueChanged.connect(
+            lambda v: self.state.set(Constants.StateKeys.AERO_PANEL_N_AXIAL, v))
+        aero_layout.addRow(tr("Panel axial strips:"), self.aero_n_axial_spinbox)
+        
+        self.aero_n_theta_spinbox = QSpinBox()
+        self.aero_n_theta_spinbox.setRange(8, 64)
+        self.aero_n_theta_spinbox.setValue(
+            self.state.get(Constants.StateKeys.AERO_PANEL_N_THETA, 16))
+        self.aero_n_theta_spinbox.valueChanged.connect(
+            lambda v: self.state.set(Constants.StateKeys.AERO_PANEL_N_THETA, v))
+        aero_layout.addRow(tr("Panel azimuth divisions:"), self.aero_n_theta_spinbox)
+        
+        self.aero_include_fins_check = QCheckBox(tr("Include fins"))
+        self.aero_include_fins_check.setChecked(
+            self.state.get(Constants.StateKeys.AERO_INCLUDE_FINS, True))
+        self.aero_include_fins_check.toggled.connect(
+            lambda v: self.state.set(Constants.StateKeys.AERO_INCLUDE_FINS, v))
+        aero_layout.addRow(self.aero_include_fins_check)
+        
+        self.aero_viscous_cf_check = QCheckBox(tr("Viscous crossflow (Allen)"))
+        self.aero_viscous_cf_check.setChecked(
+            self.state.get(Constants.StateKeys.AERO_VISCOUS_CROSSFLOW, True))
+        self.aero_viscous_cf_check.toggled.connect(
+            lambda v: self.state.set(Constants.StateKeys.AERO_VISCOUS_CROSSFLOW, v))
+        aero_layout.addRow(self.aero_viscous_cf_check)
+        
+        self.thermo_enabled_check = QCheckBox(tr("Aerodynamic heating (thermo)"))
+        self.thermo_enabled_check.setChecked(
+            self.state.get(Constants.StateKeys.THERMO_ENABLED, False))
+        self.thermo_enabled_check.toggled.connect(
+            lambda v: self.state.set(Constants.StateKeys.THERMO_ENABLED, v))
+        aero_layout.addRow(self.thermo_enabled_check)
+        
+        aero_group.setLayout(aero_layout)
+        main_layout.addWidget(aero_group)
         
         # ===== LAUNCH PARAMETERS GROUP =====
         launch_group = QGroupBox(tr("Launch Parameters"))
