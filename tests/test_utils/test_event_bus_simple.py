@@ -143,7 +143,7 @@ class TestEventBusSingletonSimple(unittest.TestCase):
         """Test that only one instance is created."""
         # Create instances directly (not via get_instance)
         # This tests the __new__ method
-        with patch.object(EventBus, '_EventBus__init__', lambda self: None):
+        with patch.object(EventBus, '__init__', lambda self: None):
             bus1 = EventBus()
             bus2 = EventBus()
             

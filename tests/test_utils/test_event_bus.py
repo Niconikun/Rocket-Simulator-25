@@ -146,8 +146,8 @@ class TestSubscribePublish(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        # Create a QApplication instance for Qt signals
-        self.app = QApplication([])
+        # Reuse the session QApplication (Qt allows only one per process)
+        self.app = QApplication.instance() or QApplication([])
         
         # Reset the singleton and metrics
         EventBus._instance = None
@@ -161,7 +161,6 @@ class TestSubscribePublish(unittest.TestCase):
         """Clean up after tests."""
         EventBus._instance = None
         reset_metrics()
-        self.app.quit()
     
     def test_subscribe_and_publish(self):
         """Test basic subscribe and publish."""
@@ -261,7 +260,7 @@ class TestWeakReferences(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.app = QApplication([])
+        self.app = QApplication.instance() or QApplication([])
         EventBus._instance = None
         reset_metrics()
         self.bus = EventBus.get_instance()
@@ -270,7 +269,6 @@ class TestWeakReferences(unittest.TestCase):
         """Clean up after tests."""
         EventBus._instance = None
         reset_metrics()
-        self.app.quit()
     
     def test_weak_ref_cleanup(self):
         """Test that weak references are cleaned up when callback is deleted."""
@@ -320,7 +318,7 @@ class TestMetricsTracking(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.app = QApplication([])
+        self.app = QApplication.instance() or QApplication([])
         EventBus._instance = None
         reset_metrics()
         self.bus = EventBus.get_instance()
@@ -329,7 +327,6 @@ class TestMetricsTracking(unittest.TestCase):
         """Clean up after tests."""
         EventBus._instance = None
         reset_metrics()
-        self.app.quit()
     
     def test_publish_increments_metrics(self):
         """Test that publishing increments metrics."""
@@ -397,7 +394,7 @@ class TestSubscribers(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.app = QApplication([])
+        self.app = QApplication.instance() or QApplication([])
         EventBus._instance = None
         reset_metrics()
         self.bus = EventBus.get_instance()
@@ -406,7 +403,6 @@ class TestSubscribers(unittest.TestCase):
         """Clean up after tests."""
         EventBus._instance = None
         reset_metrics()
-        self.app.quit()
     
     def test_get_subscriber_count(self):
         """Test getting subscriber count."""
