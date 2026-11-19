@@ -947,6 +947,7 @@ def create_rocket_from_config(
     reference_area: Optional[float] = None,
     wind_model_config: Optional[Dict[str, Any]] = None,
     parachute_config: Optional[Dict[str, Any]] = None,
+    rocket_config_override: Optional[Dict[str, Any]] = None,
     # Gravity turn parameters
     enable_gravity_turn: bool = False,
     gravity_turn_rotation_rate: float = 20.0,
@@ -975,6 +976,9 @@ def create_rocket_from_config(
         reference_area: Reference area for aerodynamics [m²]
         wind_model_config: Configuration for wind model (optional)
         parachute_config: Configuration for parachute (optional)
+        rocket_config_override: If given, use this configuration dict instead of
+            loading ``rocket_name`` from disk (used e.g. by Monte Carlo runs that
+            apply parameter overrides on top of the file config)
         enable_gravity_turn: Enable passive gravity turn (default: False)
         gravity_turn_rotation_rate: Max rotation rate [deg/s] (default: 20.0)
         gravity_turn_min_velocity: Minimum velocity to activate [m/s] (default: 10.0)
@@ -994,8 +998,11 @@ def create_rocket_from_config(
         RocketFileNotFoundError: If rocket configuration doesn't exist
         RocketConfigurationError: If configuration is invalid
     """
-    # Load rocket configuration
-    rocket_config = load_rocket_config(rocket_name, configs_dir)
+    # Load rocket configuration (or use the provided override, e.g. Monte Carlo)
+    if rocket_config_override is not None:
+        rocket_config = rocket_config_override
+    else:
+        rocket_config = load_rocket_config(rocket_name, configs_dir)
     
     # Create atmosphere
     atmosphere = Atmosphere(temperature)

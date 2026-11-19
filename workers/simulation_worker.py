@@ -52,6 +52,19 @@ logger = logging.getLogger(__name__)
 
 # Constants
 DEG_TO_RAD = np.pi / 180.0
+STANDARD_G = 9.80665  # m/s^2
+
+
+def _total_accel_magnitude(forces_b: np.ndarray, mass: float, q_enu2b: np.ndarray) -> float:
+    """Total acceleration magnitude [m/s^2] including gravity.
+
+    ``forces_b`` are the non-gravity body-frame forces (as stored in the
+    simulation history); gravity is rotated into the body frame and added.
+    """
+    g_enu = np.array([0.0, 0.0, -STANDARD_G])
+    g_b = Mat.q_rot(g_enu, q_enu2b, 0)
+    a_b = np.asarray(forces_b, dtype=float) / mass + g_b
+    return float(np.linalg.norm(a_b))
 
 
 # Use StateProxy from src.models.state for new code
@@ -182,6 +195,10 @@ class SimulationWorker(QThread):
         rocket_config = self._load_rocket_config(rocket_name)
         if not rocket_config:
             raise ValueError(f"Could not load rocket configuration: {rocket_name}")
+
+        # Apply state overrides (GUI edits and Monte Carlo samples) on top of
+        # the file config — _load_rocket_config returns a deep copy
+        rocket_config = self._apply_state_config_overrides(rocket_config)
             
         # Validate rocket configuration (Option 3)
         validation_report = self._validate_rocket_config(rocket_config, rocket_name)
@@ -292,6 +309,7 @@ class SimulationWorker(QThread):
             rocket_name=rocket_name,
             temperature=temperature,
             reference_area=reference_area,
+            rocket_config_override=rocket_config
             aero_method=aero_method,
             aero_options=aero_options or None
         )
@@ -317,7 +335,11 @@ class SimulationWorker(QThread):
         # Use cached atmosphere if available
         if self._cache is not None:
             rocket.set_atmosphere(atmosphere)
-            
+
+        # Attach the parachute so its drag is applied by the dynamics
+        if parachute is not None:
+            rocket.set_parachute(parachute)
+
         # ===== WIND MODEL INITIALIZATION (Phase 2) =====
         # Use cached wind model if available (Monte Carlo optimization)
         wind_config = self.state.get_all()
@@ -345,6 +367,8 @@ class SimulationWorker(QThread):
             'max_altitude': 0.0,
             'max_velocity': 0.0,
             'max_accel_g': 0.0,
+            'max_q': 0.0,
+            'touchdown_velocity': 0.0,
             'max_mach': 0.0,
             'max_range': 0.0,
             'flight_duration': 0.0,
@@ -416,13 +440,14 @@ class SimulationWorker(QThread):
                 
                 # =============================================================
                 # PARACHUTE HANDLING
-                # In new architecture, parachute forces need to be applied
-                # to the dynamics before the step is taken
+                # The parachute is attached to the rocket (set_parachute), so
+                # rocket.step() updates its deployment state and the dynamics
+                # apply its drag force during integration.
                 # =============================================================
                 if parachute is not None:
                     current_altitude = rocket.state.r_enu[2]
                     vertical_velocity = abs(rocket.state.v_enu[2])
-                    
+
                     # Apogee-triggered drogue
                     is_descending = current_altitude < prev_altitude
                     if (is_descending and parachute.drogue_enabled
@@ -434,7 +459,7 @@ class SimulationWorker(QThread):
                             "Drogue deployed at apogee: altitude=%.1fm, t=%.2fs",
                             current_altitude, t,
                         )
-                    
+
                     # Altitude-based deployment checks
                     if parachute.check_deployment(current_altitude, vertical_velocity, t):
                         logger.info(
@@ -445,31 +470,12 @@ class SimulationWorker(QThread):
                         logger.info(
                             "Drogue deployed (altitude trigger): %.1fm", current_altitude
                         )
-                    
-                    # Advance inflation counter
+
                     parachute.update_inflation(timestep)
-                    
-                    # Apply parachute drag force
-                    # In new architecture, we apply it directly to the dynamics
                     if parachute.deployed:
-                        # Use ground-relative velocity (v_enu) for now
-                        # Note: For more accuracy, we could calculate relative velocity
-                        v_rel = rocket.state.v_enu
-                        speed_rel = float(np.linalg.norm(v_rel))
-                        if speed_rel > 0:
-                            # Get current density from atmosphere at absolute altitude
-                            current_density = atmosphere.give_dens(absolute_altitude)
-                            drag_force = parachute.calculate_drag_force(
-                                speed_rel, current_density
-                            )
-                            # Apply force opposite to velocity direction
-                            # This needs to be integrated into the rocket's forces
-                            # For now, we'll store it in the parachute for metrics
-                            parachute.max_descent_rate = max(
-                                parachute.max_descent_rate, vertical_velocity
-                            )
-                            # Log parachute drag
-                            logger.debug(f"Parachute drag: {drag_force:.1f}N at {current_altitude:.1f}m")
+                        parachute.max_descent_rate = max(
+                            parachute.max_descent_rate, vertical_velocity
+                        )
                 
                 # =============================================================
                 # Update metrics from rocket state
@@ -481,22 +487,17 @@ class SimulationWorker(QThread):
                 # Get Mach number from atmosphere
                 mach = current_velocity / atmosphere.give_v_sonic(absolute_altitude) if current_velocity > 0 else 0.0
                 
-                # Get acceleration - from dynamics or state
-                # In new architecture, acceleration is calculated in dynamics
-                # For now, we'll use a simplified calculation or get from history
-                # We can access the acceleration from the last step's forces
+                # Get acceleration from the last step's forces (history stores the
+                # non-gravity body-frame forces, so gravity is added back here)
                 try:
-                    # Try to get acceleration magnitude from the dynamics
-                    # This would be: ||forces|| / mass + gravity
-                    # For now, use 0 as placeholder
                     accel_magnitude = 0.0
-                    
-                    # Try to get from history if available
                     if len(rocket.simulation.history.forces) > 0:
                         last_force = rocket.simulation.history.forces[-1]
                         last_mass = rocket.simulation.history.masses[-1]
                         if last_mass > 0:
-                            accel_magnitude = float(np.linalg.norm(last_force) / last_mass)
+                            accel_magnitude = _total_accel_magnitude(
+                                last_force, last_mass, rocket.state.q_enu2b
+                            )
                 except Exception:
                     accel_magnitude = 0.0
                 
@@ -505,6 +506,11 @@ class SimulationWorker(QThread):
                 metrics['max_mach'] = max(metrics['max_mach'], mach)
                 metrics['max_range'] = max(metrics['max_range'], current_range)
                 metrics['max_accel_g'] = max(metrics['max_accel_g'], accel_magnitude / 9.80665)
+
+                # Max dynamic pressure q = 0.5 * rho * |v_rel|^2
+                v_rel = rocket.state.v_enu - wind_vector_enu
+                q = 0.5 * float(atmosphere.give_dens(absolute_altitude)) * float(np.dot(v_rel, v_rel))
+                metrics['max_q'] = max(metrics['max_q'], q)
                     
                 # Detect apogee
                 if current_altitude < prev_altitude and not apogee_reached:
@@ -577,6 +583,7 @@ class SimulationWorker(QThread):
                 # Check termination conditions
                 if current_altitude <= 0 and t > 1.0:
                     termination_reason = "LANDING: Altitude <= 0m"
+                    metrics['touchdown_velocity'] = current_velocity
                     termination_step = i
                     logger.info(f"[TERMINATION] {termination_reason} at t={t:.2f}s (step {i}/{num_steps})")
                     logger.info(f"  Altitude: {current_altitude:.2f}m, Velocity: {current_velocity:.2f}m/s")
@@ -891,6 +898,34 @@ class SimulationWorker(QThread):
             }
             
         return results
+
+    # State keys applied onto the rocket config when set to a positive number
+    # (ApplicationState defaults them to 0.0, so falsy means "not set")
+    _CONFIG_OVERRIDE_KEYS = ('initial_mass', 'propellant_mass', 'reference_area')
+    _ENGINE_OVERRIDE_KEYS = (
+        'burn_time', 'propellant_mass', 'specific_impulse', 'mean_thrust',
+        'max_thrust', 'mass_flux', 'mean_chamber_pressure', 'max_chamber_pressure',
+        'nozzle_exit_diameter', 'thrust_to_weight_ratio',
+    )
+
+    def _apply_state_config_overrides(self, rocket_config: dict) -> dict:
+        """Overlay positive state values onto the rocket/engine configuration.
+
+        This is what makes GUI edits (initial mass, thrust, ...) effective in
+        the simulation and lets Monte Carlo sample these parameters via the
+        StateProxy overrides. Only positive numbers are applied, since the
+        state defaults for these keys are 0.0.
+        """
+        for key in self._CONFIG_OVERRIDE_KEYS:
+            value = self.state.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+                rocket_config[key] = float(value)
+        engine = rocket_config.setdefault('engine', {})
+        for key in self._ENGINE_OVERRIDE_KEYS:
+            value = self.state.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+                engine[key] = float(value)
+        return rocket_config
 
     def _load_rocket_config(self, rocket_name: str) -> dict | None:
         """Load rocket configuration from JSON file with validation and caching."""

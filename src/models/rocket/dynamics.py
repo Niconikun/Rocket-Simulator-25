@@ -472,6 +472,8 @@ class RocketDynamics:
         self._torques_aero_b = None
         self._forces_engine_b = None
         self._torques_engine_b = None
+        self._forces_parachute_b = None
+        self._torques_parachute_b = None
         self._forces_total_b = None
         self._torques_total_b = None
     

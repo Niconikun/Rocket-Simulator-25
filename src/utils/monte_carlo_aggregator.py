@@ -37,6 +37,8 @@ from typing import Optional
 
 import numpy as np
 
+from src.utils.monte_carlo_stats import compute_cep
+
 logger = logging.getLogger(__name__)
 
 # Scalar fields that are aggregated by default
@@ -48,6 +50,8 @@ _SCALAR_KEYS = (
     "flight_duration",
     "apogee_time",
     "max_accel_g",
+    "max_q",
+    "touchdown_velocity",
 )
 
 
@@ -61,11 +65,14 @@ class MonteCarloAggregator:
         the keys in ``_SCALAR_KEYS`` plus optional ``impact_x`` / ``impact_y``.
     """
 
-    def __init__(self, metrics_list: list[dict]) -> None:
+    def __init__(self, metrics_list: list[dict], degraded: bool = False) -> None:
         if not metrics_list:
             raise ValueError("metrics_list must contain at least one run.")
         self._runs = metrics_list
         self._n = len(metrics_list)
+        # True when built from a summary's aggregated block instead of real
+        # per-run records: std/percentiles/CEP are then degenerate (e.g. std=0)
+        self.degraded = degraded
 
         # Pre-extract arrays for fast repeated access
         self._arrays: dict[str, np.ndarray] = {}
@@ -107,7 +114,9 @@ class MonteCarloAggregator:
             except Exception as load_err:
                 logger.warning("Could not load .jsonl file: %s", load_err)
 
-        # Fallback: reconstruct stub list from pre-computed statistics block
+        # Fallback: reconstruct stub list from pre-computed statistics block.
+        # Marked degraded because dispersion statistics (std, percentiles, CEP)
+        # computed from identical stubs are degenerate.
         stats_block = summary.get("statistics", {})
         if not stats_block:
             raise ValueError(
@@ -119,7 +128,11 @@ class MonteCarloAggregator:
         for key, stat in stats_block.items():
             if isinstance(stat, dict) and "mean" in stat:
                 stub[key] = stat["mean"]
-        return cls([stub] * n)
+        logger.warning(
+            "Building aggregator from summary statistics only (no per-run records); "
+            "marked degraded — std/percentiles/CEP will be degenerate."
+        )
+        return cls([stub] * n, degraded=True)
 
     @classmethod
     def from_runs(cls, metrics_list: list[dict]) -> "MonteCarloAggregator":
@@ -195,21 +208,43 @@ class MonteCarloAggregator:
     def cep(self) -> float:
         """Circular Error Probable in metres (50th-percentile radial error).
 
-        Uses the same two-path algorithm as ``MonteCarloRunner._compute_cep``:
+        Delegates to :func:`src.utils.monte_carlo_stats.compute_cep`:
         analytical approximation for N < 20, empirical percentile for N ≥ 20.
         """
         ix, iy = self.impact_arrays()
-        if len(ix) < 2:
-            return 0.0
+        return compute_cep(ix, iy)
 
-        mu_x, mu_y = np.mean(ix), np.mean(iy)
-        cep_approx = 0.59 * (np.std(ix) + np.std(iy))
+    def probability_inside(
+        self, radius_m: float, center_x: float = 0.0, center_y: float = 0.0
+    ) -> dict:
+        """Fraction of landing impacts inside a circle (safety zone).
 
-        if len(ix) >= 20:
-            radial = np.sqrt((ix - mu_x) ** 2 + (iy - mu_y) ** 2)
-            return float(max(cep_approx, np.percentile(radial, 50)))
+        Parameters
+        ----------
+        radius_m:
+            Zone radius in metres.
+        center_x, center_y:
+            Zone centre in ENU metres relative to the launch pad
+            (default: the pad itself).
 
-        return float(cep_approx)
+        Returns
+        -------
+        dict with keys: n, inside, p (probability), radius_m, center_x, center_y
+        """
+        ix, iy = self.impact_arrays()
+        if len(ix) == 0:
+            return {"n": 0, "inside": 0, "p": float("nan"),
+                    "radius_m": radius_m, "center_x": center_x, "center_y": center_y}
+        d = np.hypot(ix - center_x, iy - center_y)
+        inside = int(np.count_nonzero(d <= radius_m))
+        return {
+            "n": int(len(ix)),
+            "inside": inside,
+            "p": inside / len(ix),
+            "radius_m": float(radius_m),
+            "center_x": float(center_x),
+            "center_y": float(center_y),
+        }
 
     def dispersion_ellipse(self, sigma_level: float = 1.0) -> dict:
         """Compute the dispersion ellipse for impact scatter.
@@ -304,7 +339,6 @@ class MonteCarloAggregator:
         ax.set_xlabel("Max Altitude (m)")
         ax.set_ylabel("Count")
         ax.set_title(title)
-        ax.legend(fontsize=8)
         fig.patch.set_facecolor("#1e1e1e")
         ax.set_facecolor("#2d2d2d")
         for spine in ax.spines.values():
@@ -379,7 +413,6 @@ class MonteCarloAggregator:
         ax.set_xlabel("East (m)")
         ax.set_ylabel("North (m)")
         ax.set_title(title)
-        ax.legend(fontsize=8)
 
         # Dark theme
         fig.patch.set_facecolor("#1e1e1e")

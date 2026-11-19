@@ -188,68 +188,58 @@ packages = [
     "workers",
 ]
 
-# Include non-Python files
-package-data = {
-    "": [
-        "*.json",
-        "*.yaml",
-        "*.yml",
-        "*.toml",
-        "*.txt",
-        "*.md",
-        "*.csv",
-        "*.ts",
-        "*.qm",
-        "*.ui",
-        "*.qrc",
-        "*.svg",
-        "*.png",
-        "*.ico",
-    ],
-    "data": ["**/*"],
-    "ui": ["**/*"],
-    "src": ["**/*"],
-    "models": ["**/*"],
-    "workers": ["**/*"],
-}
-
-# Exclude files
-exclude-package-data = {
-    "": [
-        "__pycache__",
-        "*.pyc",
-        "*.pyo",
-        "*.pyd",
-        ".git",
-        ".gitignore",
-        ".venv",
-        "venv",
-        "build",
-        "dist",
-        "*.egg-info",
-    ]
-}
-
 # Scripts to include
 scripts = ["main.py", "build_exe.py", "add_aero_methods.py"]
 
+# Include non-Python files
+[tool.setuptools.package-data]
+"" = [
+    "*.json",
+    "*.yaml",
+    "*.yml",
+    "*.toml",
+    "*.txt",
+    "*.md",
+    "*.csv",
+    "*.ts",
+    "*.qm",
+    "*.ui",
+    "*.qrc",
+    "*.svg",
+    "*.png",
+    "*.ico",
+]
+"data" = ["**/*"]
+"ui" = ["**/*"]
+"src" = ["**/*"]
+"models" = ["**/*"]
+"workers" = ["**/*"]
+
+# Exclude files
+[tool.setuptools.exclude-package-data]
+"" = [
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+    ".git",
+    ".gitignore",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
 # Entry points
-entry-points = {
-    "console_scripts": [
-        "rocket-simulator = main:main",
-        "rocket-sim-build = build_exe:main",
-    ],
-    "gui_scripts": [
-        "rocket-simulator-gui = main:main",
-    ],
-}
-
-
-[tool.setuptools.packages.find]
-# Find packages automatically
-where = [".", "src", "models", "ui", "workers"]
-include = ["*"]
-exclude = ["__pycache__", "*.tests", "*.test"]
+[tool.setuptools.entry-points]
+console_scripts = [
+    "rocket-simulator = main:main",
+    "rocket-sim-build = build_exe:main",
+]
+gui_scripts = [
+    "rocket-simulator-gui = main:main",
+]
 
 
 [tool.black]
@@ -334,7 +324,6 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
-warn_return_any = true
 warn_unused = true
 
 # Ignore missing imports for third-party libraries
@@ -385,7 +374,7 @@ filterwarnings = [
 
 convention = "google"
 add_ignore = ["D100", "D104", "D105", "D107", "D202", "D212", "D400", "D401", "D413", "D415", "D417"]
-match = "^(?!.*(test_|__)).*\.py$"
+match = "^(?!.*(test_|__)).*\\.py$"
 match-dir = "^(?!.*(tests|__pycache__)).*$"
 
 

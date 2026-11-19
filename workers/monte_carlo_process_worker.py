@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
+from src.utils.monte_carlo_stats import extract_impact_position
+
 logger = logging.getLogger(__name__)
 
 # For type checking only - at runtime, we use duck typing
@@ -49,33 +51,6 @@ class _FrozenState:
     def reset(self) -> None:
         """Reset all state to empty."""
         self._state.clear()
-
-
-def extract_impact_position(result: dict) -> tuple[float, float]:
-    """Return the (east, north) ENU impact offset in metres from the launch pad."""
-    history = result.get("history", {})
-    if history:
-        east = history.get("hist_east")
-        north = history.get("hist_north")
-        if east and north:
-            return float(east[-1]), float(north[-1])
-
-        r_enu = history.get("hist_r_enu")
-        if r_enu is not None:
-            try:
-                arr = np.asarray(r_enu)
-                if arr.ndim == 2 and arr.shape[1] >= 2:
-                    return float(arr[-1, 0]), float(arr[-1, 1])
-            except Exception:
-                pass
-
-    # Fallback: only total horizontal range is known, direction is lost
-    trajectory = result.get("trajectory", [])
-    if trajectory:
-        range_val = trajectory[-1].get("range", 0.0)
-        return float(range_val), 0.0
-
-    return 0.0, 0.0
 
 
 def run_single_montecarlo(
@@ -117,8 +92,13 @@ def run_single_montecarlo(
                 "flight_duration": metrics.get("flight_duration", 0.0),
                 "apogee_time":     metrics.get("apogee_time", 0.0),
                 "max_accel_g":     metrics.get("max_accel_g", 0.0),
+                "max_q":           metrics.get("max_q", 0.0),
+                "touchdown_velocity": metrics.get("touchdown_velocity", 0.0),
                 "impact_x":        impact_x,
                 "impact_y":        impact_y,
+                "landed":          not (np.isnan(impact_x) or np.isnan(impact_y)),
+                "termination_reason": (metrics.get("runtime_diagnostics", {}) or {}).get(
+                    "termination_reason", ""),
             },
         }
     except Exception as exc:  # pragma: no cover - defensive, reported to parent
