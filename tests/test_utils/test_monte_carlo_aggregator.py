@@ -82,6 +82,41 @@ class TestImpactStats(unittest.TestCase):
 
 
 @pytest.mark.monte_carlo
+class TestProbabilityInside(unittest.TestCase):
+    def test_all_inside(self):
+        runs = [{"impact_x": 10.0, "impact_y": 0.0}, {"impact_x": 0.0, "impact_y": 20.0}]
+        agg = MonteCarloAggregator.from_runs(runs)
+        pz = agg.probability_inside(100.0)
+        self.assertEqual(pz["n"], 2)
+        self.assertEqual(pz["inside"], 2)
+        self.assertAlmostEqual(pz["p"], 1.0)
+
+    def test_none_inside(self):
+        runs = [{"impact_x": 1000.0, "impact_y": 0.0}]
+        agg = MonteCarloAggregator.from_runs(runs)
+        pz = agg.probability_inside(100.0)
+        self.assertEqual(pz["inside"], 0)
+        self.assertAlmostEqual(pz["p"], 0.0)
+
+    def test_custom_center_and_nan_masking(self):
+        runs = [{"impact_x": 100.0, "impact_y": 0.0},
+                {"impact_x": 500.0, "impact_y": 0.0},
+                {"impact_x": float("nan"), "impact_y": 0.0}]
+        agg = MonteCarloAggregator.from_runs(runs)
+        pz = agg.probability_inside(50.0, center_x=100.0, center_y=0.0)
+        self.assertEqual(pz["n"], 2)  # NaN pair masked
+        self.assertEqual(pz["inside"], 1)
+        self.assertAlmostEqual(pz["p"], 0.5)
+
+    def test_no_impacts_returns_nan_p(self):
+        agg = MonteCarloAggregator.from_runs(
+            [{"impact_x": float("nan"), "impact_y": float("nan")}])
+        pz = agg.probability_inside(100.0)
+        self.assertEqual(pz["n"], 0)
+        self.assertTrue(np.isnan(pz["p"]))
+
+
+@pytest.mark.monte_carlo
 class TestFromSummary(unittest.TestCase):
     def test_degraded_when_no_per_run_records(self):
         summary = {

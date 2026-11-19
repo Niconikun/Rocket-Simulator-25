@@ -149,6 +149,42 @@ class TestLandingZoneFallback(TestMonteCarloWidgetBase):
         self.assertNotEqual(self.widget.cep_value_label.text(), 'N/A')
         self.assertIn('m', self.widget.distance_value_label.text())
 
+    def test_probability_in_zone_reported(self):
+        runs = [{"impact_x": 10.0, "impact_y": 0.0, "max_altitude": 1.0},
+                {"impact_x": 5000.0, "impact_y": 0.0, "max_altitude": 1.0},
+                {"impact_x": 20.0, "impact_y": 0.0, "max_altitude": 1.0}]
+        self.widget.safety_radius_spin.setValue(100.0)
+        self.widget._update_landing_summary(runs)
+        text = self.widget.p_zone_label.text()
+        self.assertIn('66.7%', text)
+        self.assertIn('(2/3 runs)', text)
+
+    def test_sensitivity_label_from_jsonl(self, tmp_path=None):
+        import json as _json
+        import tempfile, os as _os
+        records = []
+        for i in range(30):
+            wind = float(i)
+            records.append({"overrides": {"wind_speed_ref": wind},
+                            "metrics": {"max_altitude": 100.0 + 10.0 * wind}})
+        with tempfile.NamedTemporaryFile('w', suffix='.jsonl', delete=False) as f:
+            for r in records:
+                f.write(_json.dumps(r) + "\n")
+            path = f.name
+        self.addCleanup(_os.remove, path)
+        self.widget._show_sensitivity({"output_file": path})
+        text = self.widget.sensitivity_label.text()
+        self.assertIn('wind_speed_ref', text)
+        self.assertIn('r=+1.00', text)
+
+    def test_new_sigma_spinboxes_use_constants(self):
+        from src.config import Constants
+        mc = Constants.MonteCarlo
+        self.assertAlmostEqual(self.widget.sigma_mass.value(), mc.DEFAULT_SIGMA_REL_MASS * 100.0)
+        self.assertAlmostEqual(self.widget.sigma_prop.value(), mc.DEFAULT_SIGMA_REL_PROPELLANT * 100.0)
+        self.assertAlmostEqual(self.widget.sigma_thrust.value(), mc.DEFAULT_SIGMA_REL_THRUST * 100.0)
+        self.assertAlmostEqual(self.widget.sigma_burn.value(), mc.DEFAULT_SIGMA_REL_BURN_TIME * 100.0)
+
 
 if __name__ == '__main__':
     unittest.main()

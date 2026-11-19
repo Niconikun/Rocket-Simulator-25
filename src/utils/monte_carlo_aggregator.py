@@ -50,6 +50,8 @@ _SCALAR_KEYS = (
     "flight_duration",
     "apogee_time",
     "max_accel_g",
+    "max_q",
+    "touchdown_velocity",
 )
 
 
@@ -211,6 +213,38 @@ class MonteCarloAggregator:
         """
         ix, iy = self.impact_arrays()
         return compute_cep(ix, iy)
+
+    def probability_inside(
+        self, radius_m: float, center_x: float = 0.0, center_y: float = 0.0
+    ) -> dict:
+        """Fraction of landing impacts inside a circle (safety zone).
+
+        Parameters
+        ----------
+        radius_m:
+            Zone radius in metres.
+        center_x, center_y:
+            Zone centre in ENU metres relative to the launch pad
+            (default: the pad itself).
+
+        Returns
+        -------
+        dict with keys: n, inside, p (probability), radius_m, center_x, center_y
+        """
+        ix, iy = self.impact_arrays()
+        if len(ix) == 0:
+            return {"n": 0, "inside": 0, "p": float("nan"),
+                    "radius_m": radius_m, "center_x": center_x, "center_y": center_y}
+        d = np.hypot(ix - center_x, iy - center_y)
+        inside = int(np.count_nonzero(d <= radius_m))
+        return {
+            "n": int(len(ix)),
+            "inside": inside,
+            "p": inside / len(ix),
+            "radius_m": float(radius_m),
+            "center_x": float(center_x),
+            "center_y": float(center_y),
+        }
 
     def dispersion_ellipse(self, sigma_level: float = 1.0) -> dict:
         """Compute the dispersion ellipse for impact scatter.

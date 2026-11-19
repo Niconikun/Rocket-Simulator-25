@@ -13,7 +13,11 @@ import unittest
 import numpy as np
 import pytest
 
-from src.utils.monte_carlo_stats import extract_impact_position, compute_cep
+from src.utils.monte_carlo_stats import (
+    extract_impact_position,
+    compute_cep,
+    sensitivity_from_records,
+)
 
 LANDING = "LANDING: Altitude <= 0m"
 NORMAL = "NORMAL: Completed all steps"
@@ -110,6 +114,42 @@ class TestComputeCep(unittest.TestCase):
         theta = np.linspace(0, 2 * np.pi, 100, endpoint=False)
         x, y = 50.0 * np.cos(theta), 50.0 * np.sin(theta)
         self.assertAlmostEqual(compute_cep(x, y), 50.0, places=6)
+
+
+@pytest.mark.monte_carlo
+class TestSensitivityFromRecords(unittest.TestCase):
+    def _records(self, n=200, seed=0):
+        rng = np.random.default_rng(seed)
+        records = []
+        for _ in range(n):
+            wind = float(rng.normal(5.0, 1.0))
+            noise = float(rng.normal(0.0, 1.0))
+            records.append({
+                "overrides": {"wind_speed_ref": wind, "launch_roll": noise},
+                "metrics": {"max_altitude": 1000.0 + 20.0 * wind + 5.0 * noise},
+            })
+        return records
+
+    def test_correlated_parameter_detected(self):
+        sens = sensitivity_from_records(self._records(), "max_altitude")
+        self.assertIn("wind_speed_ref", sens)
+        self.assertGreater(sens["wind_speed_ref"], 0.9)
+        # strongest first
+        self.assertEqual(list(sens.keys())[0], "wind_speed_ref")
+
+    def test_uncorrelated_parameter_has_low_r(self):
+        sens = sensitivity_from_records(self._records(), "max_altitude", min_abs_r=0.0)
+        self.assertLess(abs(sens.get("launch_roll", 0.0)), 0.3)
+
+    def test_too_few_records_returns_empty(self):
+        recs = self._records(n=2)
+        self.assertEqual(sensitivity_from_records(recs, "max_altitude"), {})
+
+    def test_nan_metric_values_skipped(self):
+        recs = self._records(n=50)
+        recs[0]["metrics"]["max_altitude"] = float("nan")
+        sens = sensitivity_from_records(recs, "max_altitude")
+        self.assertIn("wind_speed_ref", sens)
 
 
 if __name__ == '__main__':

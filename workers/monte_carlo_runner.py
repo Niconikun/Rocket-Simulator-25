@@ -290,6 +290,8 @@ class MonteCarloRunner(QObject):
                     "flight_duration": metrics.get("flight_duration", 0.0),
                     "apogee_time":     metrics.get("apogee_time", 0.0),
                     "max_accel_g":     metrics.get("max_accel_g", 0.0),
+                    "max_q":           metrics.get("max_q", 0.0),
+                    "touchdown_velocity": metrics.get("touchdown_velocity", 0.0),
                     "impact_x":        impact_x,
                     "impact_y":        impact_y,
                     "landed":          not (np.isnan(impact_x) or np.isnan(impact_y)),
@@ -407,7 +409,7 @@ class MonteCarloRunner(QObject):
         scalar_keys = [
             "max_altitude", "max_velocity", "max_mach",
             "max_range", "flight_duration", "apogee_time",
-            "max_accel_g",
+            "max_accel_g", "max_q", "touchdown_velocity",
         ]
         stats: dict = {}
         for key in scalar_keys:

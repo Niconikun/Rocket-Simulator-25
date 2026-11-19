@@ -92,6 +92,8 @@ def run_single_montecarlo(
                 "flight_duration": metrics.get("flight_duration", 0.0),
                 "apogee_time":     metrics.get("apogee_time", 0.0),
                 "max_accel_g":     metrics.get("max_accel_g", 0.0),
+                "max_q":           metrics.get("max_q", 0.0),
+                "touchdown_velocity": metrics.get("touchdown_velocity", 0.0),
                 "impact_x":        impact_x,
                 "impact_y":        impact_y,
                 "landed":          not (np.isnan(impact_x) or np.isnan(impact_y)),

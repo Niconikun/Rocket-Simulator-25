@@ -120,3 +120,58 @@ def compute_cep(x: np.ndarray, y: np.ndarray) -> float:
         return float(np.percentile(radial, 50))
 
     return float(0.59 * (np.std(x) + np.std(y)))
+
+
+def sensitivity_from_records(records: list, metric: str, min_abs_r: float = 0.0) -> dict:
+    """Pearson correlation between each sampled override and a run metric.
+
+    Parameters
+    ----------
+    records:
+        List of per-run dicts as written to the batch JSONL, i.e. each with
+        ``'overrides'`` and ``'metrics'`` sub-dicts.
+    metric:
+        Metric key inside ``records[i]['metrics']`` (e.g. ``'max_altitude'``).
+    min_abs_r:
+        Only return parameters whose |r| is at least this (0 = all).
+
+    Returns
+    -------
+    dict mapping parameter name -> correlation coefficient, sorted by
+    descending |r|.  (Tornado-plot ready.)
+    """
+    xs: dict = {}
+    ys = []
+    for rec in records:
+        overrides = rec.get("overrides", {}) or {}
+        metrics = rec.get("metrics", {}) or {}
+        y = metrics.get(metric)
+        if y is None or (isinstance(y, float) and np.isnan(y)):
+            continue
+        ys.append(float(y))
+        for key, value in overrides.items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                xs.setdefault(key, []).append(float(value))
+
+    n = len(ys)
+    if n < 3:
+        return {}
+    y_arr = np.asarray(ys, dtype=float)
+    y_arr = y_arr - y_arr.mean()
+    y_norm = float(np.sqrt(np.dot(y_arr, y_arr)))
+    if y_norm == 0.0:
+        return {}
+
+    result = {}
+    for key, values in xs.items():
+        if len(values) != n:
+            continue
+        x_arr = np.asarray(values, dtype=float)
+        x_arr = x_arr - x_arr.mean()
+        x_norm = float(np.sqrt(np.dot(x_arr, x_arr)))
+        if x_norm == 0.0:
+            continue
+        r = float(np.dot(x_arr, y_arr) / (x_norm * y_norm))
+        if abs(r) >= min_abs_r:
+            result[key] = r
+    return dict(sorted(result.items(), key=lambda kv: abs(kv[1]), reverse=True))
