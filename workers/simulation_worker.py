@@ -43,6 +43,19 @@ logger = logging.getLogger(__name__)
 
 # Constants
 DEG_TO_RAD = np.pi / 180.0
+STANDARD_G = 9.80665  # m/s^2
+
+
+def _total_accel_magnitude(forces_b: np.ndarray, mass: float, q_enu2b: np.ndarray) -> float:
+    """Total acceleration magnitude [m/s^2] including gravity.
+
+    ``forces_b`` are the non-gravity body-frame forces (as stored in the
+    simulation history); gravity is rotated into the body frame and added.
+    """
+    g_enu = np.array([0.0, 0.0, -STANDARD_G])
+    g_b = Mat.q_rot(g_enu, q_enu2b, 0)
+    a_b = np.asarray(forces_b, dtype=float) / mass + g_b
+    return float(np.linalg.norm(a_b))
 
 
 # Use StateProxy from src.models.state for new code
@@ -430,22 +443,17 @@ class SimulationWorker(QThread):
                 # Get Mach number from atmosphere
                 mach = current_velocity / atmosphere.give_v_sonic(absolute_altitude) if current_velocity > 0 else 0.0
                 
-                # Get acceleration - from dynamics or state
-                # In new architecture, acceleration is calculated in dynamics
-                # For now, we'll use a simplified calculation or get from history
-                # We can access the acceleration from the last step's forces
+                # Get acceleration from the last step's forces (history stores the
+                # non-gravity body-frame forces, so gravity is added back here)
                 try:
-                    # Try to get acceleration magnitude from the dynamics
-                    # This would be: ||forces|| / mass + gravity
-                    # For now, use 0 as placeholder
                     accel_magnitude = 0.0
-                    
-                    # Try to get from history if available
                     if len(rocket.simulation.history.forces) > 0:
                         last_force = rocket.simulation.history.forces[-1]
                         last_mass = rocket.simulation.history.masses[-1]
                         if last_mass > 0:
-                            accel_magnitude = float(np.linalg.norm(last_force) / last_mass)
+                            accel_magnitude = _total_accel_magnitude(
+                                last_force, last_mass, rocket.state.q_enu2b
+                            )
                 except Exception:
                     accel_magnitude = 0.0
                 

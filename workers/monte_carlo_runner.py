@@ -87,6 +87,11 @@ class MonteCarloRunner(QObject):
         Number of OS processes to run simulations in parallel with
         ``concurrent.futures.ProcessPoolExecutor``.  ``1`` (default) keeps the
         original single-process, single-thread behaviour.
+    use_cache:
+        Reuse cached Planet/Atmosphere/wind model objects across runs.
+    clear_cache_before:
+        When ``True`` (default) the global simulation cache — shared with the
+        normal GUI simulation — is cleared at batch start.
     """
 
     # ---- Qt signals -------------------------------------------------------

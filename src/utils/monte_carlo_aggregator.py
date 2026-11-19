@@ -63,11 +63,14 @@ class MonteCarloAggregator:
         the keys in ``_SCALAR_KEYS`` plus optional ``impact_x`` / ``impact_y``.
     """
 
-    def __init__(self, metrics_list: list[dict]) -> None:
+    def __init__(self, metrics_list: list[dict], degraded: bool = False) -> None:
         if not metrics_list:
             raise ValueError("metrics_list must contain at least one run.")
         self._runs = metrics_list
         self._n = len(metrics_list)
+        # True when built from a summary's aggregated block instead of real
+        # per-run records: std/percentiles/CEP are then degenerate (e.g. std=0)
+        self.degraded = degraded
 
         # Pre-extract arrays for fast repeated access
         self._arrays: dict[str, np.ndarray] = {}
@@ -109,7 +112,9 @@ class MonteCarloAggregator:
             except Exception as load_err:
                 logger.warning("Could not load .jsonl file: %s", load_err)
 
-        # Fallback: reconstruct stub list from pre-computed statistics block
+        # Fallback: reconstruct stub list from pre-computed statistics block.
+        # Marked degraded because dispersion statistics (std, percentiles, CEP)
+        # computed from identical stubs are degenerate.
         stats_block = summary.get("statistics", {})
         if not stats_block:
             raise ValueError(
@@ -121,7 +126,11 @@ class MonteCarloAggregator:
         for key, stat in stats_block.items():
             if isinstance(stat, dict) and "mean" in stat:
                 stub[key] = stat["mean"]
-        return cls([stub] * n)
+        logger.warning(
+            "Building aggregator from summary statistics only (no per-run records); "
+            "marked degraded — std/percentiles/CEP will be degenerate."
+        )
+        return cls([stub] * n, degraded=True)
 
     @classmethod
     def from_runs(cls, metrics_list: list[dict]) -> "MonteCarloAggregator":
@@ -296,7 +305,6 @@ class MonteCarloAggregator:
         ax.set_xlabel("Max Altitude (m)")
         ax.set_ylabel("Count")
         ax.set_title(title)
-        ax.legend(fontsize=8)
         fig.patch.set_facecolor("#1e1e1e")
         ax.set_facecolor("#2d2d2d")
         for spine in ax.spines.values():
@@ -371,7 +379,6 @@ class MonteCarloAggregator:
         ax.set_xlabel("East (m)")
         ax.set_ylabel("North (m)")
         ax.set_title(title)
-        ax.legend(fontsize=8)
 
         # Dark theme
         fig.patch.set_facecolor("#1e1e1e")
