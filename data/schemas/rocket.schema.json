@@ -66,6 +66,51 @@
                     "type": "number",
                     "description": "Presión de salida [Pa]",
                     "minimum": 0
+                },
+                "engine_model": {
+                    "type": "string",
+                    "enum": ["enhanced", "experimental", "solid"],
+                    "description": "Modelo de motor: 'enhanced' (analítico), 'experimental' (curva CSV), 'solid' (motor sólido por diseño de grano, método Nakka)"
+                },
+                "thrust_curve_mode": {"type": "string", "enum": ["analytical", "experimental"]},
+                "thrust_curve_file": {"type": "string"},
+                "thrust_curve_unit": {"type": "string", "enum": ["N", "kgf"]},
+                "motor": {
+                    "type": "object",
+                    "description": "Sección de motor sólido (engine_model='solid'): grano + propelente + tobera",
+                    "required": ["grain", "nozzle"],
+                    "properties": {
+                        "grain": {
+                            "type": "object",
+                            "required": ["type"],
+                            "properties": {
+                                "type": {"type": "string", "enum": ["bates", "internal_tube", "end_burning", "star", "wagon_wheel", "c_slot"]}
+                            }
+                        },
+                        "propellant": {
+                            "type": "object",
+                            "properties": {
+                                "density": {"type": "number", "minimum": 0},
+                                "burn_rate_a": {"type": "number", "exclusiveMinimum": 0},
+                                "burn_rate_n": {"type": "number", "minimum": 0, "exclusiveMaximum": 1},
+                                "burn_rate_unit": {"type": "string", "enum": ["mm/s", "m/s"]},
+                                "burn_rate_pressure_unit": {"type": "string", "enum": ["MPa", "Pa"]},
+                                "chamber_temperature": {"type": "number", "minimum": 0},
+                                "gas_constant": {"type": "number", "minimum": 0},
+                                "gamma": {"type": "number", "exclusiveMinimum": 1},
+                                "characteristic_velocity": {"type": ["number", "null"]}
+                            }
+                        },
+                        "nozzle": {
+                            "type": "object",
+                            "required": ["throat_diameter", "exit_diameter"],
+                            "properties": {
+                                "throat_diameter": {"type": "number", "exclusiveMinimum": 0},
+                                "exit_diameter": {"type": "number", "exclusiveMinimum": 0}
+                            }
+                        },
+                        "sliver_fraction": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 0.5}
+                    }
                 }
             }
         },

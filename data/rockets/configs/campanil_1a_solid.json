@@ -1,0 +1,105 @@
+{
+    "name": "Campanil 1-A (solid grain)",
+    "description": "Campanil 1-A with Nakka grain-design solid motor (BATES, KNSB)",
+    "initial_mass": 7.8,
+    "propellant_mass": 1.9817,
+    "dry_mass_kg": 5.8183,
+    "reference_area": 0.033,
+    "I_before_burn": {
+        "x": 0.008879229,
+        "y": 0.520127852,
+        "z": 0.520199542
+    },
+    "CoM_before_burn": {
+        "x": 0.84957,
+        "y": 0.0,
+        "z": 0.00012
+    },
+    "I_after_burn": {
+        "x": 0.008879229,
+        "y": 0.486941936,
+        "z": 0.487079846
+    },
+    "CoM_after_burn": {
+        "x": 0.82877,
+        "y": 1e-05,
+        "z": 0.00016
+    },
+    "engine": {
+        "engine_model": "solid",
+        "thrust_curve_mode": "analytical",
+        "motor": {
+            "grain": {
+                "type": "bates",
+                "outer_diameter": 0.075,
+                "core_diameter": 0.03,
+                "segment_length": 0.1,
+                "segments": 3
+            },
+            "propellant": {
+                "density": 1780.0,
+                "burn_rate_a": 5.76,
+                "burn_rate_n": 0.2,
+                "burn_rate_unit": "mm/s",
+                "burn_rate_pressure_unit": "MPa",
+                "chamber_temperature": 1650.0,
+                "gas_constant": 287.0,
+                "gamma": 1.13,
+                "characteristic_velocity": 920.0
+            },
+            "nozzle": {
+                "throat_diameter": 0.0135,
+                "exit_diameter": 0.032
+            }
+        },
+        "burn_time": 2.8844,
+        "nozzle_exit_diameter": 0.032,
+        "propellant_mass": 1.9817,
+        "specific_impulse": 145.664,
+        "mean_thrust": 981.105,
+        "max_thrust": 1076.849,
+        "mean_chamber_pressure": 4385466.9,
+        "max_chamber_pressure": 4780614.1,
+        "thrust_to_weight_ratio": 14.078,
+        "mass_flux": 0.68703,
+        "gas_speed": 1428.48,
+        "exit_pressure": 139654.4,
+        "notes": "Campanil 1-A con motor sólido diseñado por grano BATES (método Nakka); los campos escalares se autocomputaron desde el diseño de grano (KNSB)."
+    },
+    "geometry": {
+        "length_nosecone_fins": 1.055,
+        "total_length": 1.19
+    },
+    "fins": {
+        "fin_type": "Tapered Swept",
+        "span": 0.139119,
+        "chord_root": 0.13,
+        "chord_tip": 0.04392,
+        "mid_chord": 0.08696,
+        "N_fins": 4,
+        "sweep_angle": 10.0
+    },
+    "nosecone": {
+        "type": "Parabolic",
+        "length": 0.2,
+        "diameter": 0.103,
+        "parabolic_parameter": 0.5,
+        "shape": "parabolic"
+    },
+    "fuselage": {
+        "length": 0.96,
+        "diameter": 0.103
+    },
+    "rear_section": {
+        "length": 0.001,
+        "diameter": 0.103
+    },
+    "aerodynamics": {
+        "method": "barrowman",
+        "n_axial": 48,
+        "n_theta": 16,
+        "include_fins": true,
+        "viscous_crossflow": true,
+        "thermo_enabled": false
+    }
+}

@@ -89,6 +89,26 @@ Proyecto iniciado por Jorge Orozco (Universidad de Concepción, 2022) para la pr
 - Compensación de presión ambiente en tobera
 - Parámetros: Isp, flujo másico, velocidad de gases, presión de salida
 
+### Motor Sólido (SRM) — Diseño de Grano (método Nakka)
+- Nuevo modelo de motor `SolidMotorEngine` (`src/models/solid_motor.py`) que implementa
+  la balística interna cuasi-estacionaria recomendada por
+  [Nakka](http://www.nakka-rocketry.net): ley de quemado `r = a·Pcⁿ`, velocidad
+  característica `c*`, equilibrio de cámara `Pc = (ρ·a·c*·Kn)^(1/(1-n))` con
+  `Kn = Ab/At`, flujo `ṁ = Pc·At/c*` y empuje `F = Cf·Pc·At` con tobera isentrópica
+  (el término de presión hace que el empuje varíe con la altitud)
+- Geometrías de grano en `src/models/grain.py`: **BATES**, tubo interno,
+  end-burning (cigarette), **estrella**, wagon-wheel y **C-slot**, con área de
+  quemado `Ab(web)` y volumen remanente; las de polígono (estrella, wagon-wheel)
+  usan la dilatación exacta del polígono, las demás una erosión por distancia
+  euclidiana en raster
+- En el editor de cohetes (pestaña **Engine**): selector *Engine Model*
+  (`enhanced` / `experimental` / `solid`) y grupo **Solid Motor - Grain Design**
+  con botón *"Compute motor from grain design"* que resuelve el motor y rellena
+  los campos de rendimiento (burn time, empujes, presiones de cámara, Isp, etc.)
+- En JSON: `engine.engine_model = "solid"` más la sección `engine.motor`
+  (`grain`, `propellant`, `nozzle`); los campos escalares se rellenan
+  automáticamente desde el diseño (ejemplo: `data/rockets/configs/campanil_1a_solid.json`)
+
 ### Simulaciones Monte Carlo
 - Muestreo de parámetros con distribuciones `normal`, `truncated_normal` y `uniform`
 - Ejecución en `QThread` con señales de progreso

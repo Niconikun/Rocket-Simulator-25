@@ -21,6 +21,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from src.models.state import StateProvider, StateProxy
 from src.models.rocket.factory import (
     create_rocket_from_config,
+    create_engine,
     aero_selection_from_state,
     validate_aerodynamics_section,
 )
@@ -1196,6 +1197,22 @@ class SimulationWorker(QThread):
         """Validate propulsion inputs before entering the simulation loop."""
         g0 = 9.80665
         engine_data = config.get('engine', {})
+
+        # Solid motor (grain design): build the engine first; create_engine
+        # backfills the scalar performance keys from the computed motor so the
+        # required-keys check and the diagnostics below work unchanged.
+        solid_engine = None
+        engine_model = str(engine_data.get('engine_model', '')).lower()
+        if engine_model == 'solid' and isinstance(engine_data.get('motor'), dict):
+            try:
+                solid_engine = create_engine(
+                    engine_data, time=0.0, ambient_pressure=101325.0,
+                    rocket_mass=config.get('initial_mass'))
+            except Exception as exc:
+                report['errors'].append(f"Solid motor (grain design) is invalid: {exc}")
+                report['valid'] = False
+                return
+
         required_keys = [
             'burn_time', 'nozzle_exit_diameter', 'propellant_mass', 'specific_impulse',
             'mean_thrust', 'max_thrust', 'mean_chamber_pressure',
@@ -1239,26 +1256,29 @@ class SimulationWorker(QThread):
                 report['valid'] = False
                 return
 
-        try:
-            engine_probe = EnhancedEngine(
-                time=0.0,
-                burn_time=engine_data['burn_time'],
-                ambient_pressure=101325.0,
-                nozzle_exit_diameter=engine_data['nozzle_exit_diameter'],
-                propellant_mass=engine_data['propellant_mass'],
-                specific_impulse=engine_data['specific_impulse'],
-                mean_thrust=engine_data['mean_thrust'],
-                max_thrust=engine_data['max_thrust'],
-                mean_chamber_pressure=engine_data['mean_chamber_pressure'],
-                max_chamber_pressure=engine_data['max_chamber_pressure'],
-                thrust_to_weight_ratio=engine_data['thrust_to_weight_ratio'],
-                thrust_curve_file=thrust_curve_file,
-                thrust_curve_unit=thrust_curve_unit,
-            )
-        except Exception as exc:
-            report['errors'].append(f"Propulsion validation failed: {exc}")
-            report['valid'] = False
-            return
+        if solid_engine is not None:
+            engine_probe = solid_engine
+        else:
+            try:
+                engine_probe = EnhancedEngine(
+                    time=0.0,
+                    burn_time=engine_data['burn_time'],
+                    ambient_pressure=101325.0,
+                    nozzle_exit_diameter=engine_data['nozzle_exit_diameter'],
+                    propellant_mass=engine_data['propellant_mass'],
+                    specific_impulse=engine_data['specific_impulse'],
+                    mean_thrust=engine_data['mean_thrust'],
+                    max_thrust=engine_data['max_thrust'],
+                    mean_chamber_pressure=engine_data['mean_chamber_pressure'],
+                    max_chamber_pressure=engine_data['max_chamber_pressure'],
+                    thrust_to_weight_ratio=engine_data['thrust_to_weight_ratio'],
+                    thrust_curve_file=thrust_curve_file,
+                    thrust_curve_unit=thrust_curve_unit,
+                )
+            except Exception as exc:
+                report['errors'].append(f"Propulsion validation failed: {exc}")
+                report['valid'] = False
+                return
 
         propulsion_diag = {
             'thrust_source': engine_probe.thrust_source,

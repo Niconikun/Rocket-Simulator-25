@@ -11,6 +11,8 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
+from src.models.solid_motor import SolidMotorEngine, create_solid_motor
+from src.utils.simulation_errors import InputValidationError
 from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
 from typing import Optional
 import json
@@ -118,6 +120,7 @@ class RocketSettingsWidget(BaseWidget):
         self.rockets = {}
         self.current_rocket = None
         self.thrust_curve_data = None  # Store loaded thrust curve
+        self._solid_motor = None  # Last SolidMotorEngine computed from the grain design
         self.init_ui()
         self._setup_event_bus()
         self.load_rocket_configs()
@@ -447,10 +450,29 @@ class RocketSettingsWidget(BaseWidget):
         widget = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        
+
         content = QWidget()
         form_layout = QFormLayout()
-        
+
+        # Engine model selection
+        self.engine_model_combo = QComboBox()
+        self.engine_model_combo.addItem("Enhanced (analytical)", 'enhanced')
+        self.engine_model_combo.addItem("Experimental (CSV curve)", 'experimental')
+        self.engine_model_combo.addItem("Solid motor - grain design (Nakka)", 'solid')
+        self.engine_model_combo.setToolTip(
+            "Enhanced: legacy analytical thrust shape. "
+            "Experimental: measured CSV thrust curve. "
+            "Solid: physics-based SRM from grain geometry (Nakka design method) - "
+            "the performance fields below are computed from the grain design."
+        )
+        self.engine_model_combo.currentIndexChanged.connect(self._on_engine_model_changed)
+        form_layout.addRow("Engine Model:", self.engine_model_combo)
+
+        # Solid motor grain-design editor (Nakka SRM design method)
+        self.motor_group = self._create_motor_design_group()
+        form_layout.addRow(self.motor_group)
+        self._on_engine_model_changed(self.engine_model_combo.currentIndex())
+
         # Burn Time
         self.burn_time = QDoubleSpinBox()
         self.burn_time.setRange(0.1, 3600)
@@ -526,12 +548,391 @@ class RocketSettingsWidget(BaseWidget):
         
         content.setLayout(form_layout)
         scroll.setWidget(content)
-        
+
         main_layout = QVBoxLayout()
         main_layout.addWidget(scroll)
         widget.setLayout(main_layout)
         return widget
-    
+
+    def _create_motor_design_group(self) -> QGroupBox:
+        """Solid motor grain-design editor (Nakka SRM design method).
+
+        Groups: grain geometry, propellant (burn rate law r = a*Pc^n),
+        nozzle, plus a 'Compute motor' button that runs the internal
+        ballistics and fills the performance fields of the Engine tab.
+        """
+        group = QGroupBox("Solid Motor - Grain Design (Nakka)")
+        outer = QVBoxLayout()
+
+        grain_form = QFormLayout()
+        self.grain_type = QComboBox()
+        self.grain_type.addItem("BATES (segmented core)", 'bates')
+        self.grain_type.addItem("Internal tube", 'internal_tube')
+        self.grain_type.addItem("End-burning (cigarette)", 'end_burning')
+        self.grain_type.addItem("Star", 'star')
+        self.grain_type.addItem("Wagon wheel", 'wagon_wheel')
+        self.grain_type.addItem("C-slot", 'c_slot')
+        grain_form.addRow("Grain Type:", self.grain_type)
+
+        self.grain_od = QDoubleSpinBox()
+        self.grain_od.setRange(0.005, 2.0)
+        self.grain_od.setDecimals(4)
+        self.grain_od.setSuffix(" m")
+        self.grain_od.setValue(0.075)
+        grain_form.addRow("Grain Outer Diameter:", self.grain_od)
+
+        self.grain_core_d = QDoubleSpinBox()
+        self.grain_core_d.setRange(0.001, 2.0)
+        self.grain_core_d.setDecimals(4)
+        self.grain_core_d.setSuffix(" m")
+        self.grain_core_d.setValue(0.030)
+        grain_form.addRow("Core Diameter:", self.grain_core_d)
+
+        self.grain_tip_d = QDoubleSpinBox()
+        self.grain_tip_d.setRange(0.001, 2.0)
+        self.grain_tip_d.setDecimals(4)
+        self.grain_tip_d.setSuffix(" m")
+        self.grain_tip_d.setValue(0.030)
+        self.grain_tip_d.setToolTip("Star/wagon-wheel tip diameter (core point radius)")
+        grain_form.addRow("Star Tip Diameter:", self.grain_tip_d)
+
+        self.grain_length = QDoubleSpinBox()
+        self.grain_length.setRange(0.005, 20.0)
+        self.grain_length.setDecimals(4)
+        self.grain_length.setSuffix(" m")
+        self.grain_length.setValue(0.30)
+        grain_form.addRow("Grain Length:", self.grain_length)
+
+        self.grain_seg_length = QDoubleSpinBox()
+        self.grain_seg_length.setRange(0.005, 20.0)
+        self.grain_seg_length.setDecimals(4)
+        self.grain_seg_length.setSuffix(" m")
+        self.grain_seg_length.setValue(0.10)
+        self.grain_seg_length.setToolTip("BATES segment length")
+        grain_form.addRow("Segment Length:", self.grain_seg_length)
+
+        self.grain_segments = QSpinBox()
+        self.grain_segments.setRange(1, 20)
+        self.grain_segments.setValue(3)
+        grain_form.addRow("Segments (BATES):", self.grain_segments)
+
+        self.star_points = QSpinBox()
+        self.star_points.setRange(3, 12)
+        self.star_points.setValue(5)
+        grain_form.addRow("Star Points:", self.star_points)
+
+        self.star_half_angle = QDoubleSpinBox()
+        self.star_half_angle.setRange(1.0, 89.0)
+        self.star_half_angle.setDecimals(1)
+        self.star_half_angle.setSuffix(" °")
+        self.star_half_angle.setValue(35.0)
+        grain_form.addRow("Star Half-Angle:", self.star_half_angle)
+
+        self.valley_ratio = QDoubleSpinBox()
+        self.valley_ratio.setRange(0.05, 0.95)
+        self.valley_ratio.setDecimals(3)
+        self.valley_ratio.setValue(0.5)
+        self.valley_ratio.setToolTip("Wagon-wheel valley radius / tip radius")
+        grain_form.addRow("Valley Ratio:", self.valley_ratio)
+
+        self.slot_width = QDoubleSpinBox()
+        self.slot_width.setRange(0.001, 1.0)
+        self.slot_width.setDecimals(4)
+        self.slot_width.setSuffix(" m")
+        self.slot_width.setValue(0.012)
+        grain_form.addRow("Slot Width (C-slot):", self.slot_width)
+
+        grain_box = QGroupBox("Grain Geometry")
+        grain_box.setLayout(grain_form)
+        outer.addWidget(grain_box)
+
+        prop_form = QFormLayout()
+        self.prop_density = QDoubleSpinBox()
+        self.prop_density.setRange(100.0, 3000.0)
+        self.prop_density.setSuffix(" kg/m³")
+        self.prop_density.setValue(1800.0)
+        prop_form.addRow("Propellant Density:", self.prop_density)
+
+        self.burn_rate_a = QDoubleSpinBox()
+        self.burn_rate_a.setRange(0.0001, 100.0)
+        self.burn_rate_a.setDecimals(4)
+        self.burn_rate_a.setSuffix(" mm/s@MPa^n")
+        self.burn_rate_a.setValue(5.0)
+        self.burn_rate_a.setToolTip("Burn rate law r = a * Pc^n (Nakka units: mm/s at MPa)")
+        prop_form.addRow("Burn Rate Coeff a:", self.burn_rate_a)
+
+        self.burn_rate_n = QDoubleSpinBox()
+        self.burn_rate_n.setRange(0.0, 0.95)
+        self.burn_rate_n.setDecimals(3)
+        self.burn_rate_n.setValue(0.30)
+        prop_form.addRow("Burn Rate Exponent n:", self.burn_rate_n)
+
+        self.chamber_temp = QDoubleSpinBox()
+        self.chamber_temp.setRange(300.0, 6000.0)
+        self.chamber_temp.setSuffix(" K")
+        self.chamber_temp.setValue(3200.0)
+        prop_form.addRow("Chamber Temperature:", self.chamber_temp)
+
+        self.gas_constant_spin = QDoubleSpinBox()
+        self.gas_constant_spin.setRange(50.0, 1500.0)
+        self.gas_constant_spin.setSuffix(" J/kg·K")
+        self.gas_constant_spin.setValue(320.0)
+        prop_form.addRow("Gas Constant R:", self.gas_constant_spin)
+
+        self.gamma_spin = QDoubleSpinBox()
+        self.gamma_spin.setRange(1.01, 1.70)
+        self.gamma_spin.setDecimals(3)
+        self.gamma_spin.setValue(1.20)
+        prop_form.addRow("Specific Heat Ratio γ:", self.gamma_spin)
+
+        self.char_vel = QDoubleSpinBox()
+        self.char_vel.setRange(0.0, 5000.0)
+        self.char_vel.setSuffix(" m/s")
+        self.char_vel.setDecimals(1)
+        self.char_vel.setValue(0.0)
+        self.char_vel.setToolTip("Characteristic velocity c* (0 = computed from Tc, R, γ)")
+        prop_form.addRow("c* (0 = auto):", self.char_vel)
+
+        prop_box = QGroupBox("Propellant")
+        prop_box.setLayout(prop_form)
+        outer.addWidget(prop_box)
+
+        nozzle_form = QFormLayout()
+        self.throat_d = QDoubleSpinBox()
+        self.throat_d.setRange(0.001, 1.0)
+        self.throat_d.setDecimals(4)
+        self.throat_d.setSuffix(" m")
+        self.throat_d.setValue(0.018)
+        nozzle_form.addRow("Throat Diameter:", self.throat_d)
+
+        self.exit_d = QDoubleSpinBox()
+        self.exit_d.setRange(0.001, 2.0)
+        self.exit_d.setDecimals(4)
+        self.exit_d.setSuffix(" m")
+        self.exit_d.setValue(0.036)
+        nozzle_form.addRow("Nozzle Exit Diameter:", self.exit_d)
+
+        nozzle_box = QGroupBox("Nozzle")
+        nozzle_box.setLayout(nozzle_form)
+        outer.addWidget(nozzle_box)
+
+        self.compute_motor_btn = QPushButton("⚙ Compute motor from grain design")
+        self.compute_motor_btn.setToolTip(
+            "Run the Nakka internal-ballistics solver (Kn equilibrium, r = a·Pcⁿ) "
+            "and fill the performance fields above from the resulting thrust curve"
+        )
+        self.compute_motor_btn.clicked.connect(self._compute_solid_motor)
+        outer.addWidget(self.compute_motor_btn)
+
+        self.motor_summary = QLabel("No motor computed yet.")
+        self.motor_summary.setWordWrap(True)
+        outer.addWidget(self.motor_summary)
+
+        group.setLayout(outer)
+        return group
+
+    def _on_engine_model_changed(self, index: int) -> None:
+        """Enable the grain-design editor only for the solid motor model."""
+        model = self.engine_model_combo.itemData(index) or 'enhanced'
+        self.motor_group.setEnabled(model == 'solid')
+
+    def _grain_config_from_ui(self) -> dict:
+        """Grain geometry dict from the UI fields, keyed by grain type."""
+        gtype = self.grain_type.currentData() or 'bates'
+        od = self.grain_od.value()
+        if gtype == 'bates':
+            return {'type': 'bates', 'outer_diameter': od,
+                    'core_diameter': self.grain_core_d.value(),
+                    'segment_length': self.grain_seg_length.value(),
+                    'segments': self.grain_segments.value()}
+        if gtype == 'internal_tube':
+            return {'type': 'internal_tube', 'outer_diameter': od,
+                    'core_diameter': self.grain_core_d.value(),
+                    'length': self.grain_length.value()}
+        if gtype == 'end_burning':
+            return {'type': 'end_burning', 'diameter': self.grain_core_d.value(),
+                    'length': self.grain_length.value()}
+        if gtype == 'star':
+            return {'type': 'star', 'outer_diameter': od,
+                    'length': self.grain_length.value(),
+                    'n_points': self.star_points.value(),
+                    'tip_diameter': self.grain_tip_d.value(),
+                    'half_angle_deg': self.star_half_angle.value()}
+        if gtype == 'wagon_wheel':
+            return {'type': 'wagon_wheel', 'outer_diameter': od,
+                    'length': self.grain_length.value(),
+                    'n_points': self.star_points.value(),
+                    'tip_diameter': self.grain_tip_d.value(),
+                    'valley_ratio': self.valley_ratio.value()}
+        return {'type': 'c_slot', 'outer_diameter': od,
+                'length': self.grain_length.value(),
+                'core_diameter': self.grain_core_d.value(),
+                'slot_width': self.slot_width.value()}
+
+    def _motor_config_from_ui(self) -> dict:
+        """Full 'motor' config dict (grain + propellant + nozzle) for create_solid_motor."""
+        c_star = self.char_vel.value()
+        return {
+            'grain': self._grain_config_from_ui(),
+            'propellant': {
+                'density': self.prop_density.value(),
+                'burn_rate_a': self.burn_rate_a.value(),
+                'burn_rate_n': self.burn_rate_n.value(),
+                'burn_rate_unit': 'mm/s',
+                'burn_rate_pressure_unit': 'MPa',
+                'chamber_temperature': self.chamber_temp.value(),
+                'gas_constant': self.gas_constant_spin.value(),
+                'gamma': self.gamma_spin.value(),
+                'characteristic_velocity': c_star if c_star > 0 else None,
+            },
+            'nozzle': {
+                'throat_diameter': self.throat_d.value(),
+                'exit_diameter': self.exit_d.value(),
+            },
+        }
+
+    def _build_solid_motor(self) -> SolidMotorEngine:
+        """Instantiate the SolidMotorEngine from the current UI grain design."""
+        rocket_mass = self.initial_mass_spinbox.value()
+        return create_solid_motor(
+            self._motor_config_from_ui(),
+            rocket_mass=rocket_mass if rocket_mass > 0 else None,
+        )
+
+    def _compute_solid_motor(self) -> None:
+        """Run the SRM solver and fill the Engine tab performance fields."""
+        try:
+            motor = self._build_solid_motor()
+        except Exception as exc:
+            self.motor_summary.setText(f"⚠ Invalid motor design: {exc}")
+            QMessageBox.warning(
+                self, "Invalid Motor Design",
+                f"The grain design could not be solved:\n{exc}"
+            )
+            logger.warning("Solid motor computation failed: %s", exc)
+            return
+
+        s = motor.summary()
+        self.burn_time.setValue(s['burn_time'])
+        self.propellant_mass.setValue(s['propellant_mass'])
+        self.specific_impulse.setValue(s['specific_impulse'])
+        self.mean_thrust.setValue(s['mean_thrust'])
+        self.max_thrust.setValue(s['max_thrust'])
+        self.nozzle_diameter.setValue(s['nozzle_exit_diameter'])
+        self.mass_flux.setValue(s['mass_flux'])
+        self.gas_speed.setValue(s['gas_speed'])
+        self.exit_pressure.setValue(s['exit_pressure'])
+        self.mean_chamber_pressure.setValue(s['mean_chamber_pressure'])
+        self.max_chamber_pressure.setValue(s['max_chamber_pressure'])
+        if motor.thrust_to_weight_ratio > 0:
+            self.thrust_to_weight.setValue(motor.thrust_to_weight_ratio)
+
+        self._solid_motor = motor
+        self.motor_summary.setText(
+            f"Grain: {s['grain_type']}   Web: {s['web_limit']*1000:.1f} mm\n"
+            f"Burn time: {s['burn_time']:.3f} s   Propellant: {s['propellant_mass']:.3f} kg\n"
+            f"Total impulse: {s['total_impulse']:.1f} N·s   Isp: {s['specific_impulse']:.1f} s\n"
+            f"Mean / max thrust: {s['mean_thrust']:.1f} / {s['max_thrust']:.1f} N\n"
+            f"Mean / max Pc: {s['mean_chamber_pressure']/1e6:.2f} / "
+            f"{s['max_chamber_pressure']/1e6:.2f} MPa   c*: {s['characteristic_velocity']:.0f} m/s"
+        )
+
+        if HAS_MATPLOTLIB and hasattr(self, 'figure'):
+            self.figure.clear()
+            ax = self.figure.add_subplot(111)
+            ts = np.linspace(0.0, s['burn_time'], 200)
+            fs = []
+            for t in ts:
+                motor.update(time=float(t), ambient_pressure=101325.0)
+                fs.append(motor.get_thrust())
+            ax.plot(ts, fs, 'g-', linewidth=2, label='Computed thrust (sea level)')
+            ax.axhline(y=s['mean_thrust'], color='r', linestyle='--',
+                       label=f"Mean: {s['mean_thrust']:.0f} N")
+            ax.set_xlabel('Time (s)')
+            ax.set_ylabel('Thrust (N)')
+            ax.set_title('Solid motor thrust curve (grain design)')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            self.figure.tight_layout()
+            self.canvas.draw()
+        logger.info("Solid motor computed from grain design: %s", s)
+
+    def _engine_section_dict(self) -> dict:
+        """The 'engine' section written into the rocket JSON."""
+        engine = {
+            'burn_time': self.burn_time.value(),
+            'propellant_mass': self.propellant_mass.value(),
+            'specific_impulse': self.specific_impulse.value(),
+            'mean_thrust': self.mean_thrust.value(),
+            'max_thrust': self.max_thrust.value(),
+            'nozzle_exit_diameter': self.nozzle_diameter.value(),
+            'mass_flux': self.mass_flux.value(),
+            'gas_speed': self.gas_speed.value(),
+            'exit_pressure': self.exit_pressure.value(),
+            'mean_chamber_pressure': self.mean_chamber_pressure.value(),
+            'max_chamber_pressure': self.max_chamber_pressure.value(),
+            'thrust_to_weight_ratio': self.thrust_to_weight.value(),
+        }
+        model = self.engine_model_combo.currentData() or 'enhanced'
+        engine['engine_model'] = model
+        if model == 'experimental':
+            engine['thrust_curve_mode'] = 'experimental'
+            if self.thrust_curve_data and self.thrust_curve_data.get('file'):
+                engine['thrust_curve_file'] = self.thrust_curve_data['file']
+                engine['thrust_curve_unit'] = self.thrust_curve_data.get('unit', 'N')
+        else:
+            engine['thrust_curve_mode'] = 'analytical'
+            if model == 'solid':
+                engine['motor'] = self._motor_config_from_ui()
+        return engine
+
+    def _load_engine_section(self, engine: dict) -> None:
+        """Restore engine-model combo and grain-design fields from a rocket dict."""
+        model = str(engine.get('engine_model', '')).lower()
+        if not model:
+            model = 'experimental' if engine.get('thrust_curve_mode') == 'experimental' else 'enhanced'
+        idx = self.engine_model_combo.findData(model)
+        self.engine_model_combo.setCurrentIndex(idx if idx >= 0 else 0)
+
+        motor = engine.get('motor') or {}
+        grain = motor.get('grain') or {}
+        gidx = self.grain_type.findData(str(grain.get('type', 'bates')).lower().replace('-', '_'))
+        if gidx >= 0:
+            self.grain_type.setCurrentIndex(gidx)
+        for attr, key in (
+            ('grain_od', 'outer_diameter'), ('grain_core_d', 'core_diameter'),
+            ('grain_tip_d', 'tip_diameter'), ('grain_length', 'length'),
+            ('grain_seg_length', 'segment_length'), ('slot_width', 'slot_width'),
+        ):
+            if key in grain:
+                getattr(self, attr).setValue(float(grain[key]))
+        if 'segments' in grain:
+            self.grain_segments.setValue(int(grain['segments']))
+        if 'n_points' in grain:
+            self.star_points.setValue(int(grain['n_points']))
+        if 'half_angle_deg' in grain:
+            self.star_half_angle.setValue(float(grain['half_angle_deg']))
+        if 'valley_ratio' in grain:
+            self.valley_ratio.setValue(float(grain['valley_ratio']))
+        if 'diameter' in grain:
+            self.grain_core_d.setValue(float(grain['diameter']))
+
+        prop = motor.get('propellant') or {}
+        for attr, key in (
+            ('prop_density', 'density'), ('burn_rate_a', 'burn_rate_a'),
+            ('burn_rate_n', 'burn_rate_n'), ('chamber_temp', 'chamber_temperature'),
+            ('gas_constant_spin', 'gas_constant'), ('gamma_spin', 'gamma'),
+            ('char_vel', 'characteristic_velocity'),
+        ):
+            if prop.get(key) is not None:
+                getattr(self, attr).setValue(float(prop[key]))
+
+        nozzle = motor.get('nozzle') or {}
+        if 'throat_diameter' in nozzle:
+            self.throat_d.setValue(float(nozzle['throat_diameter']))
+        if 'exit_diameter' in nozzle:
+            self.exit_d.setValue(float(nozzle['exit_diameter']))
+
     def _create_geometry_tab(self):
         """Create Geometry tab for rocket structural dimensions.
         
@@ -1244,7 +1645,8 @@ class RocketSettingsWidget(BaseWidget):
         self.mean_chamber_pressure.setValue(engine.get('mean_chamber_pressure', 0.0))
         self.max_chamber_pressure.setValue(engine.get('max_chamber_pressure', 0.0))
         self.thrust_to_weight.setValue(engine.get('thrust_to_weight_ratio', 0.0))
-        
+        self._load_engine_section(engine)
+
         # Geometry
         geometry = rocket_data.get('geometry', {})
         self.total_length.setValue(geometry.get('total length', 0.0))
@@ -1308,6 +1710,14 @@ class RocketSettingsWidget(BaseWidget):
         # Engine validation
         if self.burn_time.value() <= 0:
             errors.append("❌ Burn time must be > 0")
+
+        # Solid motor (grain design) validation: the motor section must solve
+        model = self.engine_model_combo.currentData() or 'enhanced'
+        if model == 'solid':
+            try:
+                self._build_solid_motor()
+            except Exception as exc:
+                errors.append(f"❌ Solid motor grain design is invalid: {exc}")
         
         if self.specific_impulse.value() <= 0 and self.mean_thrust.value() > 0:
             warnings.append("⚠️  Isp should be > 0 if motor is burning")
@@ -1659,20 +2069,7 @@ class RocketSettingsWidget(BaseWidget):
                 'y': self.com_after_y.value(),
                 'z': self.com_after_z.value()
             },
-            'engine': {
-                'burn_time': self.burn_time.value(),
-                'propellant_mass': self.propellant_mass.value(),
-                'specific_impulse': self.specific_impulse.value(),
-                'mean_thrust': self.mean_thrust.value(),
-                'max_thrust': self.max_thrust.value(),
-                'nozzle_exit_diameter': self.nozzle_diameter.value(),
-                'mass_flux': self.mass_flux.value(),
-                'gas_speed': self.gas_speed.value(),
-                'exit_pressure': self.exit_pressure.value(),
-                'mean_chamber_pressure': self.mean_chamber_pressure.value(),
-                'max_chamber_pressure': self.max_chamber_pressure.value(),
-                'thrust_to_weight_ratio': self.thrust_to_weight.value()
-            },
+            'engine': self._engine_section_dict(),
             'geometry': {
                 'total length': self.total_length.value(),
                 'length nosecone fins': self.length_nosecone_fins.value(),
@@ -2119,20 +2516,7 @@ class RocketSettingsWidget(BaseWidget):
                 'y': self.com_after_y.value(),
                 'z': self.com_after_z.value()
             },
-            'engine': {
-                'burn_time': self.burn_time.value(),
-                'propellant_mass': self.propellant_mass.value(),
-                'specific_impulse': self.specific_impulse.value(),
-                'mean_thrust': self.mean_thrust.value(),
-                'max_thrust': self.max_thrust.value(),
-                'nozzle_exit_diameter': self.nozzle_diameter.value(),
-                'mass_flux': self.mass_flux.value(),
-                'gas_speed': self.gas_speed.value(),
-                'exit_pressure': self.exit_pressure.value(),
-                'mean_chamber_pressure': self.mean_chamber_pressure.value(),
-                'max_chamber_pressure': self.max_chamber_pressure.value(),
-                'thrust_to_weight_ratio': self.thrust_to_weight.value()
-            },
+            'engine': self._engine_section_dict(),
             'geometry': {
                 'total length': self.total_length.value(),
                 'length nosecone fins': self.length_nosecone_fins.value(),
