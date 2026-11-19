@@ -34,13 +34,6 @@ def rocket_data_from_config(rocket_config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _mass_props_from_config(rocket_config: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        'CoM_before_burn': rocket_config.get('CoM_before_burn', {'x': 0.0, 'y': 0.0, 'z': 0.0}),
-        'CoM_after_burn': rocket_config.get('CoM_after_burn', {'x': 0.0, 'y': 0.0, 'z': 0.0}),
-    }
-
-
 def analyze_aero_curves(
     rocket_config: Dict[str, Any],
     machs: Optional[List[float]] = None,

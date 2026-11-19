@@ -24,14 +24,13 @@ References:
 
 import logging
 logger = logging.getLogger(__name__)
-import os
-from math import sqrt, exp, sin, pi
+from math import sqrt
 from typing import cast
 
 import numpy as np
 from scipy.interpolate import interp1d
 
-from src.utils.thrust_processor import ThrustCurveData, ThrustCurveError, ThrustCurveProcessor
+from src.utils.thrust_processor import ThrustCurveData, ThrustCurveProcessor
 from src.utils.simulation_constants import EngineConstants as EC
 from src.utils.simulation_errors import InputValidationError
 from src.models.interfaces import IEngine
@@ -379,15 +378,6 @@ class EnhancedEngine(IEngine):
             measured, expected, error_pct,
         )
 
-    # ------------------------------------------------------------------
-    # Retained for backward compatibility – delegates to _thrust_at_time
-    # ------------------------------------------------------------------
-
-    def _calculate_experimental_thrust(self, time=None):
-        """Retained for backward compatibility – delegates to _thrust_at_time."""
-        t = time if time is not None else self.time
-        return self._thrust_at_time(t)
-
     def _calculate_nozzle_performance(self):
         """Calculate nozzle performance using isentropic flow relations"""
         try:
@@ -502,10 +492,6 @@ class EnhancedEngine(IEngine):
         self.remaining_propellant    = max(0.0, self.propellant_mass - self.propellant_consumed)
         self.total_impulse_delivered = self.propellant_consumed * self.specific_impulse * g0
         self.burnout_reached         = self.time > self.burn_time
-
-    def _calculate_thrust_curve(self) -> float:
-        """Analytical thrust at current time.  Thin wrapper over _thrust_at_time."""
-        return self._thrust_at_time(self.time)
 
     def _fallback_thrust_value(self, t_norm: float) -> float:
         """

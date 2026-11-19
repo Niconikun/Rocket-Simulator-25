@@ -53,7 +53,7 @@ class TestMonteCarloWidgetBase(unittest.TestCase):
         })
         # Isolate the widget from the global EventBus singleton
         self._bus_patches = [
-            mock.patch.object(mcw, name) for name in ('subscribe', 'unsubscribe', 'publish')
+            mock.patch.object(mcw, name) for name in ('subscribe', 'unsubscribe')
         ]
         for p in self._bus_patches:
             p.start()

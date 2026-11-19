@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from ui.widgets import BaseWidget
-from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
 from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
@@ -434,12 +433,6 @@ class LocationSettingsWidget(BaseWidget):
             self.elevation_spinbox.setValue(location_data.get('elevation', 0.0))
             self.refresh_map(focus_lat=lat, focus_lon=lon, radius_km=50.0)
             
-            # Publish location selected event
-            publish(EventType.LOCATION_SELECTED, {
-                'location_name': location_name,
-                'location_data': location_data
-            })
-            logger.info(f"Published LOCATION_SELECTED event for: {location_name}")
     
     def save_location(self):
         """Save location to file with validation.

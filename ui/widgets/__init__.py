@@ -5,7 +5,6 @@ Rocket Simulator application.
 """
 
 from PyQt6.QtWidgets import QWidget
-from PyQt6.QtCore import pyqtSlot
 from src.models.state import StateProvider
 from src.models.app_state import ApplicationState
 from src.config import tr

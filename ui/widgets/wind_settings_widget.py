@@ -9,12 +9,11 @@ Allows users to:
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDoubleSpinBox, QCheckBox,
-    QPushButton, QGroupBox, QFormLayout, QComboBox, QSpinBox, QTabWidget,
+    QPushButton, QGroupBox, QFormLayout, QComboBox, QTabWidget,
     QTableWidget, QTableWidgetItem, QMessageBox, QTextEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from ui.widgets import BaseWidget
-from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
 from typing import Optional
@@ -383,11 +382,6 @@ class WindSettingsWidget(BaseWidget):
         logger.info(f"Wind model changed to: {model_type}")
         self.wind_changed.emit()
         
-        # Publish wind scenario selected event
-        publish(EventType.WIND_SCENARIO_SELECTED, {
-            'model_type': model_type
-        })
-        logger.info(f"Published WIND_SCENARIO_SELECTED event for: {model_type}")
     
     def on_parameter_changed(self, value):
         """Handle wind parameter changes from spinboxes.
