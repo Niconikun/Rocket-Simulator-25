@@ -37,6 +37,8 @@ from typing import Optional
 
 import numpy as np
 
+from src.utils.monte_carlo_stats import compute_cep
+
 logger = logging.getLogger(__name__)
 
 # Scalar fields that are aggregated by default
@@ -195,21 +197,11 @@ class MonteCarloAggregator:
     def cep(self) -> float:
         """Circular Error Probable in metres (50th-percentile radial error).
 
-        Uses the same two-path algorithm as ``MonteCarloRunner._compute_cep``:
+        Delegates to :func:`src.utils.monte_carlo_stats.compute_cep`:
         analytical approximation for N < 20, empirical percentile for N ≥ 20.
         """
         ix, iy = self.impact_arrays()
-        if len(ix) < 2:
-            return 0.0
-
-        mu_x, mu_y = np.mean(ix), np.mean(iy)
-        cep_approx = 0.59 * (np.std(ix) + np.std(iy))
-
-        if len(ix) >= 20:
-            radial = np.sqrt((ix - mu_x) ** 2 + (iy - mu_y) ** 2)
-            return float(max(cep_approx, np.percentile(radial, 50)))
-
-        return float(cep_approx)
+        return compute_cep(ix, iy)
 
     def dispersion_ellipse(self, sigma_level: float = 1.0) -> dict:
         """Compute the dispersion ellipse for impact scatter.
