@@ -77,7 +77,8 @@ class RocketDynamics:
         reference_area: float,
         mass_properties: Optional['IMassProperties'] = None,
         wind_vector_enu: Optional[np.ndarray] = None,
-        parachute: Optional['IParachute'] = None
+        parachute: Optional['IParachute'] = None,
+        ground_elevation: float = 0.0
     ) -> None:
         """
         Initialize rocket dynamics calculator.
@@ -91,6 +92,8 @@ class RocketDynamics:
             mass_properties: Optional mass properties calculator
             wind_vector_enu: Optional wind vector in ENU frame [m/s]
             parachute: Optional parachute system for recovery
+            ground_elevation: Launch site elevation above sea level [m]. State
+                positions are AGL, atmosphere models need ASL.
         """
         self.state = state
         self.engine = engine
@@ -100,6 +103,7 @@ class RocketDynamics:
         self.mass_properties = mass_properties
         self.wind_vector_enu = np.zeros(3) if wind_vector_enu is None else np.array(wind_vector_enu)
         self.parachute = parachute
+        self.ground_elevation = float(ground_elevation)
         
         # Initialize derived values
         self._dynamic_pressure: float = 0.0
@@ -174,11 +178,11 @@ class RocketDynamics:
             self._torques_aero_b = np.zeros(3)
             return self._forces_aero_b.copy(), self._torques_aero_b.copy()
         
-        # Update aerodynamics
+        # Update aerodynamics (height is ASL: state Z is AGL)
         self.aerodynamics.update(
             mach=self._mach,
             angle_attack=self._alpha,
-            height=self.state.r_enu[2],  # Altitude is Z in ENU
+            height=self.state.r_enu[2] + self.ground_elevation,
             density=self._density
         )
         
@@ -229,10 +233,10 @@ class RocketDynamics:
         if self._forces_engine_b is not None and self._torques_engine_b is not None:
             return self._forces_engine_b.copy(), self._torques_engine_b.copy()
         
-        # Update engine state
+        # Update engine state (atmosphere models take ASL, state is AGL)
         self.engine.update(
             time=self.state.time,
-            ambient_pressure=self.atmosphere.give_pressure(self.state.r_enu[2])
+            ambient_pressure=self.atmosphere.give_pressure(self.state.r_enu[2] + self.ground_elevation)
         )
         
         # Get thrust
@@ -411,8 +415,8 @@ class RocketDynamics:
         v_rel_enu = self.state.v_enu - self.wind_vector_enu
         v_rel_norm = np.linalg.norm(v_rel_enu)
         
-        # Update atmosphere
-        altitude = self.state.r_enu[2]
+        # Update atmosphere (ASL = AGL + ground elevation)
+        altitude = self.state.r_enu[2] + self.ground_elevation
         density = self.atmosphere.give_dens(altitude)
         v_sonic = self.atmosphere.give_v_sonic(altitude)
         self._density = float(density) if density is not None else 0.0
@@ -446,6 +450,8 @@ class RocketDynamics:
         self._torques_aero_b = None
         self._forces_engine_b = None
         self._torques_engine_b = None
+        self._forces_parachute_b = None
+        self._torques_parachute_b = None
         self._forces_total_b = None
         self._torques_total_b = None
     

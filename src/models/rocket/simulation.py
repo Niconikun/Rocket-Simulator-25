@@ -71,7 +71,11 @@ class SimulationHistory:
     masses: list = field(default_factory=list)
     forces: list = field(default_factory=list)
     torques: list = field(default_factory=list)
-    
+    forces_aero: list = field(default_factory=list)
+    forces_engine: list = field(default_factory=list)
+    coeffs: list = field(default_factory=list)  # (cd, cl) per entry
+    cp_b: list = field(default_factory=list)
+
     def add_entry(
         self,
         time: float,
@@ -80,7 +84,12 @@ class SimulationHistory:
         attitude: np.ndarray,
         mass: float,
         force: np.ndarray,
-        torque: np.ndarray
+        torque: np.ndarray,
+        force_aero: Optional[np.ndarray] = None,
+        force_engine: Optional[np.ndarray] = None,
+        cd: Optional[float] = None,
+        cl: Optional[float] = None,
+        cp_b: Optional[np.ndarray] = None
     ) -> None:
         """Add a new entry to the history."""
         self.times.append(time)
@@ -90,7 +99,11 @@ class SimulationHistory:
         self.masses.append(mass)
         self.forces.append(force.copy())
         self.torques.append(torque.copy())
-    
+        self.forces_aero.append(force_aero.copy() if force_aero is not None else np.zeros(3))
+        self.forces_engine.append(force_engine.copy() if force_engine is not None else np.zeros(3))
+        self.coeffs.append((float(cd), float(cl)) if cd is not None and cl is not None else (0.0, 0.0))
+        self.cp_b.append(cp_b.copy() if cp_b is not None else np.zeros(3))
+
     def clear(self) -> None:
         """Clear all history."""
         self.times.clear()
@@ -100,6 +113,10 @@ class SimulationHistory:
         self.masses.clear()
         self.forces.clear()
         self.torques.clear()
+        self.forces_aero.clear()
+        self.forces_engine.clear()
+        self.coeffs.clear()
+        self.cp_b.clear()
     
     def __len__(self) -> int:
         """Number of history entries."""
@@ -245,7 +262,9 @@ class RocketSimulation:
         # This ensures mass_flow and thrust are calculated at the correct time
         self.dynamics.engine.update(
             time=temp_state.time,
-            ambient_pressure=self.dynamics.atmosphere.give_pressure(temp_state.r_enu[2])
+            ambient_pressure=self.dynamics.atmosphere.give_pressure(
+                temp_state.r_enu[2] + self.dynamics.ground_elevation
+            )
         )
         
         # Get mass_flow at this intermediate time
@@ -326,7 +345,9 @@ class RocketSimulation:
             atmosphere=self.dynamics.atmosphere,
             reference_area=self.dynamics.reference_area,
             mass_properties=self.dynamics.mass_properties,
-            wind_vector_enu=self.dynamics.wind_vector_enu
+            wind_vector_enu=self.dynamics.wind_vector_enu,
+            parachute=self.dynamics.parachute,
+            ground_elevation=self.dynamics.ground_elevation
         )
         return temp_dynamics
     
@@ -384,9 +405,13 @@ class RocketSimulation:
     
     def _save_to_history(self) -> None:
         """Save current state to history."""
-        # Get forces and torques
+        # Get force components and aero coefficients (cached by calculate_forces)
+        forces_aero_b, _ = self.dynamics.calculate_aerodynamics()
+        forces_engine_b, _ = self.dynamics.calculate_engine_forces()
         forces_b, torques_b = self.dynamics.calculate_forces()
-        
+        cd, cl = self.dynamics.aerodynamics.get_coefficients()
+        cp_b = self.dynamics.aerodynamics.get_center_of_pressure()
+
         self.history.add_entry(
             time=self.state.time,
             position=self.state.r_enu,
@@ -394,7 +419,12 @@ class RocketSimulation:
             attitude=self.state.q_enu2b,
             mass=self.state.mass,
             force=forces_b,
-            torque=torques_b
+            torque=torques_b,
+            force_aero=forces_aero_b,
+            force_engine=forces_engine_b,
+            cd=cd,
+            cl=cl,
+            cp_b=cp_b
         )
     
     def _normalize_quaternion(self) -> None:
@@ -439,6 +469,14 @@ class RocketSimulation:
             return np.array(self.history.forces)
         elif field == 'torques':
             return np.array(self.history.torques)
+        elif field == 'forces_aero':
+            return np.array(self.history.forces_aero)
+        elif field == 'forces_engine':
+            return np.array(self.history.forces_engine)
+        elif field == 'coeffs':
+            return np.array(self.history.coeffs)
+        elif field == 'cp_b':
+            return np.array(self.history.cp_b)
         else:
             raise ValueError(f"Unknown field: {field}")
     

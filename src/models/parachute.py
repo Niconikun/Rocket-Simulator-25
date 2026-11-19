@@ -80,7 +80,8 @@ class Parachute(IParachute):
         
         logger.info(f"Parachute initialized: {self.name}, diameter={self.diameter}m, Cd={self.Cd}")
     
-    def check_deployment(self, altitude: float, velocity: float, time: float) -> bool:
+    def check_deployment(self, altitude: float, velocity: float, time: float,
+                         descending: bool = True) -> bool:
         """
         Check if parachute should deploy.
         
@@ -88,15 +89,17 @@ class Parachute(IParachute):
             altitude: Current altitude above ground in meters
             velocity: Current vertical velocity (positive downward) in m/s
             time: Current simulation time in seconds
-        
+            descending: If True, only deploy while descending. Prevents
+                deployment during the initial ascent at low altitude.
+
         Returns:
             True if deployment triggered, False otherwise
         """
         if self._deployed:
             return False
-        
-        # Check if we've reached deployment altitude
-        if altitude < self.deployment_altitude:
+
+        # Check if we've reached deployment altitude while descending
+        if altitude < self.deployment_altitude and descending:
             # Check velocity constraints
             if self.min_velocity <= velocity <= self.max_velocity:
                 self._deployed = True
@@ -119,21 +122,23 @@ class Parachute(IParachute):
         
         return False
     
-    def check_drogue_deployment(self, altitude: float, time: float) -> bool:
+    def check_drogue_deployment(self, altitude: float, time: float,
+                                descending: bool = True) -> bool:
         """
         Check if drogue chute should deploy.
         
         Args:
             altitude: Current altitude above ground in meters
             time: Current simulation time in seconds
-        
+            descending: If True, only deploy while descending.
+
         Returns:
             True if drogue should deploy, False otherwise
         """
         if not self.drogue_enabled or self._drogue_deployed:
             return False
-        
-        if altitude < self.drogue_deployment_altitude:
+
+        if altitude < self.drogue_deployment_altitude and descending:
             self._drogue_deployed = True
             self.drogue_deployment_time = time
             self.drogue_deployment_altitude_actual = altitude
@@ -249,16 +254,18 @@ class Parachute(IParachute):
         return info
     
     # IParachute interface methods
-    def update(self, velocity: float, altitude: float, density: float) -> None:
+    def update(self, velocity: float, altitude: float, density: float,
+               time: Optional[float] = None) -> None:
         """
         Update parachute state based on flight conditions.
-        
+
         This method checks for deployment conditions and updates inflation progress.
         Args:
             velocity: Current velocity magnitude in m/s [m/s]
-            altitude: Current altitude above sea level in meters [m]
+            altitude: Current altitude above ground in meters [m]
             density: Current air density in kg/m³ [kg/m³]
-        
+            time: Current simulation time in seconds [s] (optional)
+
         Returns:
             None. Updates internal state (deployed, inflation_progress, etc.).
         """
@@ -266,17 +273,23 @@ class Parachute(IParachute):
         self._current_density = density
         self._current_velocity = velocity
         self._current_altitude = altitude
-        
-        # Check for drogue deployment (if enabled and not already deployed)        if not self._drogue_deployed:
-            self.check_drogue_deployment(altitude, 0.0)  # time not used in check_drogue_deployment
-        
+
+        # Deploy only while descending: at liftoff the altitude is also below
+        # the deployment altitude, which must not trigger deployment.
+        descending = altitude < self.previous_altitude
+        t = time if time is not None else 0.0
+
+        # Check for drogue deployment (if enabled and not already deployed)
+        if not self._drogue_deployed:
+            self.check_drogue_deployment(altitude, t, descending=descending)
+
         # Check for main parachute deployment (if not already deployed)
         if not self._deployed:
-            self.check_deployment(altitude, velocity, 0.0)  # time not used in check_deployment
-        
-        # Update inflation progress
-        # Note: This would need delta_time, but interface doesn't provide it.
-        # For now, assume fully inflated once deployed.
+            self.check_deployment(altitude, velocity, t, descending=descending)
+
+        self.previous_altitude = altitude
+
+        # Assume fully inflated once deployed (inflation ramp not modeled).
         if self._deployed:
             self.inflation_progress = 1.0
     
@@ -299,7 +312,12 @@ class Parachute(IParachute):
             bool: True if parachute is deployed and active, False otherwise.
         """
         return self._deployed
-    
+
+    @property
+    def drogue_deployed(self) -> bool:
+        """Check if the drogue chute is deployed."""
+        return self._drogue_deployed
+
     def get_drag_coefficient(self) -> float:
         """
         Get current parachute drag coefficient.

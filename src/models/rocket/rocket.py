@@ -125,6 +125,7 @@ class Rocket:
         wind_vector_enu: Optional[np.ndarray] = None,
         wind_model: Optional['WindModel'] = None,
         parachute: Optional['Parachute'] = None,
+        launch_elevation: float = 0.0,
         # Gravity turn parameters
         enable_gravity_turn: bool = False,
         gravity_turn_rotation_rate: float = 20.0,
@@ -149,6 +150,8 @@ class Rocket:
             wind_vector_enu: Initial wind vector in ENU frame [m/s]
             wind_model: Wind model instance for atmospheric wind (optional)
             parachute: Parachute system for recovery (optional)
+            launch_elevation: Launch site elevation above sea level [m]. r_enu[2]
+                is altitude above ground (AGL); ASL = AGL + launch_elevation
             enable_gravity_turn: Enable passive gravity turn (default: False)
             gravity_turn_rotation_rate: Max rotation rate for gravity turn [deg/s] (default: 20.0)
             gravity_turn_min_velocity: Minimum velocity to activate gravity turn [m/s] (default: 10.0)
@@ -160,6 +163,13 @@ class Rocket:
         # Create or use provided state
         self._initial_mass = initial_mass
         self._propellant_mass = propellant_mass
+        self.launch_elevation = float(launch_elevation)
+
+        # Keep the initial conditions so reset() can restore them
+        self._r_enu_0 = np.array(r_enu_0, dtype=float)
+        self._v_enu_0 = np.array(v_enu_0, dtype=float)
+        self._q_enu2b_0 = np.array(q_enu2b_0, dtype=float)
+        self._w_enu_0 = np.array(w_enu_0, dtype=float)
         
         # Gravity turn configuration
         self.enable_gravity_turn = enable_gravity_turn
@@ -223,9 +233,10 @@ class Rocket:
             reference_area=self.reference_area,
             mass_properties=self.mass_properties,
             wind_vector_enu=self.wind_vector_enu,
-            parachute=self.parachute
+            parachute=self.parachute,
+            ground_elevation=launch_elevation
         )
-        
+
         # Create simulation manager
         self.simulation = RocketSimulation(
             state=self.state,
@@ -339,32 +350,34 @@ class Rocket:
         if self.enable_gravity_turn:
             self._update_gravity_turn_orientation(dt)
         
-        # Get current altitude as Python float for all downstream calculations
-        altitude = float(self.state.r_enu[2])
-        
-        # Update wind from wind model if available
+        # r_enu[2] is altitude above ground (AGL); atmosphere/aero/engine models
+        # expect altitude above sea level (ASL). Parachute and wind models use AGL.
+        altitude_agl = float(self.state.r_enu[2])
+        altitude_asl = altitude_agl + self.launch_elevation
+
+        # Update wind from wind model if available (wind profiles take AGL)
         if self.wind_model is not None:
             # Get wind vector at current altitude
-            self.wind_vector_enu = self.wind_model.get_wind_vector(altitude)
+            self.wind_vector_enu = self.wind_model.get_wind_vector(altitude_agl)
             # Update wind model time
             self.wind_model.update(dt)
-        
-        # Update parachute if available
+
+        # Update parachute if available (deployment altitude is AGL)
         parachute = self.parachute
         if parachute is not None:
             velocity_magnitude = float(np.linalg.norm(self.state.v_enu))
-            density = float(self.atmosphere.give_dens(altitude))
-            parachute.update(velocity_magnitude, altitude, density)
-        
+            density = float(self.atmosphere.give_dens(altitude_asl))
+            parachute.update(velocity_magnitude, altitude_agl, density, time=self.state.time)
+
         # Update environment
         self.dynamics.update_environment(wind_vector_enu=self.wind_vector_enu)
-        self.dynamics.update_atmosphere(altitude)
-        
+        self.dynamics.update_atmosphere(altitude_asl)
+
         # Update engine state BEFORE integration to get current thrust/mass flow
         # engine is guaranteed to be non-None by __init__ validation
         self.engine.update(
             time=self.state.time,
-            ambient_pressure=self.atmosphere.give_pressure(altitude)
+            ambient_pressure=self.atmosphere.give_pressure(altitude_asl)
         )
         
         # Note: Mass is updated through RK4 integration in simulation.step()
@@ -386,14 +399,20 @@ class Rocket:
             self.step(dt)
     
     def reset(self) -> None:
-        """Reset simulation to initial state."""
+        """Reset simulation to the initial state.
+
+        Recreates the RocketState and rebinds it to the dynamics and simulation
+        components, which hold their own reference to the state object.
+        """
         self.state = RocketState(
-            r_enu=self.state.r_enu * 0,  # Reset to origin
-            v_enu=np.zeros(3),
-            q_enu2b=np.array([0, 0, 0, 1]),
-            w_enu=np.zeros(3),
+            r_enu=self._r_enu_0,
+            v_enu=self._v_enu_0,
+            q_enu2b=self._q_enu2b_0,
+            w_enu=self._w_enu_0,
             mass=self._initial_mass
         )
+        self.dynamics.state = self.state
+        self.simulation.state = self.state
         self.simulation.reset()
     
     # ------------------------------------------------------------------
