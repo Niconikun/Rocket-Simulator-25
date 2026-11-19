@@ -26,14 +26,23 @@ def qapplication():
     yield app
 
 
-@pytest.hookimpl(trylast=True)
+_EXITSTATUS = None
+
+
 def pytest_sessionfinish(session, exitstatus):
+    """Remember the real test exit status (see pytest_unconfigure)."""
+    global _EXITSTATUS
+    _EXITSTATUS = int(exitstatus)
+
+
+def pytest_unconfigure(config):
     """Exit immediately with the real test status when Qt was loaded.
 
     On headless runners the interpreter segfaults (SIGSEGV, exit 139) while
-    tearing down Qt/pyvista/vtk objects at shutdown, which would mask the
-    actual pytest result. Skipping interpreter teardown avoids that.
-    trylast so the terminal summary/failure details are printed first.
+    tearing down Qt/pyvista/vtk objects after the run, which would mask the
+    actual pytest result. unconfigure runs after the terminal summary is
+    printed, so logs stay complete; skipping interpreter teardown then avoids
+    the segfault.
     """
-    if "PyQt6.QtWidgets" in sys.modules:
-        os._exit(int(exitstatus))
+    if _EXITSTATUS is not None and "PyQt6.QtWidgets" in sys.modules:
+        os._exit(_EXITSTATUS)
