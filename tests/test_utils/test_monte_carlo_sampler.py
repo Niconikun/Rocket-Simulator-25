@@ -49,6 +49,14 @@ class TestParameterConfigValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             ParameterConfig('normal', nominal=0.0, sigma=1.0, wrap=-360.0)
 
+    def test_sigma_rel_alternative_to_sigma(self):
+        with self.assertRaises(ValueError):
+            ParameterConfig('normal', nominal=10.0)  # neither sigma nor sigma_rel
+        cfg = ParameterConfig('normal', nominal=10.0, sigma_rel=0.05)
+        self.assertAlmostEqual(cfg.effective_sigma(), 0.5)
+        with self.assertRaises(ValueError):
+            ParameterConfig('normal', nominal=10.0, sigma_rel=-0.1)
+
 
 @pytest.mark.monte_carlo
 class TestSampling(unittest.TestCase):
@@ -109,6 +117,14 @@ class TestSampling(unittest.TestCase):
         z = np.mean(np.exp(1j * np.radians(vals)))
         circ_mean = np.degrees(np.angle(z)) % 360.0
         self.assertAlmostEqual(circ_mean, 359.0, delta=1.0)
+
+    def test_sigma_rel_sampling_spread(self):
+        s = MonteCarloSampler(
+            {'mass': ParameterConfig('truncated_normal', nominal=100.0,
+                                     sigma_rel=0.10, low=50.0)}, seed=5)
+        vals = np.array([s.sample()['mass'] for _ in range(4000)])
+        self.assertAlmostEqual(float(np.std(vals)), 10.0, delta=1.0)
+        self.assertTrue(np.all(vals >= 50.0))
 
     def test_reproducible_with_seed(self):
         cfgs = {'x': ParameterConfig('normal', nominal=0.0, sigma=1.0),

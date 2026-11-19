@@ -196,6 +196,12 @@ class MonteCarloConstants:
     DEFAULT_SIGMA_DROGUE_ALTITUDE = 15.0  # meters
     DEFAULT_SIGMA_DROGUE_CD = 0.075
 
+    # Relative sigmas (fraction of nominal) for rocket/engine parameters
+    DEFAULT_SIGMA_REL_MASS = 0.02       # 2% of initial mass
+    DEFAULT_SIGMA_REL_PROPELLANT = 0.02  # 2% of propellant mass
+    DEFAULT_SIGMA_REL_THRUST = 0.05     # 5% of mean thrust
+    DEFAULT_SIGMA_REL_BURN_TIME = 0.02  # 2% of burn time
+
 
 class StateKeyConstants:
     """

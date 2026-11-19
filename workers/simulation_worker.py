@@ -186,6 +186,10 @@ class SimulationWorker(QThread):
         rocket_config = self._load_rocket_config(rocket_name)
         if not rocket_config:
             raise ValueError(f"Could not load rocket configuration: {rocket_name}")
+
+        # Apply state overrides (GUI edits and Monte Carlo samples) on top of
+        # the file config — _load_rocket_config returns a deep copy
+        rocket_config = self._apply_state_config_overrides(rocket_config)
             
         # Validate rocket configuration (Option 3)
         validation_report = self._validate_rocket_config(rocket_config, rocket_name)
@@ -289,7 +293,8 @@ class SimulationWorker(QThread):
             initial_mass=initial_mass,
             rocket_name=rocket_name,
             temperature=temperature,
-            reference_area=reference_area
+            reference_area=reference_area,
+            rocket_config_override=rocket_config
         )
         
         # Use cached atmosphere if available
@@ -327,6 +332,8 @@ class SimulationWorker(QThread):
             'max_altitude': 0.0,
             'max_velocity': 0.0,
             'max_accel_g': 0.0,
+            'max_q': 0.0,
+            'touchdown_velocity': 0.0,
             'max_mach': 0.0,
             'max_range': 0.0,
             'flight_duration': 0.0,
@@ -462,6 +469,11 @@ class SimulationWorker(QThread):
                 metrics['max_mach'] = max(metrics['max_mach'], mach)
                 metrics['max_range'] = max(metrics['max_range'], current_range)
                 metrics['max_accel_g'] = max(metrics['max_accel_g'], accel_magnitude / 9.80665)
+
+                # Max dynamic pressure q = 0.5 * rho * |v_rel|^2
+                v_rel = rocket.state.v_enu - wind_vector_enu
+                q = 0.5 * float(atmosphere.give_dens(absolute_altitude)) * float(np.dot(v_rel, v_rel))
+                metrics['max_q'] = max(metrics['max_q'], q)
                     
                 # Detect apogee
                 if current_altitude < prev_altitude and not apogee_reached:
@@ -487,6 +499,7 @@ class SimulationWorker(QThread):
                 # Check termination conditions
                 if current_altitude <= 0 and t > 1.0:
                     termination_reason = "LANDING: Altitude <= 0m"
+                    metrics['touchdown_velocity'] = current_velocity
                     termination_step = i
                     logger.info(f"[TERMINATION] {termination_reason} at t={t:.2f}s (step {i}/{num_steps})")
                     logger.info(f"  Altitude: {current_altitude:.2f}m, Velocity: {current_velocity:.2f}m/s")
@@ -771,6 +784,34 @@ class SimulationWorker(QThread):
             }
             
         return results
+
+    # State keys applied onto the rocket config when set to a positive number
+    # (ApplicationState defaults them to 0.0, so falsy means "not set")
+    _CONFIG_OVERRIDE_KEYS = ('initial_mass', 'propellant_mass', 'reference_area')
+    _ENGINE_OVERRIDE_KEYS = (
+        'burn_time', 'propellant_mass', 'specific_impulse', 'mean_thrust',
+        'max_thrust', 'mass_flux', 'mean_chamber_pressure', 'max_chamber_pressure',
+        'nozzle_exit_diameter', 'thrust_to_weight_ratio',
+    )
+
+    def _apply_state_config_overrides(self, rocket_config: dict) -> dict:
+        """Overlay positive state values onto the rocket/engine configuration.
+
+        This is what makes GUI edits (initial mass, thrust, ...) effective in
+        the simulation and lets Monte Carlo sample these parameters via the
+        StateProxy overrides. Only positive numbers are applied, since the
+        state defaults for these keys are 0.0.
+        """
+        for key in self._CONFIG_OVERRIDE_KEYS:
+            value = self.state.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+                rocket_config[key] = float(value)
+        engine = rocket_config.setdefault('engine', {})
+        for key in self._ENGINE_OVERRIDE_KEYS:
+            value = self.state.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+                engine[key] = float(value)
+        return rocket_config
 
     def _load_rocket_config(self, rocket_name: str) -> dict | None:
         """Load rocket configuration from JSON file with validation and caching."""

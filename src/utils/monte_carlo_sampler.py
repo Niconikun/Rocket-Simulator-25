@@ -67,7 +67,12 @@ class ParameterConfig:
         Central / expected value. Required for ``'normal'`` and ``'fixed'``; used
         as the mean for ``'truncated_normal'``.
     sigma:
-        Standard deviation. Required for ``'normal'`` and ``'truncated_normal'``.
+        Standard deviation (absolute). Required for ``'normal'`` and
+        ``'truncated_normal'`` unless ``sigma_rel`` is given.
+    sigma_rel:
+        Relative standard deviation (fraction of ``nominal``), e.g. ``0.05``
+        for 5%. Used when ``sigma`` is ``None``; effective sigma =
+        ``abs(nominal) * sigma_rel``. Handy for mass/thrust-type parameters.
     low:
         Lower bound. For ``'uniform'``: left edge. For ``'normal'`` / ``'truncated_normal'``:
         hard floor (samples below this are clipped / rejected). ``None`` = no floor.
@@ -82,6 +87,7 @@ class ParameterConfig:
     distribution: DistributionType = 'normal'
     nominal: Optional[float] = None
     sigma: Optional[float] = None
+    sigma_rel: Optional[float] = None
     low: Optional[float] = None
     high: Optional[float] = None
     wrap: Optional[float] = None
@@ -90,13 +96,36 @@ class ParameterConfig:
         if self.wrap is not None and self.wrap <= 0:
             raise ValueError(f"wrap must be > 0, got {self.wrap}")
         if self.distribution in ('normal', 'truncated_normal'):
-            if self.nominal is None or self.sigma is None:
+            if self.nominal is None or (self.sigma is None and self.sigma_rel is None):
                 raise ValueError(
-                    f"'normal'/'truncated_normal' distributions require both "
-                    f"'nominal' and 'sigma'. Got nominal={self.nominal}, sigma={self.sigma}"
+                    f"'normal'/'truncated_normal' distributions require 'nominal' and "
+                    f"'sigma' (or 'sigma_rel'). Got nominal={self.nominal}, "
+                    f"sigma={self.sigma}, sigma_rel={self.sigma_rel}"
                 )
-            if self.sigma < 0:
+            if self.sigma is not None and self.sigma < 0:
                 raise ValueError(f"sigma must be >= 0, got {self.sigma}")
+            if self.sigma_rel is not None and self.sigma_rel < 0:
+                raise ValueError(f"sigma_rel must be >= 0, got {self.sigma_rel}")
+
+        if self.distribution == 'uniform':
+            if self.low is None or self.high is None:
+                raise ValueError("'uniform' distribution requires both 'low' and 'high'.")
+            if self.low >= self.high:
+                raise ValueError(
+                    f"'uniform' requires low < high, got low={self.low}, high={self.high}"
+                )
+
+        if self.distribution == 'fixed':
+            if self.nominal is None:
+                raise ValueError("'fixed' distribution requires 'nominal'.")
+
+    def effective_sigma(self) -> Optional[float]:
+        """Absolute sigma: ``sigma`` if set, else ``abs(nominal) * sigma_rel``."""
+        if self.sigma is not None:
+            return self.sigma
+        if self.sigma_rel is not None and self.nominal is not None:
+            return abs(self.nominal) * self.sigma_rel
+        return None
 
         if self.distribution == 'uniform':
             if self.low is None or self.high is None:
@@ -207,12 +236,13 @@ class MonteCarloSampler:
                     bounds = f", clipped [{cfg.low}, {cfg.high}]"
                 if cfg.wrap is not None:
                     bounds += f", wrapped mod {cfg.wrap}"
+                sigma_txt = f"σ={cfg.sigma}" if cfg.sigma is not None else f"σ={cfg.sigma_rel:.3f}·nominal"
                 lines.append(
-                    f"  {key}: Normal(μ={cfg.nominal}, σ={cfg.sigma}){bounds}"
+                    f"  {key}: Normal(μ={cfg.nominal}, {sigma_txt}){bounds}"
                 )
             elif cfg.distribution == 'truncated_normal':
                 lines.append(
-                    f"  {key}: TruncatedNormal(μ={cfg.nominal}, σ={cfg.sigma}, "
+                    f"  {key}: TruncatedNormal(μ={cfg.nominal}, σ={cfg.effective_sigma()}, "
                     f"[{cfg.low}, {cfg.high}])"
                 )
             elif cfg.distribution == 'uniform':
@@ -367,9 +397,10 @@ class MonteCarloSampler:
             return self._apply_wrap(float(self._rng.uniform(cfg.low, cfg.high)), cfg)
 
         if cfg.distribution == 'normal':
-            # Type narrowing: __post_init__ guarantees nominal and sigma are not None for normal
-            assert cfg.nominal is not None and cfg.sigma is not None
-            value = float(self._rng.normal(cfg.nominal, cfg.sigma))
+            assert cfg.nominal is not None
+            sigma = cfg.effective_sigma()
+            assert sigma is not None
+            value = float(self._rng.normal(cfg.nominal, sigma))
             # Soft clip
             if cfg.low is not None:
                 value = max(value, cfg.low)
@@ -395,12 +426,14 @@ class MonteCarloSampler:
         to prevent infinite loops for very tight bounds.
         """
         # Type narrowing: __post_init__ guarantees nominal and sigma are not None for truncated_normal
-        assert cfg.nominal is not None and cfg.sigma is not None
+        assert cfg.nominal is not None
+        sigma = cfg.effective_sigma()
+        assert sigma is not None
         low = cfg.low if cfg.low is not None else -np.inf
         high = cfg.high if cfg.high is not None else np.inf
 
         for attempt in range(self._max_attempts):
-            value = float(self._rng.normal(cfg.nominal, cfg.sigma))
+            value = float(self._rng.normal(cfg.nominal, sigma))
             if low <= value <= high:
                 return value
 
@@ -408,7 +441,7 @@ class MonteCarloSampler:
         logger.warning(
             "Truncated normal for '%s' (μ=%.3f, σ=%.3f, [%.3f, %.3f]) did not converge "
             "in %d attempts. Clipping to bounds.",
-            key, cfg.nominal, cfg.sigma, low, high, self._max_attempts,
+            key, cfg.nominal, sigma, low, high, self._max_attempts,
         )
-        value = float(self._rng.normal(cfg.nominal, cfg.sigma))
+        value = float(self._rng.normal(cfg.nominal, sigma))
         return float(np.clip(value, low, high))
