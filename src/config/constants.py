@@ -337,6 +337,15 @@ class StateKeyConstants:
     MEAN_CHAMBER_PRESSURE = 'mean_chamber_pressure'
     MAX_CHAMBER_PRESSURE = 'max_chamber_pressure'
     THRUST_TO_WEIGHT = 'thrust_to_weight'
+    
+    # Aerodynamics keys
+    # AERO_METHOD: 'default' (use rocket file), 'barrowman' or 'panel'
+    AERO_METHOD = 'aero_method'
+    AERO_PANEL_N_AXIAL = 'aero_panel_n_axial'
+    AERO_PANEL_N_THETA = 'aero_panel_n_theta'
+    AERO_INCLUDE_FINS = 'aero_include_fins'
+    AERO_VISCOUS_CROSSFLOW = 'aero_viscous_crossflow'
+    THERMO_ENABLED = 'thermo_enabled'
 
 
 class Constants:

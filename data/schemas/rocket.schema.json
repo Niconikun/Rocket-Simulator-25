@@ -157,6 +157,39 @@
                     "description": "Diámetro de la sección trasera [mm]"
                 }
             }
+        },
+        "aerodynamics": {
+            "type": "object",
+            "description": "Aerodynamics model selection and panel method options (optional)",
+            "properties": {
+                "method": {
+                    "type": "string",
+                    "enum": ["barrowman", "panel"],
+                    "description": "Aerodynamic model: Barrowman (default) or surface panel method"
+                },
+                "n_axial": {
+                    "type": "integer",
+                    "minimum": 8,
+                    "description": "Axial strips of the panel mesh (panel method)"
+                },
+                "n_theta": {
+                    "type": "integer",
+                    "minimum": 8,
+                    "description": "Azimuthal panels per strip (panel method)"
+                },
+                "include_fins": {
+                    "type": "boolean",
+                    "description": "Include fin contribution (panel method)"
+                },
+                "viscous_crossflow": {
+                    "type": "boolean",
+                    "description": "Allen viscous crossflow normal force (panel method)"
+                },
+                "thermo_enabled": {
+                    "type": "boolean",
+                    "description": "Compute aerodynamic heating metrics per step (requires panel method)"
+                }
+            }
         }
     }
 }

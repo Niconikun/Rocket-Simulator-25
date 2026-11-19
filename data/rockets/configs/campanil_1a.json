@@ -66,5 +66,13 @@
     "rear_section": {
         "length": 0.001,
         "diameter": 0.103
+    },
+    "aerodynamics": {
+        "method": "barrowman",
+        "n_axial": 48,
+        "n_theta": 16,
+        "include_fins": true,
+        "viscous_crossflow": true,
+        "thermo_enabled": false
     }
 }

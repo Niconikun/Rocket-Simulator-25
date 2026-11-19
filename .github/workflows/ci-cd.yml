@@ -91,7 +91,7 @@ jobs:
       
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: |
@@ -182,14 +182,14 @@ jobs:
         id: create_archive
       
       - name: Upload executable artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: RocketSimulator-exe
           path: dist/RocketSimulator/
           retention-days: 7
       
       - name: Upload zip artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: RocketSimulator-zip
           path: ${{ steps.create_archive.outputs.archive_name }}
