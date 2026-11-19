@@ -14,7 +14,7 @@ import unittest
 import weakref
 import threading
 import time
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from typing import Any, Dict, List
 
 from PyQt6.QtCore import QCoreApplication, QTimer
@@ -146,8 +146,8 @@ class TestSubscribePublish(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        # Create a QApplication instance for Qt signals
-        self.app = QApplication([])
+        # Reuse the session QApplication (Qt allows only one per process)
+        self.app = QApplication.instance() or QApplication([])
         
         # Reset the singleton and metrics
         EventBus._instance = None
@@ -161,7 +161,6 @@ class TestSubscribePublish(unittest.TestCase):
         """Clean up after tests."""
         EventBus._instance = None
         reset_metrics()
-        self.app.quit()
     
     def test_subscribe_and_publish(self):
         """Test basic subscribe and publish."""
@@ -172,11 +171,8 @@ class TestSubscribePublish(unittest.TestCase):
         
         self.bus.subscribe(EventType.SIMULATION_STARTED, callback)
         
-        # Need to use QTimer to ensure signal is processed
-        with patch.object(self.bus._event_signal, 'emit') as mock_emit:
-            self.bus.publish(EventType.SIMULATION_STARTED, test_data)
-            # Directly call the handler since we're not running the Qt event loop
-            self.bus._handle_event(EventType.SIMULATION_STARTED, test_data)
+        # Direct connection: publish() emits the signal synchronously
+        self.bus.publish(EventType.SIMULATION_STARTED, test_data)
         
         self.assertEqual(len(self.received_data), 1)
         self.assertEqual(self.received_data[0], test_data)
@@ -191,10 +187,7 @@ class TestSubscribePublish(unittest.TestCase):
         
         subscribe(EventType.SIMULATION_COMPLETED, callback)
         
-        with patch.object(EventBus.get_instance()._event_signal, 'emit'):
-            publish(EventType.SIMULATION_COMPLETED, test_data)
-            # Directly call the handler
-            EventBus.get_instance()._handle_event(EventType.SIMULATION_COMPLETED, test_data)
+        publish(EventType.SIMULATION_COMPLETED, test_data)
         
         self.assertEqual(len(received), 1)
         
@@ -202,9 +195,7 @@ class TestSubscribePublish(unittest.TestCase):
         unsubscribe(EventType.SIMULATION_COMPLETED, callback)
         received.clear()
         
-        with patch.object(EventBus.get_instance()._event_signal, 'emit'):
-            publish(EventType.SIMULATION_COMPLETED, test_data)
-            EventBus.get_instance()._handle_event(EventType.SIMULATION_COMPLETED, test_data)
+        publish(EventType.SIMULATION_COMPLETED, test_data)
         
         self.assertEqual(len(received), 0)
     
@@ -223,9 +214,7 @@ class TestSubscribePublish(unittest.TestCase):
         self.bus.subscribe(EventType.SIMULATION_STARTED, callback1)
         self.bus.subscribe(EventType.SIMULATION_STARTED, callback2)
         
-        with patch.object(self.bus._event_signal, 'emit'):
-            self.bus.publish(EventType.SIMULATION_STARTED, test_data)
-            self.bus._handle_event(EventType.SIMULATION_STARTED, test_data)
+        self.bus.publish(EventType.SIMULATION_STARTED, test_data)
         
         self.assertEqual(len(received1), 1)
         self.assertEqual(len(received2), 1)
@@ -235,9 +224,7 @@ class TestSubscribePublish(unittest.TestCase):
         test_data = {'test': 'value'}
         
         # Should not raise an error
-        with patch.object(self.bus._event_signal, 'emit'):
-            self.bus.publish(EventType.SIMULATION_STARTED, test_data)
-            self.bus._handle_event(EventType.SIMULATION_STARTED, test_data)
+        self.bus.publish(EventType.SIMULATION_STARTED, test_data)
     
     def test_none_data(self):
         """Test publishing with None data."""
@@ -248,9 +235,7 @@ class TestSubscribePublish(unittest.TestCase):
         
         self.bus.subscribe(EventType.SIMULATION_STARTED, callback)
         
-        with patch.object(self.bus._event_signal, 'emit'):
-            self.bus.publish(EventType.SIMULATION_STARTED, None)
-            self.bus._handle_event(EventType.SIMULATION_STARTED, {})
+        self.bus.publish(EventType.SIMULATION_STARTED, None)
         
         self.assertEqual(len(received), 1)
         self.assertEqual(received[0], {})
@@ -261,7 +246,7 @@ class TestWeakReferences(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.app = QApplication([])
+        self.app = QApplication.instance() or QApplication([])
         EventBus._instance = None
         reset_metrics()
         self.bus = EventBus.get_instance()
@@ -270,7 +255,6 @@ class TestWeakReferences(unittest.TestCase):
         """Clean up after tests."""
         EventBus._instance = None
         reset_metrics()
-        self.app.quit()
     
     def test_weak_ref_cleanup(self):
         """Test that weak references are cleaned up when callback is deleted."""
@@ -308,8 +292,7 @@ class TestWeakReferences(unittest.TestCase):
         del callback
         
         # Process an event - should clean up dead ref
-        with patch.object(self.bus._event_signal, 'emit'):
-            self.bus._handle_event(EventType.SIMULATION_STARTED, test_data)
+        self.bus._handle_event(EventType.SIMULATION_STARTED, test_data)
         
         # The subscriber list should be empty
         self.assertEqual(len(self.bus._subscribers[EventType.SIMULATION_STARTED]), 0)
@@ -320,7 +303,7 @@ class TestMetricsTracking(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.app = QApplication([])
+        self.app = QApplication.instance() or QApplication([])
         EventBus._instance = None
         reset_metrics()
         self.bus = EventBus.get_instance()
@@ -329,7 +312,6 @@ class TestMetricsTracking(unittest.TestCase):
         """Clean up after tests."""
         EventBus._instance = None
         reset_metrics()
-        self.app.quit()
     
     def test_publish_increments_metrics(self):
         """Test that publishing increments metrics."""
@@ -338,8 +320,7 @@ class TestMetricsTracking(unittest.TestCase):
         
         self.bus.subscribe(EventType.SIMULATION_STARTED, callback)
         
-        with patch.object(self.bus._event_signal, 'emit'):
-            self.bus.publish(EventType.SIMULATION_STARTED, {})
+        self.bus.publish(EventType.SIMULATION_STARTED, {})
         
         metrics = get_metrics()
         
@@ -365,8 +346,7 @@ class TestMetricsTracking(unittest.TestCase):
         
         self.bus.subscribe(EventType.SIMULATION_STARTED, bad_callback)
         
-        with patch.object(self.bus._event_signal, 'emit'):
-            self.bus._handle_event(EventType.SIMULATION_STARTED, {})
+        self.bus._handle_event(EventType.SIMULATION_STARTED, {})
         
         metrics = get_metrics()
         
@@ -381,8 +361,7 @@ class TestMetricsTracking(unittest.TestCase):
         
         self.bus.subscribe(EventType.SIMULATION_STARTED, callback)
         
-        with patch.object(self.bus._event_signal, 'emit'):
-            self.bus.publish(EventType.SIMULATION_STARTED, {})
+        self.bus.publish(EventType.SIMULATION_STARTED, {})
         
         reset_metrics()
         
@@ -397,7 +376,7 @@ class TestSubscribers(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.app = QApplication([])
+        self.app = QApplication.instance() or QApplication([])
         EventBus._instance = None
         reset_metrics()
         self.bus = EventBus.get_instance()
@@ -406,7 +385,6 @@ class TestSubscribers(unittest.TestCase):
         """Clean up after tests."""
         EventBus._instance = None
         reset_metrics()
-        self.app.quit()
     
     def test_get_subscriber_count(self):
         """Test getting subscriber count."""
@@ -464,8 +442,7 @@ class TestSubscribers(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(self.bus.get_subscriber_count(EventType.SIMULATION_STARTED), 1)
         
-        with patch.object(self.bus._event_signal, 'emit'):
-            self.bus._handle_event(EventType.SIMULATION_STARTED, {})
+        self.bus._handle_event(EventType.SIMULATION_STARTED, {})
         
         self.assertEqual(len(received), 1)
         self.assertEqual(received[0], 'callback2')

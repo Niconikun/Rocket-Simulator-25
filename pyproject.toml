@@ -174,9 +174,6 @@ package-dir = {"" = "."}
 # Scripts to include
 scripts = ["main.py", "build_exe.py", "add_aero_methods.py"]
 
-# Scripts to include
-scripts = ["main.py", "build_exe.py", "add_aero_methods.py"]
-
 # Include non-Python files
 [tool.setuptools.package-data]
 "" = [

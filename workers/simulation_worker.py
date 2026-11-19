@@ -309,7 +309,8 @@ class SimulationWorker(QThread):
             rocket_name=rocket_name,
             temperature=temperature,
             reference_area=reference_area,
-            rocket_config_override=rocket_config
+            launch_elevation=altitude,
+            rocket_config_override=rocket_config,
             aero_method=aero_method,
             aero_options=aero_options or None
         )
@@ -460,13 +461,16 @@ class SimulationWorker(QThread):
                             current_altitude, t,
                         )
 
-                    # Altitude-based deployment checks
-                    if parachute.check_deployment(current_altitude, vertical_velocity, t):
+                    # Altitude-based deployment checks (descent-gated: never
+                    # deploy during the initial ascent below deployment altitude)
+                    if parachute.check_deployment(current_altitude, vertical_velocity, t,
+                                                  descending=is_descending):
                         logger.info(
                             "Main parachute deployed: altitude=%.1fm, velocity=%.1fm/s",
                             current_altitude, vertical_velocity,
                         )
-                    if parachute.check_drogue_deployment(current_altitude, t):
+                    if parachute.check_drogue_deployment(current_altitude, t,
+                                                         descending=is_descending):
                         logger.info(
                             "Drogue deployed (altitude trigger): %.1fm", current_altitude
                         )
@@ -497,7 +501,7 @@ class SimulationWorker(QThread):
                         last_mass = rocket.simulation.history.masses[-1]
                         if last_mass > 0:
                             accel_magnitude = _total_accel_magnitude(
-                                last_force, last_mass, rocket.state.q_enu2b
+                                last_force_b, last_mass, last_q
                             )
                 except Exception:
                     accel_magnitude = 0.0

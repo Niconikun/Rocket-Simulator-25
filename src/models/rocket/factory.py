@@ -724,6 +724,8 @@ def create_aerodynamics(
     fins = rocket_config.get('fins', {})
     
     # Build mass properties dict (for aerodynamics calculations)
+    inertia_before = rocket_config.get('I_before_burn')
+    inertia_after = rocket_config.get('I_after_burn')
     mass_props = {
         'CoM_before_burn': mass_props_before,
         'CoM_after_burn': mass_props_after,
@@ -952,6 +954,7 @@ def create_rocket_from_config(
     configs_dir: str = 'data/rockets/configs',
     wind_vector_enu: Optional[np.ndarray] = None,
     reference_area: Optional[float] = None,
+    launch_elevation: Optional[float] = None,
     wind_model_config: Optional[Dict[str, Any]] = None,
     parachute_config: Optional[Dict[str, Any]] = None,
     rocket_config_override: Optional[Dict[str, Any]] = None,
@@ -981,6 +984,8 @@ def create_rocket_from_config(
         configs_dir: Directory containing rocket configurations
         wind_vector_enu: Initial wind vector in ENU frame [m/s]
         reference_area: Reference area for aerodynamics [m²]
+        launch_elevation: Launch site elevation above sea level [m]; falls back to
+            rocket_config['launch_elevation'], then 0.0
         wind_model_config: Configuration for wind model (optional)
         parachute_config: Configuration for parachute (optional)
         rocket_config_override: If given, use this configuration dict instead of
@@ -1043,6 +1048,9 @@ def create_rocket_from_config(
     # Get reference area from config or use provided
     ref_area = reference_area if reference_area is not None else rocket_config.get('reference_area', 0.01)
     
+    # Launch site elevation: explicit argument > rocket config > 0.0
+    launch_elev = launch_elevation if launch_elevation is not None else rocket_config.get('launch_elevation', 0.0)
+    
     # Gravity turn: explicit arguments take precedence, otherwise use the
     # rocket config's 'gravity_turn' section, otherwise the defaults
     gravity_turn_config = rocket_config.get('gravity_turn', {})
@@ -1066,7 +1074,7 @@ def create_rocket_from_config(
         wind_model=wind_model,
         parachute=parachute,
         propellant_mass=propellant_mass,
-        launch_elevation=launch_elevation,
+        launch_elevation=launch_elev,
         # Gravity turn parameters
         enable_gravity_turn=gt_enabled,
         gravity_turn_rotation_rate=gt_rotation_rate,

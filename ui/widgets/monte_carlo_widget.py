@@ -189,14 +189,14 @@ class MonteCarloWidget(BaseWidget):
 
         self.runs_spinbox = QSpinBox()
         self.runs_spinbox.setRange(Constants.MonteCarlo.MIN_MONTE_CARLO_RUNS, Constants.MonteCarlo.MAX_MONTE_CARLO_RUNS)
-        self.runs_spinbox.setValue(self.state.get(Constants.StateKeys.MONTE_CARLO_RUNS, Constants.MonteCarlo.DEFAULT_MONTE_CARLO_RUNS))
+        self.runs_spinbox.setValue(int(self.state.get(Constants.StateKeys.MONTE_CARLO_RUNS, Constants.MonteCarlo.DEFAULT_MONTE_CARLO_RUNS)))
         self.runs_spinbox.valueChanged.connect(lambda v: self.state.set(Constants.StateKeys.MONTE_CARLO_RUNS, v))
         run_form.addRow("Number of Runs:", self.runs_spinbox)
 
         self.seed_spinbox = QSpinBox()
         self.seed_spinbox.setSpecialValueText("Random")
         self.seed_spinbox.setRange(0, 999999)
-        self.seed_spinbox.setValue(self.state.get(Constants.StateKeys.MONTE_CARLO_SEED, 0))
+        self.seed_spinbox.setValue(int(self.state.get(Constants.StateKeys.MONTE_CARLO_SEED, 0)))
         self.seed_spinbox.valueChanged.connect(
             lambda v: self.state.set(Constants.StateKeys.MONTE_CARLO_SEED, v))
         run_form.addRow("RNG Seed (0 = random):", self.seed_spinbox)
@@ -204,7 +204,7 @@ class MonteCarloWidget(BaseWidget):
         self.workers_spinbox = QSpinBox()
         self.workers_spinbox.setRange(1, max(1, os.cpu_count() or 1))
         self.workers_spinbox.setValue(
-            self.state.get(Constants.StateKeys.MONTE_CARLO_WORKERS, max(1, (os.cpu_count() or 1) - 1))
+            int(self.state.get(Constants.StateKeys.MONTE_CARLO_WORKERS, max(1, (os.cpu_count() or 1) - 1)))
         )
         self.workers_spinbox.valueChanged.connect(lambda v: self.state.set(Constants.StateKeys.MONTE_CARLO_WORKERS, v))
         run_form.addRow("Parallel Workers (processes):", self.workers_spinbox)

@@ -13,6 +13,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--no-sandbox")
 
+from unittest.mock import patch
+
 from PyQt6.QtWidgets import QApplication
 
 from ui.main_window import MainWindow
@@ -29,11 +31,12 @@ class TestMainWindowIntegration(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self):
-        # Force lightweight label-based fallback to avoid WebEngine runtime requirements.
-        self._old_location_webengine = location_widget_module.HAS_WEBENGINE
-        self._old_dashboard_webengine = dashboard_widget_module.HAS_WEBENGINE
-        location_widget_module.HAS_WEBENGINE = False
-        dashboard_widget_module.HAS_WEBENGINE = False
+        # Force lightweight label-based fallback to avoid WebEngine runtime
+        # requirements (the attribute only exists when QtWebEngine is installed)
+        self._loc_patch = patch.object(location_widget_module, 'HAS_WEBENGINE', False, create=True)
+        self._dash_patch = patch.object(dashboard_widget_module, 'HAS_WEBENGINE', False, create=True)
+        self._loc_patch.start()
+        self._dash_patch.start()
 
         self.window = MainWindow()
         self.app.processEvents()
@@ -42,8 +45,8 @@ class TestMainWindowIntegration(unittest.TestCase):
         self.window.close()
         self.window.deleteLater()
         self.app.processEvents()
-        location_widget_module.HAS_WEBENGINE = self._old_location_webengine
-        dashboard_widget_module.HAS_WEBENGINE = self._old_dashboard_webengine
+        self._dash_patch.stop()
+        self._loc_patch.stop()
 
     def test_main_window_builds_key_widgets(self):
         """MainWindow should build core widgets used by simulation workflow."""

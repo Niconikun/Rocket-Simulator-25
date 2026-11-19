@@ -65,6 +65,8 @@ class TestParachuteAttachment(unittest.TestCase):
         rocket = _make_rocket()
         p = _make_parachute()
         rocket.set_parachute(p)
+        # deployment is descent-gated: simulate a previous higher-altitude step
+        p.previous_altitude = 200.0
         p.update(velocity=50.0, altitude=100.0, density=1.225)
         self.assertTrue(p.is_deployed())
 
@@ -90,6 +92,8 @@ class TestParachuteAttachment(unittest.TestCase):
         rocket = _make_rocket()
         p = _make_parachute()
         rocket.set_parachute(p)
+        # deployment is descent-gated: simulate a previous higher-altitude step
+        p.previous_altitude = 200.0
         p.update(velocity=50.0, altitude=100.0, density=1.225)
 
         state = rocket.state.copy()

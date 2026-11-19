@@ -334,7 +334,10 @@ class ThrustCurveProcessor:
         # 8. Derived metrics
         duration     = float(time_s[-1])
         max_thrust   = float(np.max(thrust_N))
-        total_impulse = float(np.trapz(thrust_N, time_s))
+        # np.trapz was renamed np.trapezoid in numpy 2.0; the `or` short-circuits
+        # so the removed attribute is never accessed on numpy >= 2
+        _trapezoid = getattr(np, 'trapezoid', None) or np.trapz
+        total_impulse = float(_trapezoid(thrust_N, time_s))
         mean_thrust  = total_impulse / duration if duration > 0 else 0.0
 
         validation = {
