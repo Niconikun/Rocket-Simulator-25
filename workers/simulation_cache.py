@@ -39,11 +39,9 @@ import json
 import logging
 import os
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, time
-from functools import lru_cache
-from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -377,33 +375,6 @@ class SimulationCache:
             logger.debug(f"Cache miss: created Engine({cache_key[:8]})")
             
             return engine
-    
-    def _get_thrust_at_time(self, t: float, engine_config: Dict[str, Any]) -> float:
-        """Get thrust at time t from engine configuration."""
-        # If thrust_curve is provided as a list
-        if 'thrust_curve' in engine_config:
-            thrust_data = engine_config['thrust_curve']
-            if isinstance(thrust_data, list):
-                if len(thrust_data) == 2:
-                    # Simple (time, thrust) pairs
-                    times, thrusts = thrust_data
-                    idx = np.searchsorted(times, t)
-                    if idx == 0:
-                        return thrusts[0]
-                    elif idx >= len(times):
-                        return 0.0
-                    else:
-                        # Linear interpolation
-                        t0, t1 = times[idx-1], times[idx]
-                        f0, f1 = thrusts[idx-1], thrusts[idx]
-                        return f0 + (f1 - f0) * (t - t0) / (t1 - t0) if t1 > t0 else f0
-                else:
-                    return thrust_data[0] if t < thrust_data[1] else 0.0
-        
-        # Default: constant thrust based on other parameters
-        max_thrust = engine_config.get('max_thrust', 0)
-        burn_time = engine_config.get('burn_time', 0)
-        return max_thrust if t < burn_time else 0.0
     
     # -------------------------------------------------------------------------
     # Wind Model Cache

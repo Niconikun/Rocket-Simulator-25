@@ -15,7 +15,6 @@ Usage::
     importer.save_json("output.json")  # convenience wrapper
 """
 
-import io
 import math
 import zipfile
 import xml.etree.ElementTree as ET
@@ -80,14 +79,6 @@ def _child_int(elem: ET.Element, tag: str, default: int = 0) -> int:
         except ValueError:
             pass
     return default
-
-
-def _attr_float(elem: ET.Element, attr: str, default: float = 0.0) -> float:
-    val = elem.get(attr, "")
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return default
 
 
 # ---------------------------------------------------------------------------
@@ -655,9 +646,6 @@ class OrkExporter:
         ValueError
             If required data is missing from config.
         """
-        import os
-        import io
-        
         # Create rocket element
         rocket = self._create_rocket_element()
         

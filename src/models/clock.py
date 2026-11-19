@@ -25,9 +25,8 @@ References:
 """
 
 # Imports
-from datetime import datetime, timezone, date, time
+from datetime import datetime, timezone
 import numpy as np
-from typing import Optional, Union, Tuple
 import logging
 
 from src.utils.simulation_constants import ClockConstants as CC
@@ -138,21 +137,6 @@ class Clock:
             return self.GMST_degrees
         else:
             return self.GMST_degrees * CC.DEG2RAD
-    
-    def _calculate_julian_day(self) -> float:
-        """
-        Internal method to calculate Julian Day from current time_vector.
-        
-        Returns:
-            Julian Day number
-        """
-        self.j_day = (
-            367 * self.time_vector[0] -
-            int((7 * (self.time_vector[0] + int((self.time_vector[1] + 9) / 12))) / 4) +
-            int((275 * self.time_vector[1]) / 9) + self.time_vector[2] + 1721013.5 +
-            (((self.time_vector[5] / 60) + self.time_vector[4]) / 60 + self.time_vector[3]) / 24
-        )
-        return self.j_day
     
     def _get_current_time(self) -> np.ndarray:
         """

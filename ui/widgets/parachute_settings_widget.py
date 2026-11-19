@@ -1,20 +1,18 @@
 """Parachute Settings Widget - Parachute configuration."""
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox, QCheckBox,
+    QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QDoubleSpinBox, QCheckBox,
     QPushButton, QGroupBox, QFormLayout, QMessageBox, QComboBox, QFileDialog,
-    QSpinBox, QPlainTextEdit
+    QPlainTextEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from ui.widgets import BaseWidget
-from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
-from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
+from src.utils.event_bus import EventType, subscribe, unsubscribe
 from typing import Optional
 import logging
 import json
-import os
 from pathlib import Path
 from typing import Dict, Any
 
@@ -489,13 +487,6 @@ class ParachuteSettingsWidget(BaseWidget):
                 )
                 logger.info(f"Parachute configuration saved: {filepath}")
                 
-                # Publish parachute config changed event
-                publish(EventType.PARACHUTE_CONFIG_CHANGED, {
-                    'config_name': name,
-                    'filepath': filepath,
-                    'config': config
-                })
-                logger.info(f"Published PARACHUTE_CONFIG_CHANGED event for: {name}")
             except Exception as e:
                 logger.error(f"Error saving parachute config: {e}")
                 QMessageBox.critical(self, "Error", f"Failed to save configuration: {e}")
@@ -508,11 +499,6 @@ class ParachuteSettingsWidget(BaseWidget):
         self.parachute_changed.emit()
         logger.info(f"Main parachute {'enabled' if enabled else 'disabled'}")
         
-        # Publish parachute enabled changed event
-        publish(EventType.PARACHUTE_ENABLED_CHANGED, {
-            'enabled': enabled
-        })
-        logger.info(f"Published PARACHUTE_ENABLED_CHANGED event: {enabled}")
     
     def on_drogue_enabled(self, state):
         """Handle drogue chute enable/disable."""

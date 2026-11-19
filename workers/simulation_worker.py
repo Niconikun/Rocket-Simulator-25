@@ -18,14 +18,12 @@ Migration Status: Phase 4 - Migrated to new architecture
 """
 
 from PyQt6.QtCore import QThread, pyqtSignal
-from models.app_state import ApplicationState
 from src.models.state import StateProvider, StateProxy
 from src.models.rocket.factory import (
     create_rocket_from_config,
     aero_selection_from_state,
     validate_aerodynamics_section,
 )
-from src.models.rocket.rocket import Rocket as NewRocket
 from src.models.planet import Planet
 from src.models.atmosphere import Atmosphere
 from src.models.clock import Clock
@@ -46,7 +44,7 @@ import os
 import copy
 import numpy as np
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -1297,26 +1295,6 @@ class SimulationWorker(QThread):
                 )
 
         report['diagnostics']['propulsion'] = propulsion_diag
-    
-    def _get_history_length(self, history_dict: dict) -> int:
-        """
-        Get the number of timesteps recorded in history data.
-        
-        Args:
-            history_dict: Dictionary returned from rocket.finalize_history()
-        
-        Returns:
-            Number of timesteps, or 0 if empty
-        """
-        if not history_dict:
-            return 0
-        
-        # Get the first available array to determine length
-        for key, value in history_dict.items():
-            if isinstance(value, list) and value:
-                return len(value)
-        
-        return 0
     
     def stop(self):
         """Stop the simulation worker."""

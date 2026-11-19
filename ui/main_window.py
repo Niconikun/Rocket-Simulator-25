@@ -5,7 +5,7 @@ Central PyQt6 window that manages all application tabs and coordinates
 between different widget pages.
 """
 from PyQt6.QtWidgets import (
-    QMainWindow, QTabWidget, QVBoxLayout, QHBoxLayout, QWidget,
+    QMainWindow, QTabWidget, QVBoxLayout, QWidget,
     QStatusBar, QMenuBar, QMenu, QMessageBox, QFileDialog, QApplication
 )
 from PyQt6.QtCore import Qt, QSize
@@ -14,10 +14,9 @@ from models.app_state import ApplicationState
 from src.utils.event_bus import EventType, publish, subscribe
 import logging
 import os
-from src.models.state import StateProvider, StateProxy
+from src.models.state import StateProvider
 from src.config import Constants, TranslationManager, tr, SUPPORTED_LANGUAGES
 from typing import Optional, cast
-import sys
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -305,12 +304,6 @@ class MainWindow(QMainWindow):
             if self.state.load_from_file(filepath):
                 cast(QStatusBar, self.statusBar()).showMessage(f"Configuration loaded from {filepath}")
                 
-                # Publish configuration loaded event
-                publish(EventType.CONFIGURATION_LOADED, {
-                    'filepath': filepath,
-                    'timestamp': datetime.now().isoformat()
-                })
-                logger.info(f"Published CONFIGURATION_LOADED event for: {filepath}")
             else:
                 QMessageBox.critical(self, "Error", "Failed to load configuration")
     
@@ -324,12 +317,6 @@ class MainWindow(QMainWindow):
             if self.state.save_to_file(filepath):
                 cast(QStatusBar, self.statusBar()).showMessage(f"Configuration saved to {filepath}")
                 
-                # Publish configuration saved event
-                publish(EventType.CONFIGURATION_SAVED, {
-                    'filepath': filepath,
-                    'timestamp': datetime.now().isoformat()
-                })
-                logger.info(f"Published CONFIGURATION_SAVED event for: {filepath}")
             else:
                 QMessageBox.critical(self, "Error", "Failed to save configuration")
     
@@ -344,12 +331,6 @@ class MainWindow(QMainWindow):
             self.state.reset()
             cast(QStatusBar, self.statusBar()).showMessage("All parameters reset to defaults")
             
-            # Publish configuration changed event
-            publish(EventType.CONFIGURATION_CHANGED, {
-                'action': 'reset_to_defaults',
-                'timestamp': datetime.now().isoformat()
-            })
-            logger.info("Published CONFIGURATION_CHANGED event (reset to defaults)")
     
     def show_about(self):
         """Show about dialog."""
@@ -395,12 +376,6 @@ class MainWindow(QMainWindow):
         self.state.set(Constants.StateKeys.DARK_MODE_ENABLED, checked)
         cast(QStatusBar, self.statusBar()).showMessage(f"Dark mode {'enabled' if checked else 'disabled'}")
         
-        # Publish theme changed event
-        publish(EventType.THEME_CHANGED, {
-            'dark_mode': checked,
-            'timestamp': datetime.now().isoformat()
-        })
-        logger.debug(f"Published THEME_CHANGED event: dark_mode={checked}")
     
     def change_language(self):
         """Change the application language."""
@@ -429,13 +404,6 @@ class MainWindow(QMainWindow):
         cast(QStatusBar, self.statusBar()).showMessage(f"{tr('Language changed to ')}{SUPPORTED_LANGUAGES.get(lang_code, lang_code)}")
         logger.info(f"Language changed to: {lang_code}")
         
-        # Publish language changed event
-        publish(EventType.LANGUAGE_CHANGED, {
-            'language_code': lang_code,
-            'language_name': SUPPORTED_LANGUAGES.get(lang_code, lang_code),
-            'timestamp': datetime.now().isoformat()
-        })
-        logger.debug(f"Published LANGUAGE_CHANGED event for: {lang_code}")
     
     def _retranslate_ui(self):
         """Retranslate all UI elements after language change."""
@@ -516,16 +484,6 @@ class MainWindow(QMainWindow):
         light_palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(150, 150, 150))
         
         cast(QApplication, self._app).setPalette(light_palette)
-    
-    def _apply_dark_theme(self):
-        """Apply dark theme to this window only (legacy)."""
-        self._apply_dark_theme_to_app()
-        self.setStyleSheet(self._get_dark_stylesheet())
-    
-    def _apply_light_theme(self):
-        """Apply light theme to this window only (legacy)."""
-        self._apply_light_theme_to_app()
-        self.setStyleSheet(self._get_light_stylesheet())
     
     def _get_dark_stylesheet(self) -> str:
         """Get dark theme stylesheet."""

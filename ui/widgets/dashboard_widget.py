@@ -7,9 +7,8 @@ from PyQt6.QtWidgets import (
     QHeaderView, QApplication
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QPalette, QCloseEvent
+from PyQt6.QtGui import QPalette, QCloseEvent
 from ui.widgets import BaseWidget
-from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
 from typing import Optional, Dict
@@ -20,10 +19,10 @@ logger = logging.getLogger(__name__)
 from datetime import datetime
 import csv
 import json
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
 
 # Import matplotlib for plotting (kept for maps and compatibility)
@@ -31,14 +30,13 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (import registers the '3d' projection)
 import numpy as np
 
 # Import PyQtGraph for performance charts
 try:
     import pyqtgraph as pg
-    from pyqtgraph import PlotWidget, PlotDataItem, PlotCurveItem, ViewBox, GraphicsLayoutWidget, InfiniteLine, mkPen
-    from pyqtgraph.Qt import QtGui
+    from pyqtgraph import PlotWidget, PlotCurveItem, ViewBox, InfiniteLine, mkPen
     HAS_PYQTGRAPH = True
 except ImportError:
     HAS_PYQTGRAPH = False
@@ -1002,30 +1000,6 @@ class DashboardWidget(BaseWidget):
             logger.warning(f"Could not create stability chart: {e}")
             plot13 = self._create_pyqtgraph_placeholder("Stability")
         self._add_pyqtgraph_as_tab(plot13, "Stability")
-    
-    def _create_chart(self, title, x_data, y_data_list, labels, colors_list):
-        """Create a matplotlib figure with multiple y-axes."""
-        fig, ax1 = plt.subplots(figsize=(8, 6), dpi=100)
-        fig.suptitle(title, fontsize=12, fontweight='bold')
-        
-        # Plot first dataset
-        color = colors_list[0]
-        ax1.set_xlabel('Time [s]')
-        ax1.set_ylabel(labels[0], color=color)
-        ax1.plot(x_data, y_data_list[0], color=color, linewidth=2)
-        ax1.tick_params(axis='y', labelcolor=color)
-        ax1.grid(True, alpha=0.3)
-        
-        # Plot second dataset on secondary y-axis
-        if len(y_data_list) > 1:
-            ax2 = ax1.twinx()
-            color = colors_list[1]
-            ax2.set_ylabel(labels[1], color=color)
-            ax2.plot(x_data, y_data_list[1], color=color, linewidth=2)
-            ax2.tick_params(axis='y', labelcolor=color)
-        
-        plt.tight_layout()
-        return fig
     
     def _create_simple_chart(self, title, x_data, y_data, x_label, y_label):
         """Create a simple matplotlib figure with single dataset."""

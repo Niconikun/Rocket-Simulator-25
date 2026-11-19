@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QGroupBox, QFormLayout, QProgressBar, QMessageBox, QTableWidget,
     QTableWidgetItem, QTabWidget, QSizePolicy,
 )
-from PyQt6.QtCore import Qt, QThread, QObject, pyqtSignal
+from PyQt6.QtCore import Qt, QThread
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.patches as mpatches
@@ -24,11 +24,10 @@ from scipy.stats import chi2
 from ui.widgets import BaseWidget
 from src.models.state import StateProvider
 from src.config import Constants
-from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
+from src.utils.event_bus import EventType, subscribe, unsubscribe
 from typing import Optional
 from src.utils.monte_carlo_aggregator import MonteCarloAggregator
 from workers.monte_carlo_runner import MonteCarloRunner
-from datetime import datetime
 import json
 import logging
 import os
@@ -547,14 +546,6 @@ class MonteCarloWidget(BaseWidget):
         self.status_label.setText(f"Running 0 / {n_runs} … ({n_workers} parallel worker(s))")
         logger.info("Monte Carlo batch started: %d runs, seed=%s, workers=%d", n_runs, seed, n_workers)
         
-        # Publish Monte Carlo started event
-        publish(EventType.MONTE_CARLO_STARTED, {
-            'n_runs': n_runs,
-            'seed': seed,
-            'n_workers': n_workers,
-            'timestamp': datetime.now().isoformat()
-        })
-        logger.info("Published MONTE_CARLO_STARTED event")
         
         self._thread.start()
 
@@ -630,14 +621,6 @@ class MonteCarloWidget(BaseWidget):
 
         logger.info("Monte Carlo batch finished: %s", summary.get("batch_id"))
         
-        # Publish Monte Carlo completed event
-        publish(EventType.MONTE_CARLO_COMPLETED, {
-            'summary': summary,
-            'n_successful': n_ok,
-            'n_failed': n_fail,
-            'timestamp': datetime.now().isoformat()
-        })
-        logger.info("Published MONTE_CARLO_COMPLETED event")
 
     def _on_error(self, msg: str):
         self._cleanup_thread()
