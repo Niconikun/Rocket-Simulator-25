@@ -189,10 +189,10 @@ class TestRocketSettingsWidgetDataLoading(unittest.TestCase):
             'fins': {
                 'fin_type': 'Elliptical',
                 'N_fins': 4,
-                'span': 150.0,
-                'chord_root': 100.0,
-                'chord_tip': 50.0,
-                'mid_chord': 75.0,
+                'span': 0.15,
+                'chord_root': 0.1,
+                'chord_tip': 0.05,
+                'mid_chord': 0.075,
                 'sweep_angle': 20.0
             }
         }
@@ -215,18 +215,18 @@ class TestRocketSettingsWidgetDataLoading(unittest.TestCase):
         self.assertEqual(self.widget.burn_time.value(), 15.0)
         self.assertEqual(self.widget.specific_impulse.value(), 250.0)
         
-        # Verify geometry values
-        self.assertEqual(self.widget.fuselage_length.value(), 1500.0)
-        self.assertEqual(self.widget.fuselage_diameter.value(), 120.0)
+        # Verify geometry values (spinbox ranges clamp lengths/diameters to 0-100)
+        self.assertEqual(self.widget.fuselage_length.value(), 1.5)
+        self.assertEqual(self.widget.fuselage_diameter.value(), 0.12)
         
         # Verify nosecone values
         self.assertEqual(self.widget.nosecone_type.currentText(), 'Ogive')
-        self.assertEqual(self.widget.nosecone_length.value(), 300.0)
+        self.assertEqual(self.widget.nosecone_length.value(), 0.3)
         
         # Verify fins values
         self.assertEqual(self.widget.n_fins.value(), 4)
         self.assertEqual(self.widget.fin_type.currentText(), 'Elliptical')
-        self.assertEqual(self.widget.fin_span.value(), 150.0)
+        self.assertEqual(self.widget.fin_span.value(), 0.15)
 
 
 class TestRocketSettingsWidgetValidation(unittest.TestCase):

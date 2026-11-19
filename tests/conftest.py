@@ -1,6 +1,7 @@
 """Shared pytest fixtures for the Rocket Simulator test suite."""
 
 import os
+import sys
 
 import pytest
 
@@ -23,3 +24,14 @@ def qapplication():
     if app is None:
         app = QApplication([])
     yield app
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Exit immediately with the real test status when Qt was loaded.
+
+    On headless runners the interpreter segfaults (SIGSEGV, exit 139) while
+    tearing down Qt/pyvista/vtk objects at shutdown, which would mask the
+    actual pytest result. Skipping interpreter teardown avoids that.
+    """
+    if "PyQt6.QtWidgets" in sys.modules:
+        os._exit(int(exitstatus))
