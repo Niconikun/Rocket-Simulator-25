@@ -369,7 +369,10 @@ class SimulationValidator:
 
         total_impulse_est = 0.0
         if len(time_hist) > 1:
-            total_impulse_est = float(np.trapz(thrust_hist, time_hist))
+            # np.trapz was renamed np.trapezoid in numpy 2.0; the `or` short-circuits
+            # so the removed attribute is never accessed on numpy >= 2
+            _trapezoid = getattr(np, 'trapezoid', None) or np.trapz
+            total_impulse_est = float(_trapezoid(thrust_hist, time_hist))
             reported_impulse = propulsion_metrics.get('total_impulse_delivered', 0.0)
             if reported_impulse > 0.0:
                 impulse_error_pct = abs(total_impulse_est - reported_impulse) / reported_impulse * 100.0

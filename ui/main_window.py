@@ -11,8 +11,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QAction, QPalette, QColor
 from models.app_state import ApplicationState
-from src.utils.event_bus import EventType, publish
+from src.utils.event_bus import EventType, publish, subscribe
 import logging
+import os
 from src.models.state import StateProvider, StateProxy
 from src.config import Constants, TranslationManager, tr, SUPPORTED_LANGUAGES
 from typing import Optional, cast
@@ -139,6 +140,10 @@ class MainWindow(QMainWindow):
             lambda _sim_id: self.dashboard_widget.load_simulation_history()
         )
         
+        # Invalidate cached rocket configs when one is edited/saved in the GUI,
+        # so the next simulation run reads the updated file instead of stale cache
+        subscribe(EventType.ROCKET_CONFIG_CHANGED, self._on_rocket_config_changed)
+        
         # Connect tab change signal
         self.tabs.currentChanged.connect(self.on_tab_changed)
         
@@ -256,6 +261,24 @@ class MainWindow(QMainWindow):
             'timestamp': datetime.now().isoformat()
         })
         logger.debug(f"Published TAB_CHANGED event for: {tab_name}")
+    
+    def _on_rocket_config_changed(self, data: dict) -> None:
+        """Handle ROCKET_CONFIG_CHANGED: drop cached rocket configs for the saved rocket."""
+        from workers.simulation_cache import get_cache
+        if not isinstance(data, dict):
+            return
+        names = set()
+        rocket_name = data.get('rocket_name')
+        if rocket_name:
+            names.add(str(rocket_name))
+            names.add(str(rocket_name).lower().replace(' ', '_'))
+        file_path = data.get('file_path')
+        if file_path:
+            names.add(os.path.splitext(os.path.basename(file_path))[0])
+        cache = get_cache()
+        for name in names:
+            cache.invalidate_rocket_config(name)
+        logger.info(f"Invalidated cached rocket config(s) after save: {sorted(names)}")
     
     def on_wind_settings_changed(self):
         """Handle wind settings changes from the wind widget."""
