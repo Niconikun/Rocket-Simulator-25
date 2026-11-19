@@ -220,6 +220,7 @@ class StateKeyConstants:
     SIMULATION_RUNNING = 'simulation_running'
     SIMULATION_RESULTS = 'simulation_results'
     SIMULATION_ERROR = 'simulation_error'
+    LAST_SIMULATION_TIMESTAMP = 'last_simulation_timestamp'
     
     # Environmental keys
     AVERAGE_TEMPERATURE = 'average_temperature'

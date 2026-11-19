@@ -46,7 +46,7 @@ except ImportError:
 
 from pathlib import Path
 
-from typing import Any
+from typing import Any, Dict
 
 # Try to import cartopy for geographic map
 try:
@@ -107,7 +107,7 @@ class DashboardWidget(BaseWidget):
             # Store results temporarily so they can be loaded
             self.state.set(Constants.StateKeys.SIMULATION_RESULTS, results)
             if timestamp:
-                self.state.set('last_simulation_timestamp', timestamp)
+                self.state.set(Constants.StateKeys.LAST_SIMULATION_TIMESTAMP, timestamp)
             
             # Auto-load the latest results
             self.load_simulation_history()
@@ -464,7 +464,6 @@ class DashboardWidget(BaseWidget):
         self.generate_trajectory_maps(sim_data, metadata)
         
         logger.info(f"Loaded simulation: {sim_id}")
-        QMessageBox.information(self, "Success", f"Loaded simulation {sim_id}")
     
     def delete_selected_simulation(self):
         """Delete the selected simulation."""
@@ -1782,6 +1781,7 @@ class DashboardWidget(BaseWidget):
         if recent:
             self.current_sim_id = recent.get('id')
             self.sim_combo.setCurrentIndex(0)
+            self.load_selected_simulation()
             logger.info("Dashboard refreshed with recent simulation")
         else:
             logger.info("Dashboard refreshed (no simulations)")
