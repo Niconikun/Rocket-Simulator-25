@@ -62,6 +62,19 @@ class MockAtmosphere:
             'speed_of_sound': 340.0
         }
 
+    # IAtmosphere-style API used by RocketDynamics
+    def give_temp(self, height: float) -> float:
+        return self.temperature
+
+    def give_pressure(self, height: float) -> float:
+        return self.pressure
+
+    def give_dens(self, height: float) -> float:
+        return self.density
+
+    def give_v_sonic(self, height: float) -> float:
+        return 340.0
+
 
 class MockAerodynamics:
     """Mock aerodynamics for testing"""
@@ -82,6 +95,29 @@ class MockAerodynamics:
             'pitching_moment': 0.0,
             'yaw_moment': 0.0,
             'rolling_moment': 0.0
+        }
+
+    # IAerodynamics-style API used by RocketDynamics
+    def update(self, mach: float, angle_attack: float, height: float, density: float) -> None:
+        pass
+
+    def get_coefficients(self):
+        return (self.cd, self.cl)
+
+    def get_center_of_pressure(self):
+        return np.array([0.5, 0.0, 0.0])
+
+    def get_stability_margin(self):
+        return 1.0
+
+    def get_aerodynamic_forces(self, dynamic_pressure, reference_area=None):
+        return {
+            'drag': 0.0,
+            'lift': 0.0,
+            'cd': self.cd,
+            'cl': self.cl,
+            'cp_position': np.array([0.5, 0.0, 0.0]),
+            'stability_margin': 1.0,
         }
 
 
@@ -109,7 +145,7 @@ class TestGravityTurnInitialization(unittest.TestCase):
         # Check default values
         self.assertFalse(rocket.enable_gravity_turn)
         self.assertEqual(rocket.gravity_turn_rotation_rate, 20.0)
-        self.assertEqual(rocket.gravity_turn_min_velocity, 50.0)
+        self.assertEqual(rocket.gravity_turn_min_velocity, 10.0)
         self.assertFalse(rocket.gravity_turn_use_relative_velocity)
     
     def test_gravity_turn_enabled(self):
@@ -152,9 +188,9 @@ class TestGravityTurnFactory(unittest.TestCase):
         builder = RocketBuilder()
         builder.with_position(np.array([0., 0., 0.]))
         builder.with_velocity(np.array([0., 0., 10.]))
-        builder.with_orientation(np.array([0., 0., 0., 1.]))
+        builder.with_attitude(np.array([0., 0., 0., 1.]))
         builder.with_angular_velocity(np.array([0., 0., 0.]))
-        builder.with_mass(10.0)
+        builder.with_initial_mass(10.0)
         builder.with_engine(engine)
         builder.with_atmosphere(atmosphere)
         builder.with_aerodynamics(aerodynamics)
@@ -164,7 +200,7 @@ class TestGravityTurnFactory(unittest.TestCase):
         
         self.assertFalse(rocket.enable_gravity_turn)
         self.assertEqual(rocket.gravity_turn_rotation_rate, 20.0)
-        self.assertEqual(rocket.gravity_turn_min_velocity, 50.0)
+        self.assertEqual(rocket.gravity_turn_min_velocity, 10.0)
     
     def test_factory_with_gravity_turn(self):
         """Test factory with gravity turn parameters"""
@@ -175,15 +211,15 @@ class TestGravityTurnFactory(unittest.TestCase):
         builder = RocketBuilder()
         builder.with_position(np.array([0., 0., 0.]))
         builder.with_velocity(np.array([0., 0., 10.]))
-        builder.with_orientation(np.array([0., 0., 0., 1.]))
+        builder.with_attitude(np.array([0., 0., 0., 1.]))
         builder.with_angular_velocity(np.array([0., 0., 0.]))
-        builder.with_mass(10.0)
+        builder.with_initial_mass(10.0)
         builder.with_engine(engine)
         builder.with_atmosphere(atmosphere)
         builder.with_aerodynamics(aerodynamics)
         builder.with_reference_area(0.01)
-        builder.enable_gravity_turn(True)
-        builder.with_gravity_turn_rotation_rate(25.0)
+        builder.with_gravity_turn(True)
+        builder.with_gravity_turn_rate(25.0)
         builder.with_gravity_turn_min_velocity(75.0)
         builder.with_gravity_turn_use_relative_velocity(True)
         

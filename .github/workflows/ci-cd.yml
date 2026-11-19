@@ -64,6 +64,11 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
       
+      - name: Install Qt system libraries (headless PyQt6)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libglib2.0-0 libxkbcommon0 libxkbcommon-x11-0 libdbus-1-3 libfontconfig1
+      
       - name: Run linter (flake8)
         run: |
           echo "Running flake8 linter..."
@@ -82,6 +87,7 @@ jobs:
           pytest tests/ -v --tb=short --color=yes
         env:
           PYTHONPATH: .
+          QT_QPA_PLATFORM: offscreen
       
       - name: Run code formatting check (black)
         run: |

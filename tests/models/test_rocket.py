@@ -117,9 +117,8 @@ class TestRocket(unittest.TestCase):
     def test_mass_conservation(self):
         """Test mass consumption during burn
         
-        Note: Current implementation updates mass twice (once in Rocket.step() and 
-        once in the simulation integration), so the effective mass flow rate is doubled.
-        This test verifies the current behavior.
+        Mass is integrated once per RK4 step (dm/dt = -mass_flow), so the
+        expected consumption is mass_flow * dt * num_steps.
         """
         initial_mass = self.rocket.mass
         mass_flow = self.engine.mass_flow
@@ -131,9 +130,7 @@ class TestRocket(unittest.TestCase):
         for _ in range(num_steps):
             self.rocket.step(dt)
         
-        # Mass decreases at 2 * mass_flow rate due to double update
-        # (once in Rocket.step() and once in simulation integration)
-        expected_mass = initial_mass - 2 * mass_flow * dt * num_steps
+        expected_mass = initial_mass - mass_flow * dt * num_steps
         self.assertAlmostEqual(self.rocket.mass, expected_mass, places=3)
 
     def test_dependency_injection(self):
