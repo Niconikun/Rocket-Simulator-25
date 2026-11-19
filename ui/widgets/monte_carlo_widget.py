@@ -86,6 +86,7 @@ class MonteCarloWidget(BaseWidget):
         self._thread: QThread | None = None
         self._runner: MonteCarloRunner | None = None
         self._accumulated_runs: list[dict] = []   # grows as runs complete
+        self._failed_count: int = 0
         self._landing_canvas: _PlotCanvas | None = None
         self.init_ui()
         self._setup_event_bus()
@@ -450,6 +451,7 @@ class MonteCarloWidget(BaseWidget):
 
         # Reset accumulators
         self._accumulated_runs.clear()
+        self._failed_count = 0
         self.results_table.setRowCount(0)
         self._clear_landing_zone()
         self._reset_landing_summary()
@@ -509,6 +511,7 @@ class MonteCarloWidget(BaseWidget):
                 self._thread.terminate()
                 self._thread.wait(5000)
         self._accumulated_runs.clear()
+        self._failed_count = 0
         self.progress_bar.setValue(0)
         self.results_table.setRowCount(0)
         self._clear_landing_zone()
@@ -527,11 +530,17 @@ class MonteCarloWidget(BaseWidget):
         n_total = self.runs_spinbox.value()
         self.status_label.setText(
             f"Completed {len(self._accumulated_runs)} / {n_total}  "
-            f"(failed: {idx + 1 - len(self._accumulated_runs)})"
+            f"(failed: {self._failed_count})"
         )
 
     def _on_run_failed(self, idx: int, reason: str):
+        self._failed_count += 1
         logger.warning("Run %d failed: %s", idx, reason)
+        n_total = self.runs_spinbox.value()
+        self.status_label.setText(
+            f"Completed {len(self._accumulated_runs)} / {n_total}  "
+            f"(failed: {self._failed_count})"
+        )
 
     def _on_progress(self, pct: int):
         self.progress_bar.setValue(pct)
@@ -668,7 +677,10 @@ class MonteCarloWidget(BaseWidget):
         mode_txt = "Parachute descent" if self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False) else "Ballistic (no parachute)"
 
         if HAS_CARTOPY and has_coords:
-            return self._draw_map_landing_zone(fig, ix, iy, mean_x, mean_y, ellipse, lat0, lon0, mode_txt)
+            try:
+                return self._draw_map_landing_zone(fig, ix, iy, mean_x, mean_y, ellipse, lat0, lon0, mode_txt)
+            except Exception as map_err:
+                logger.warning("Map rendering failed (%s); falling back to local ENU plot", map_err)
         return self._draw_local_landing_zone(fig, ix, iy, mean_x, mean_y, ellipse, mode_txt, has_coords)
 
     def _draw_map_landing_zone(self, fig, ix, iy, mean_x, mean_y, ellipse, lat0, lon0, mode_txt) -> Figure:
@@ -698,14 +710,22 @@ class MonteCarloWidget(BaseWidget):
 
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
         ax.set_extent(extent, crs=ccrs.PlateCarree())
-        ax.add_feature(cfeature.NaturalEarthFeature(
-            'physical', 'land', res, facecolor='#e6dfa8', edgecolor='none'))
-        ax.add_feature(cfeature.NaturalEarthFeature(
-            'physical', 'ocean', res, facecolor='#a8d0e8', edgecolor='none'))
-        ax.add_feature(cfeature.NaturalEarthFeature(
-            'cultural', 'admin_0_countries', res, facecolor='none', edgecolor='#555555', linewidth=0.5))
-        ax.add_feature(cfeature.NaturalEarthFeature(
-            'physical', 'coastline', res, facecolor='none', edgecolor='#333333', linewidth=0.7))
+        features = [
+            cfeature.NaturalEarthFeature(
+                'physical', 'land', res, facecolor='#e6dfa8', edgecolor='none'),
+            cfeature.NaturalEarthFeature(
+                'physical', 'ocean', res, facecolor='#a8d0e8', edgecolor='none'),
+            cfeature.NaturalEarthFeature(
+                'cultural', 'admin_0_countries', res, facecolor='none', edgecolor='#555555', linewidth=0.5),
+            cfeature.NaturalEarthFeature(
+                'physical', 'coastline', res, facecolor='none', edgecolor='#333333', linewidth=0.7),
+        ]
+        # Force download/materialization now so a missing Natural Earth dataset
+        # raises here (caught by the caller) instead of during canvas paint
+        for feature in features:
+            list(feature.geometries())
+        for feature in features:
+            ax.add_feature(feature)
 
         lat_pts, lon_pts = self._enu_to_latlon(ix, iy, lat0, lon0)
         ax.scatter(lon_pts, lat_pts, transform=ccrs.PlateCarree(), s=8, alpha=0.35,
