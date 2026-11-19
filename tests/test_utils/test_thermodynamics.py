@@ -79,6 +79,60 @@ def test_sutherland_monotonic():
 
 
 # ---------------------------------------------------------------------------
+# Laminar-turbulent transition threshold
+# ---------------------------------------------------------------------------
+
+def test_transition_threshold_shared_constant():
+    from src.utils.thermodynamics import RE_LAMINAR_MAX
+    from src.utils.simulation_constants import AerodynamicsConstants as ADC
+    from src.models.panel_method import LAMINAR_TURBULENT_RE
+    assert RE_LAMINAR_MAX == ADC.LAMINAR_TURBULENT_RE == LAMINAR_TURBULENT_RE == 5.0e5
+
+
+def test_local_cf_laminar_vs_turbulent():
+    from src.utils.thermodynamics import _local_cf, RE_LAMINAR_MAX
+    re = np.array([1.0e5, 1.0e7])
+    turb = re > RE_LAMINAR_MAX
+    cf = _local_cf(re, turb)
+    assert cf[0] == pytest.approx(0.664 / math.sqrt(1.0e5))      # laminar Blasius
+    assert cf[1] == pytest.approx(0.0592 / 1.0e7 ** 0.2)           # turbulent
+    # below transition, laminar Cf is lower than the turbulent correlation
+    assert 0.664 / math.sqrt(1.0e5) < 0.0592 / 1.0e5 ** 0.2
+
+
+def test_regime_decided_at_reference_reynolds():
+    # campanil is L=1.19 m: at M=0.01 Re_L ~ 2.8e5 < 5e5 -> all laminar;
+    # at M=3 Re* is huge -> (nearly) all turbulent. The regime must follow the
+    # reference-temperature Re, not the freestream Re.
+    cfg = _campanil()
+    aero = _panel_aero(cfg)
+    aero.update(mach=0.01, angle_attack=1.0, height=0.0, density=1.225)
+    res_low = surface_heating(aero, 0.01, 0.0, 288.15, 101325.0)
+    assert res_low['re_star_max'] < 5.0e5
+    assert res_low['turbulent_fraction'] == pytest.approx(0.0)  # all laminar
+    aero.update(mach=3.0, angle_attack=1.0, height=0.0, density=1.225)
+    res_high = surface_heating(aero, 3.0, 0.0, 288.15, 101325.0)
+    assert res_high['turbulent_fraction'] > 0.9  # turbulent at M=3
+    assert res_high['max_heat_flux'] > res_low['max_heat_flux']
+
+
+def test_panel_skin_friction_laminar_branch():
+    # At very low Re (M=0.01, Re_L ~ 2.8e5 < 5e5) the panel drag must use the
+    # laminar (lower) Blasius Cf instead of the turbulent-only correlation.
+    # Same wetted area / roughness in both branches, so compare directly.
+    cfg = _campanil()
+    aero = _panel_aero(cfg)
+    aero.update(mach=0.01, angle_attack=0.0, height=0.0, density=1.225)
+    cd_laminar = aero._skin_friction_cd(0.01)
+    Re_L = aero.rho * (0.01 * aero.speed_of_sound) * aero.mesh.L / 1.789e-5
+    assert Re_L < 5.0e5
+    assert cd_laminar > 0
+    aero.update(mach=0.5, angle_attack=0.0, height=0.0, density=1.225)  # Re_L ~ 1.4e7, turbulent
+    cd_turbulent = aero._skin_friction_cd(0.5)
+    assert cd_laminar < 0.6 * cd_turbulent  # laminar Cf is ~4.8x lower at Re=2.8e5
+
+
+# ---------------------------------------------------------------------------
 # Surface heating on the panel method
 # ---------------------------------------------------------------------------
 

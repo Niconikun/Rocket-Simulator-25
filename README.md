@@ -69,7 +69,10 @@ Proyecto iniciado por Jorge Orozco (Universidad de Concepción, 2022) para la pr
 ### Termodinámica — Calentamiento Aerodinámico
 - Habilitado por el mapa de presión del método de paneles
   (`src/utils/thermodynamics.py`, solo con `method: "panel"` y `thermo_enabled`)
-- Por panel: Mach local desde la inversión isentrópica de `Cp`; temperatura de
+- Por panel: Mach local desde la inversión isentrópica de `Cp`; régimen de capa
+  límite laminar/turbulento según `Re_x` de referencia con umbral de transición
+  `Re_x ≈ 5×10⁵` (compartido con la fricción del método de paneles,
+  `LAMINAR_TURBULENT_RE`); temperatura de
   recuperación `T_r = T_e (1 + r (γ−1)/2 M_e²)` (r = Pr^½ laminar, Pr^⅓ turbulento);
   **temperatura de referencia de Eckert** `T* = 0.5(T_w + T_e) + 0.22(T_r − T_e)` con
   μ* (Sutherland), ρ* y cp*; Cf local de placa plana; **analogía de Reynolds**

@@ -38,6 +38,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
+from src.utils.simulation_constants import AerodynamicsConstants as ADC
+
 logger = logging.getLogger(__name__)
 
 GAMMA_AIR = 1.4
@@ -45,7 +47,9 @@ R_AIR = 287.05          # J/(kg K)
 PRANDTL = 0.71
 SUTHERLAND_C1 = 1.458e-6
 SUTHERLAND_S = 110.4    # K
-RE_LAMINAR_MAX = 5.0e5
+# Laminar-turbulent transition threshold (critical local Re_x, flat plate ~5e5).
+# Shared with the panel method skin friction via AerodynamicsConstants.
+RE_LAMINAR_MAX = ADC.LAMINAR_TURBULENT_RE
 
 RECOVERY_LAMINAR = PRANDTL ** 0.5    # ~0.84
 RECOVERY_TURBULENT = PRANDTL ** (1.0 / 3.0)  # ~0.89
@@ -138,8 +142,10 @@ def surface_heating(
     T_e = T_inf * (1.0 + 0.5 * (gamma - 1.0) * M_inf ** 2) / (1.0 + 0.5 * (gamma - 1.0) * M_e ** 2)
     p_e = p_inf * (1.0 + 0.5 * gamma * M_inf ** 2 * Cp)
 
-    # Boundary layer regime from local Reynolds number (evaluated at T*)
-    # iterate once: start with freestream Re to pick regime, then refine at T*
+    # Boundary layer regime: two passes. First guess at freestream properties,
+    # then re-decide at the reference-temperature Re (re_star) so that the
+    # regime, recovery factor and Cf all use the SAME Reynolds number
+    # (at high Mach T* >> T_inf, so re_star < re_x and the regime can flip).
     V_e = M_e * np.sqrt(gamma * R_AIR * T_e)
     # characteristic length per strip = x (distance from nose tip)
     x_len = np.maximum(x, 1e-3)[:, None]
@@ -147,15 +153,17 @@ def surface_heating(
     rho_inf = p_inf / (R_AIR * T_inf)
     re_x = rho_inf * np.maximum(V_e, 1e-6) * x_len / mu_inf
     turbulent = re_x > RE_LAMINAR_MAX
-    recovery = np.where(turbulent, RECOVERY_TURBULENT, RECOVERY_LAMINAR)
 
-    T_r = recovery_temperature(T_e, M_e, recovery, gamma)
-    T_star = eckert_reference_temperature(T_wall, T_e, T_r)
-    mu_star = sutherland_mu(T_star)
-    rho_star = p_e / (R_AIR * T_star)
+    for _ in range(2):
+        recovery = np.where(turbulent, RECOVERY_TURBULENT, RECOVERY_LAMINAR)
+        T_r = recovery_temperature(T_e, M_e, recovery, gamma)
+        T_star = eckert_reference_temperature(T_wall, T_e, T_r)
+        mu_star = sutherland_mu(T_star)
+        rho_star = p_e / (R_AIR * T_star)
+        re_star = rho_star * np.maximum(V_e, 1e-6) * x_len / mu_star
+        turbulent = re_star > RE_LAMINAR_MAX
     cp_star = gamma * R_AIR / (gamma - 1.0)
 
-    re_star = rho_star * np.maximum(V_e, 1e-6) * x_len / mu_star
     cf = _local_cf(re_star, turbulent)
 
     # Reynolds analogy
@@ -188,6 +196,8 @@ def surface_heating(
         'x_max': x_max, 'az_max': az_max,
         'stagnation_temperature': float(T_stag),
         'total_heat_load_rate': total_q,
+        'turbulent_fraction': float(np.mean(turbulent)),
+        're_star_max': float(np.max(re_star)),
     }
 
 

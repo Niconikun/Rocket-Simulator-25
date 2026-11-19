@@ -63,6 +63,8 @@ from src.utils.simulation_constants import (
     AtmosphereConstants as AC,
     AerodynamicsConstants as ADC,
 )
+
+LAMINAR_TURBULENT_RE = ADC.LAMINAR_TURBULENT_RE  # critical Re_x for transition (~5e5)
 from src.utils.simulation_errors import InputValidationError
 
 logger = logging.getLogger(__name__)
@@ -503,12 +505,21 @@ class PanelMethodAerodynamics(IAerodynamics):
         return C_N_fins, x_cp_fins, cd_form + cd_int
 
     def _skin_friction_cd(self, mach: float) -> float:
-        """Turbulent skin friction drag (Prandtl-Schlichting), as in Barrowman model."""
+        """Skin friction drag with laminar-turbulent transition.
+
+        Laminar Blasius below the critical Re_x (~5e5), turbulent
+        Prandtl-Schlichting (same constant as the Barrowman model) above.
+        """
         m = self.mesh
         mu = _calculate_dynamic_viscosity(self.temp)
         V = mach * self.speed_of_sound
         Re_L = (self.rho * V * m.L) / mu if V > 0 else 0.0
-        Cf = TURBULENT_SKIN_FRICTION_K / (Re_L ** 0.2) if Re_L > 0 else 0.0
+        if Re_L <= 0:
+            Cf = 0.0
+        elif Re_L < LAMINAR_TURBULENT_RE:
+            Cf = 0.664 / math.sqrt(Re_L)  # laminar flat plate (Blasius)
+        else:
+            Cf = TURBULENT_SKIN_FRICTION_K / (Re_L ** 0.2)  # turbulent
         A_wet = m.wetted_area
         if self.include_fins:
             fins = self.rocket_data.get('fins', {}) or {}
