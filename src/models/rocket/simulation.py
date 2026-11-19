@@ -326,7 +326,8 @@ class RocketSimulation:
             atmosphere=self.dynamics.atmosphere,
             reference_area=self.dynamics.reference_area,
             mass_properties=self.dynamics.mass_properties,
-            wind_vector_enu=self.dynamics.wind_vector_enu
+            wind_vector_enu=self.dynamics.wind_vector_enu,
+            parachute=self.dynamics.parachute
         )
         return temp_dynamics
     

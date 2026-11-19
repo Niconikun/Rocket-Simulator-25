@@ -282,7 +282,11 @@ class SimulationWorker(QThread):
         # Use cached atmosphere if available
         if self._cache is not None:
             rocket.set_atmosphere(atmosphere)
-            
+
+        # Attach the parachute so its drag is applied by the dynamics
+        if parachute is not None:
+            rocket.set_parachute(parachute)
+
         # ===== WIND MODEL INITIALIZATION (Phase 2) =====
         # Use cached wind model if available (Monte Carlo optimization)
         wind_config = self.state.get_all()
@@ -379,13 +383,14 @@ class SimulationWorker(QThread):
                 
                 # =============================================================
                 # PARACHUTE HANDLING
-                # In new architecture, parachute forces need to be applied
-                # to the dynamics before the step is taken
+                # The parachute is attached to the rocket (set_parachute), so
+                # rocket.step() updates its deployment state and the dynamics
+                # apply its drag force during integration.
                 # =============================================================
                 if parachute is not None:
                     current_altitude = rocket.state.r_enu[2]
                     vertical_velocity = abs(rocket.state.v_enu[2])
-                    
+
                     # Apogee-triggered drogue
                     is_descending = current_altitude < prev_altitude
                     if (is_descending and parachute.drogue_enabled
@@ -397,7 +402,7 @@ class SimulationWorker(QThread):
                             "Drogue deployed at apogee: altitude=%.1fm, t=%.2fs",
                             current_altitude, t,
                         )
-                    
+
                     # Altitude-based deployment checks
                     if parachute.check_deployment(current_altitude, vertical_velocity, t):
                         logger.info(
@@ -408,31 +413,12 @@ class SimulationWorker(QThread):
                         logger.info(
                             "Drogue deployed (altitude trigger): %.1fm", current_altitude
                         )
-                    
-                    # Advance inflation counter
+
                     parachute.update_inflation(timestep)
-                    
-                    # Apply parachute drag force
-                    # In new architecture, we apply it directly to the dynamics
                     if parachute.deployed:
-                        # Use ground-relative velocity (v_enu) for now
-                        # Note: For more accuracy, we could calculate relative velocity
-                        v_rel = rocket.state.v_enu
-                        speed_rel = float(np.linalg.norm(v_rel))
-                        if speed_rel > 0:
-                            # Get current density from atmosphere at absolute altitude
-                            current_density = atmosphere.give_dens(absolute_altitude)
-                            drag_force = parachute.calculate_drag_force(
-                                speed_rel, current_density
-                            )
-                            # Apply force opposite to velocity direction
-                            # This needs to be integrated into the rocket's forces
-                            # For now, we'll store it in the parachute for metrics
-                            parachute.max_descent_rate = max(
-                                parachute.max_descent_rate, vertical_velocity
-                            )
-                            # Log parachute drag
-                            logger.debug(f"Parachute drag: {drag_force:.1f}N at {current_altitude:.1f}m")
+                        parachute.max_descent_rate = max(
+                            parachute.max_descent_rate, vertical_velocity
+                        )
                 
                 # =============================================================
                 # Update metrics from rocket state
