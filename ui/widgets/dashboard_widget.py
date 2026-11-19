@@ -12,7 +12,7 @@ from ui.widgets import BaseWidget
 from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
-from typing import Optional
+from typing import Optional, Dict
 from src.utils.simulation_manager import SimulationManager
 from src.utils.event_bus import EventType, subscribe, unsubscribe
 import logging
