@@ -476,6 +476,5 @@ def get_cache() -> SimulationCache:
 
 def clear_cache() -> None:
     """Clear the global simulation cache."""
-    global _cache_instance
     if _cache_instance is not None:
         _cache_instance.clear()

@@ -64,6 +64,7 @@ import numpy as np
 from src.models.rocket.rocket import Rocket as NewRocket
 from src.models.rocket.state import RocketState
 from src.models.atmosphere import Atmosphere
+from src.config.constants import Constants
 from src.utils.simulation_constants import RocketConstants as RC
 from src.models.engine import EnhancedEngine
 from src.models.aerodynamics import Aerodynamics
@@ -154,6 +155,8 @@ class AerodynamicsConfig:
     fins: Dict[str, Any] = field(default_factory=dict)
     inertia_before: Dict[str, float] = field(default_factory=lambda: {'x': 0.1, 'y': 0.1, 'z': 0.05})
     inertia_after: Dict[str, float] = field(default_factory=lambda: {'x': 0.1, 'y': 0.1, 'z': 0.05})
+    method: str = 'barrowman'  # 'barrowman' | 'panel'
+    panel_options: Dict[str, Any] = field(default_factory=dict)  # n_axial, n_theta, include_fins, viscous_crossflow
 
 
 # =============================================================================
@@ -519,26 +522,31 @@ class RocketBuilder:
     def _create_aerodynamics_from_config(
         self, config: AerodynamicsConfig, atmosphere: IAtmosphere
     ) -> IAerodynamics:
-        """Create aerodynamics from configuration."""
-        return Aerodynamics(
+        """Create aerodynamics from configuration (Barrowman or panel method)."""
+        rocket_data = {
+            'reference_area': config.reference_area,
+            'geometry': config.geometry,
+            'fuselage': config.fuselage,
+            'nosecone': config.nosecone,
+            'rear_section': config.rear_section,
+            'fins': config.fins
+        }
+        mass_props = {
+            'CoM_before_burn': config.fuselage if config.fuselage else {'x': 0.5, 'y': 0, 'z': 0},
+            'CoM_after_burn': config.fuselage if config.fuselage else {'x': 0.6, 'y': 0, 'z': 0},
+            'I_before_burn': config.inertia_before,
+            'I_after_burn': config.inertia_after
+        }
+        return create_aerodynamics(
             mach=config.mach,
             angle_attack=config.angle_attack,
             height=config.height,
             atmosphere=atmosphere,
-            rocket_data={
-                'reference_area': config.reference_area,
-                'geometry': config.geometry,
-                'fuselage': config.fuselage,
-                'nosecone': config.nosecone,
-                'rear_section': config.rear_section,
-                'fins': config.fins
-            },
-            mass_props={
-                'CoM_before_burn': config.fuselage if config.fuselage else {'x': 0.5, 'y': 0, 'z': 0},
-                'CoM_after_burn': config.fuselage if config.fuselage else {'x': 0.6, 'y': 0, 'z': 0},
-                'I_before_burn': config.inertia_before,
-                'I_after_burn': config.inertia_after
-            }
+            rocket_config=rocket_data,
+            mass_props_before=mass_props['CoM_before_burn'],
+            mass_props_after=mass_props['CoM_after_burn'],
+            method=config.method,
+            panel_options=config.panel_options or None,
         )
     
     def _create_parachute_from_config(self, config: ParachuteConfig) -> Parachute:
@@ -677,7 +685,9 @@ def create_aerodynamics(
     atmosphere: IAtmosphere,
     rocket_config: dict,
     mass_props_before: Dict[str, float],
-    mass_props_after: Dict[str, float]
+    mass_props_after: Dict[str, float],
+    method: Optional[str] = None,
+    panel_options: Optional[Dict[str, Any]] = None
 ) -> IAerodynamics:
     """
     Create an aerodynamics instance from configuration.
@@ -690,6 +700,11 @@ def create_aerodynamics(
         rocket_config: Full rocket configuration dictionary
         mass_props_before: Center of mass and inertia before burn
         mass_props_after: Center of mass and inertia after burn
+        method: Aerodynamics method override: 'barrowman' (default) or 'panel'.
+            If None, uses rocket_config['aerodynamics']['method'] if present.
+        panel_options: Optional dict with panel method settings
+            (n_axial, n_theta, include_fins, viscous_crossflow); overrides
+            rocket_config['aerodynamics'] entries.
     
     Returns:
         IAerodynamics: Configured aerodynamics instance
@@ -719,6 +734,30 @@ def create_aerodynamics(
         'fins': fins,
     }
     
+    # Method selection: explicit argument > rocket config > default Barrowman
+    aero_cfg = rocket_config.get('aerodynamics', {}) or {}
+    method = (method or aero_cfg.get('method') or 'barrowman').lower()
+    
+    if method == 'panel':
+        from src.models.panel_method import PanelMethodAerodynamics
+        opts: Dict[str, Any] = {
+            k: aero_cfg[k]
+            for k in ('n_axial', 'n_theta', 'include_fins', 'viscous_crossflow')
+            if k in aero_cfg
+        }
+        if panel_options:
+            opts.update(panel_options)
+        logger.info(f"Creating panel method aerodynamics (options={opts})")
+        return PanelMethodAerodynamics(
+            mach=mach,
+            angle_attack=angle_attack,
+            height=height,
+            atmosphere=atmosphere,
+            rocket_data=rocket_data,
+            mass_props=mass_props,
+            **opts
+        )
+    
     # Create aerodynamics with geometry-based calculations (Barrowman method)
     aero = Aerodynamics(
         mach=mach,
@@ -730,6 +769,84 @@ def create_aerodynamics(
     )
     
     return aero
+
+
+VALID_AERO_METHODS = ('barrowman', 'panel')
+
+
+def validate_aerodynamics_section(aero_cfg: Optional[Dict[str, Any]]) -> Dict[str, list]:
+    """
+    Validate the optional 'aerodynamics' section of a rocket configuration.
+
+    Args:
+        aero_cfg: Value of rocket_config['aerodynamics'] (may be None/empty)
+
+    Returns:
+        {'errors': [...], 'warnings': [...]} - errors invalidate the config
+    """
+    report: Dict[str, list] = {'errors': [], 'warnings': []}
+    if not aero_cfg:
+        return report
+    if not isinstance(aero_cfg, dict):
+        report['errors'].append(f"'aerodynamics' must be an object, got {type(aero_cfg).__name__}")
+        return report
+    method = str(aero_cfg.get('method', 'barrowman')).lower()
+    if method not in VALID_AERO_METHODS:
+        report['errors'].append(
+            f"Invalid aerodynamics.method {aero_cfg.get('method')!r}: "
+            f"must be one of {VALID_AERO_METHODS}"
+        )
+    for key in ('n_axial', 'n_theta'):
+        if key in aero_cfg:
+            v = aero_cfg[key]
+            if isinstance(v, bool) or not isinstance(v, int) or v < 8:
+                report['errors'].append(f"aerodynamics.{key} must be an integer >= 8, got {v!r}")
+    for key in ('include_fins', 'viscous_crossflow', 'thermo_enabled'):
+        if key in aero_cfg and not isinstance(aero_cfg[key], bool):
+            report['errors'].append(f"aerodynamics.{key} must be a boolean, got {aero_cfg[key]!r}")
+    if method == 'panel' and 'thermo_enabled' in aero_cfg and aero_cfg['thermo_enabled']:
+        report['warnings'].append(
+            "aerodynamics.thermo_enabled=true requires the panel method at runtime; "
+            "heating metrics are only produced when method='panel'"
+        )
+    return report
+
+
+def aero_selection_from_state(getter) -> Tuple[Optional[str], Dict[str, Any]]:
+    """
+    Read the aerodynamics method and panel options from application state.
+
+    Args:
+        getter: Any object with .get(key, default) (StateProvider, dict, ...)
+
+    Returns:
+        (method, options): method is None to use the rocket config file default
+        ('barrowman' unless the file says otherwise), otherwise 'barrowman' or
+        'panel'. options holds panel settings (n_axial, n_theta, include_fins,
+        viscous_crossflow) for options explicitly set in the state.
+    """
+    method = getter.get(Constants.StateKeys.AERO_METHOD, 'default')
+    if method in (None, '', 'default'):
+        method = None
+    else:
+        method = str(method).lower()
+        if method not in VALID_AERO_METHODS:
+            logger.warning(f"Unknown aero_method {method!r} in state; using rocket file default")
+            method = None
+    options: Dict[str, Any] = {}
+    n_ax = getter.get(Constants.StateKeys.AERO_PANEL_N_AXIAL, None)
+    if n_ax is not None:
+        options['n_axial'] = int(n_ax)
+    n_th = getter.get(Constants.StateKeys.AERO_PANEL_N_THETA, None)
+    if n_th is not None:
+        options['n_theta'] = int(n_th)
+    inc = getter.get(Constants.StateKeys.AERO_INCLUDE_FINS, None)
+    if inc is not None:
+        options['include_fins'] = bool(inc)
+    vc = getter.get(Constants.StateKeys.AERO_VISCOUS_CROSSFLOW, None)
+    if vc is not None:
+        options['viscous_crossflow'] = bool(vc)
+    return method, options
 
 
 def create_mass_properties(
@@ -835,7 +952,10 @@ def create_rocket_from_config(
     enable_gravity_turn: bool = False,
     gravity_turn_rotation_rate: float = 20.0,
     gravity_turn_min_velocity: float = 10.0,
-    gravity_turn_use_relative_velocity: bool = False
+    gravity_turn_use_relative_velocity: bool = False,
+    # Aerodynamics method selection ('barrowman' | 'panel'); None = use config file
+    aero_method: Optional[str] = None,
+    aero_options: Optional[Dict[str, Any]] = None
 ) -> Tuple[NewRocket, dict, IEngine, IAerodynamics, IAtmosphere]:
     """
     Create a fully configured Rocket from a rocket configuration file.
@@ -863,6 +983,8 @@ def create_rocket_from_config(
         gravity_turn_rotation_rate: Max rotation rate [deg/s] (default: 20.0)
         gravity_turn_min_velocity: Minimum velocity to activate [m/s] (default: 10.0)
         gravity_turn_use_relative_velocity: Use air-relative velocity (default: False)
+        aero_method: Aerodynamics method override ('barrowman' | 'panel'); None = config file
+        aero_options: Optional panel method options (n_axial, n_theta, include_fins, ...)
     
     Returns:
         Tuple containing:
@@ -964,7 +1086,9 @@ def create_rocket_from_config(
         atmosphere=atmosphere,
         rocket_config=rocket_config,
         mass_props_before=mass_props_before,
-        mass_props_after=mass_props_after
+        mass_props_after=mass_props_after,
+        method=aero_method,
+        panel_options=aero_options
     )
     
     # Set aerodynamics on the rocket
@@ -1093,6 +1217,9 @@ __all__ = [
     'load_rocket_config',
     'create_engine',
     'create_aerodynamics',
+    'validate_aerodynamics_section',
+    'aero_selection_from_state',
+    'VALID_AERO_METHODS',
     'create_mass_properties',
     'create_wind_model',
     'create_parachute',

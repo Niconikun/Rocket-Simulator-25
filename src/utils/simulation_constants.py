@@ -163,6 +163,11 @@ class AerodynamicsConstants:
     # Skin friction coefficient for turbulent flow
     TURBULENT_SKIN_FRICTION_K = 0.074   # [-] Empirical constant for turbulent boundary layer
     
+    # Laminar-turbulent transition: critical local Reynolds number Re_x ~ 5e5
+    # (classic flat-plate value; used by the panel method skin friction and by
+    # the thermodynamics module to pick the recovery factor / Cf regime)
+    LAMINAR_TURBULENT_RE = 5.0e5        # [-] Critical Re_x for boundary-layer transition
+    
     # Drag model components
     SKIN_FRICTION_K1 = 0.0010          # Skin friction coefficient
     PRESSURE_DRAG_FACTOR = 0.5         # Pressure drag multiplier

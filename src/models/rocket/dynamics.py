@@ -107,6 +107,7 @@ class RocketDynamics:
         self._alpha: float = 0.0
         self._density: float = 0.0
         self._v_sonic: float = 0.0
+        self._v_rel_b: np.ndarray = np.zeros(3)
         
         # Force/torque results (cached)
         self._forces_aero_b: Optional[np.ndarray] = None
@@ -174,15 +175,46 @@ class RocketDynamics:
             self._torques_aero_b = np.zeros(3)
             return self._forces_aero_b.copy(), self._torques_aero_b.copy()
         
-        # Update aerodynamics
-        self.aerodynamics.update(
-            mach=self._mach,
-            angle_attack=self._alpha,
-            height=self.state.r_enu[2],  # Altitude is Z in ENU
-            density=self._density
-        )
+        # Update aerodynamics. If the model accepts the full body-frame relative
+        # velocity (e.g. the panel method), pass it so sideslip is preserved;
+        # otherwise fall back to the scalar angle-of-attack contract.
+        if getattr(self.aerodynamics, 'accepts_v_rel_body', False):
+            self.aerodynamics.update(
+                mach=self._mach,
+                angle_attack=self._alpha,
+                height=self.state.r_enu[2],  # Altitude is Z in ENU
+                density=self._density,
+                v_rel_body=self._v_rel_b
+            )
+        else:
+            self.aerodynamics.update(
+                mach=self._mach,
+                angle_attack=self._alpha,
+                height=self.state.r_enu[2],  # Altitude is Z in ENU
+                density=self._density
+            )
         
-        # Get coefficients
+        # Get center of mass
+        if self.mass_properties is not None:
+            # Calculate burn fraction from mass
+            burn_fraction = self.mass_properties.get_burn_fraction(self.state.mass)
+            cm_b = self.mass_properties.get_center_of_mass(burn_fraction)
+        else:
+            # Use simple approximation
+            cm_b = np.array([0.5, 0.0, 0.0])
+        
+        # Full 6-DOF panel path: the aero model returns force and moment about
+        # the CoM directly from its surface pressure integration
+        get_fm = getattr(self.aerodynamics, 'get_force_moment_body', None)
+        if callable(get_fm):
+            forces_aero_b, torques_aero_b = get_fm(
+                self._dynamic_pressure, self.reference_area, cm_b
+            )
+            self._forces_aero_b = np.asarray(forces_aero_b, dtype=float)
+            self._torques_aero_b = np.asarray(torques_aero_b, dtype=float)
+            return self._forces_aero_b.copy(), self._torques_aero_b.copy()
+        
+        # Scalar fallback: drag/lift coefficients + center of pressure
         cd, cl = self.aerodynamics.get_coefficients()
         cp_b = self.aerodynamics.get_center_of_pressure()
         
@@ -195,15 +227,6 @@ class RocketDynamics:
         forces_drag_b = np.array([-drag_force, 0.0, 0.0])
         forces_lift_b = np.array([0.0, 0.0, lift_force])
         forces_aero_b = forces_drag_b + forces_lift_b
-        
-        # Get center of mass
-        if self.mass_properties is not None:
-            # Calculate burn fraction from mass
-            burn_fraction = self.mass_properties.get_burn_fraction(self.state.mass)
-            cm_b = self.mass_properties.get_center_of_mass(burn_fraction)
-        else:
-            # Use simple approximation
-            cm_b = np.array([0.5, 0.0, 0.0])
         
         # Calculate torque: cm2cp x forces
         cm2cp_b = cm_b - cp_b
@@ -431,6 +454,9 @@ class RocketDynamics:
         # This is a simplified calculation; real implementation would use relative velocity
         from src.utils.mattools import MatTools as Mat
         v_b = Mat.q_rot(v_rel_enu, self.state.q_enu2b, 0)
+        # Keep the full body-frame relative velocity: aero models that accept it
+        # (e.g. panel method, accepts_v_rel_body) use it to capture sideslip too
+        self._v_rel_b = v_b
         if v_rel_norm > 0:
             # Angle of attack: angle between velocity vector and body X-axis
             v_x = v_b[0]
