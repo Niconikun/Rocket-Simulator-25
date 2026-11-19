@@ -172,6 +172,14 @@ class MonteCarloSampler:
         """
         return [self.sample() for _ in range(n)]
 
+    def draw_seed(self) -> int:
+        """Draw a non-negative 31-bit integer from the same RNG stream.
+
+        Useful for per-run seeds of stochastic sub-models (e.g. wind gusts):
+        keeps the whole batch reproducible from the sampler seed.
+        """
+        return int(self._rng.integers(0, 2**31 - 1))
+
     def reset(self, seed: Optional[int] = None) -> None:
         """Re-seed the RNG and reset the run counter."""
         self._rng = np.random.default_rng(seed)
