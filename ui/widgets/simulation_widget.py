@@ -88,7 +88,7 @@ class SimulationWidget(BaseWidget):
         
         # Date
         self.date_edit = QDateEdit()
-        current_date = self.state.get(Constants.StateKeys.SIM_DATE)
+        current_date = self.state.get(Constants.StateKeys.SIM_DATE) or datetime.now().date()
         self.date_edit.setDate(QDate(current_date.year, current_date.month, current_date.day))
         self.date_edit.dateChanged.connect(
             lambda d: self.state.set(Constants.StateKeys.SIM_DATE, d.toPyDate())
@@ -97,8 +97,8 @@ class SimulationWidget(BaseWidget):
         
         # Time
         self.time_edit = QTimeEdit()
-        current_time = self.state.get(Constants.StateKeys.SIM_TIME)
-        self.time_edit.setTime(QTime(current_time.hour, current_time.minute))
+        current_time = self.state.get(Constants.StateKeys.SIM_TIME) or datetime.now().time()
+        self.time_edit.setTime(QTime(current_time.hour, current_time.minute, current_time.second))
         self.time_edit.timeChanged.connect(
             lambda t: self.state.set(Constants.StateKeys.SIM_TIME, t.toPyTime())
         )
@@ -380,12 +380,20 @@ class SimulationWidget(BaseWidget):
             if sim_id:
                 self.simulation_saved.emit(sim_id)
             
-            QMessageBox.information(
-                self, tr("Success"),
-                f"{tr('Simulation completed successfully!')}\n\n"
-                f"{tr('Results saved with ID:')}\n{sim_id}\n\n"
-                f"{tr('You can view them in the Dashboard.')}"
-            )
+            term = ((results.get('metrics', {}) or {}).get('runtime_diagnostics', {}) or {}).get('termination_reason', '')
+            stopped_by_user = isinstance(term, str) and term.startswith('USER_STOP')
+            if stopped_by_user:
+                QMessageBox.information(
+                    self, tr("Stopped"),
+                    f"{tr('Simulation stopped by user. Partial results saved with ID:')}\n{sim_id}"
+                )
+            else:
+                QMessageBox.information(
+                    self, tr("Success"),
+                    f"{tr('Simulation completed successfully!')}\n\n"
+                    f"{tr('Results saved with ID:')}\n{sim_id}\n\n"
+                    f"{tr('You can view them in the Dashboard.')}"
+                )
             logger.info(f"Simulation saved with ID: {sim_id}")
         except Exception as e:
             logger.error(f"Error saving simulation: {e}")
@@ -467,16 +475,16 @@ class SimulationWidget(BaseWidget):
         """Reset simulation parameters to defaults."""
         self.stop_simulation()
 
-        # Reset UI elements
+        # Reset UI elements to the configured defaults
         self.progress_bar.setValue(0)
-        self.runtime_spinbox.setValue(600)
-        self.timestep_spinbox.setValue(0.001)
-        self.temp_spinbox.setValue(20.0)
-        self.pressure_spinbox.setValue(101325.0)
-        self.elevation_spinbox.setValue(60.0)
-        self.launch_angle_spinbox.setValue(85.0)
-        self.launch_azimuth_spinbox.setValue(0.0)
-        self.launch_roll_spinbox.setValue(0.0)
+        self.runtime_spinbox.setValue(Constants.Simulation.DEFAULT_RUNTIME)
+        self.timestep_spinbox.setValue(Constants.Simulation.DEFAULT_TIMESTEP)
+        self.temp_spinbox.setValue(Constants.Environmental.DEFAULT_TEMPERATURE)
+        self.pressure_spinbox.setValue(Constants.Environmental.DEFAULT_PRESSURE)
+        self.elevation_spinbox.setValue(Constants.Environmental.DEFAULT_ELEVATION)
+        self.launch_angle_spinbox.setValue(Constants.Simulation.DEFAULT_LAUNCH_ANGLE)
+        self.launch_azimuth_spinbox.setValue(Constants.Simulation.DEFAULT_LAUNCH_AZIMUTH)
+        self.launch_roll_spinbox.setValue(Constants.Simulation.DEFAULT_LAUNCH_ROLL)
         self.timezone_combo.setCurrentText('UTC')
         
         # Reset state

@@ -192,7 +192,7 @@ class EventBus(QObject):
     def __init__(self):
         """Initialize the event bus."""
         super().__init__()
-        self._subscribers: Dict[EventType, List[weakref.ReferenceType[Callable]]] = {}
+        self._subscribers: Dict[EventType, List[Any]] = {}
         self._metrics = EventMetrics()
         self._metrics_lock = Lock()
         # Connect the signal to the internal handler
@@ -236,8 +236,14 @@ class EventBus(QObject):
         if event_type not in self._subscribers:
             self._subscribers[event_type] = []
         
-        # Use weak reference to avoid memory leaks
-        self._subscribers[event_type].append(weakref.ref(callback))
+        # Use weak references to avoid memory leaks. Bound methods must use
+        # WeakMethod: a plain weakref to a bound method dies as soon as
+        # subscribe() returns, silently dropping the subscription.
+        if hasattr(callback, "__self__"):
+            ref = weakref.WeakMethod(callback)
+        else:
+            ref = weakref.ref(callback)
+        self._subscribers[event_type].append(ref)
         
         # Update metrics
         with self._metrics_lock:

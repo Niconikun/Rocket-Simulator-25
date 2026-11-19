@@ -213,6 +213,7 @@ class RocketBuilder:
         # Other parameters
         self._reference_area: float = 0.01
         self._temperature: float = 15.0
+        self._launch_elevation: float = 0.0
         
         # Gravity turn parameters
         self._enable_gravity_turn: bool = False
@@ -341,6 +342,11 @@ class RocketBuilder:
         """Set reference area for aerodynamics."""
         self._reference_area = float(reference_area)
         return self
+
+    def with_launch_elevation(self, launch_elevation: float) -> 'RocketBuilder':
+        """Set launch site elevation above sea level [m]."""
+        self._launch_elevation = float(launch_elevation)
+        return self
     
     # -------------------------------------------------------------------------
     # Validation
@@ -452,6 +458,7 @@ class RocketBuilder:
             wind_vector_enu=self._wind_vector_enu,
             wind_model=wind_model,
             parachute=parachute,
+            launch_elevation=self._launch_elevation,
             # Gravity turn parameters
             enable_gravity_turn=self._enable_gravity_turn,
             gravity_turn_rotation_rate=self._gravity_turn_rotation_rate,
@@ -720,8 +727,8 @@ def create_aerodynamics(
     mass_props = {
         'CoM_before_burn': mass_props_before,
         'CoM_after_burn': mass_props_after,
-        'I_before_burn': mass_props_before,  # Simplified - in reality these might differ
-        'I_after_burn': mass_props_after,
+        'I_before_burn': inertia_before if inertia_before is not None else mass_props_before,
+        'I_after_burn': inertia_after if inertia_after is not None else mass_props_after,
     }
     
     # Build rocket data dict (for aerodynamics calculations)
@@ -1036,20 +1043,13 @@ def create_rocket_from_config(
     # Get reference area from config or use provided
     ref_area = reference_area if reference_area is not None else rocket_config.get('reference_area', 0.01)
     
-    # Get gravity turn parameters from config if not provided
+    # Gravity turn: explicit arguments take precedence, otherwise use the
+    # rocket config's 'gravity_turn' section, otherwise the defaults
     gravity_turn_config = rocket_config.get('gravity_turn', {})
-    if 'enable_gravity_turn' in locals():
-        # Use provided parameters
-        gt_enabled = enable_gravity_turn
-        gt_rotation_rate = gravity_turn_rotation_rate
-        gt_min_velocity = gravity_turn_min_velocity
-        gt_use_relative = gravity_turn_use_relative_velocity
-    else:
-        # Use config file parameters
-        gt_enabled = gravity_turn_config.get('enabled', False)
-        gt_rotation_rate = gravity_turn_config.get('rotation_rate', 20.0)
-        gt_min_velocity = gravity_turn_config.get('min_velocity', 10.0)
-        gt_use_relative = gravity_turn_config.get('use_relative_velocity', False)
+    gt_enabled = enable_gravity_turn if enable_gravity_turn is not None else gravity_turn_config.get('enabled', False)
+    gt_rotation_rate = gravity_turn_rotation_rate if gravity_turn_rotation_rate is not None else gravity_turn_config.get('rotation_rate', 20.0)
+    gt_min_velocity = gravity_turn_min_velocity if gravity_turn_min_velocity is not None else gravity_turn_config.get('min_velocity', 10.0)
+    gt_use_relative = gravity_turn_use_relative_velocity if gravity_turn_use_relative_velocity is not None else gravity_turn_config.get('use_relative_velocity', False)
     
     # Create rocket with dependency injection
     rocket = NewRocket(
@@ -1066,6 +1066,7 @@ def create_rocket_from_config(
         wind_model=wind_model,
         parachute=parachute,
         propellant_mass=propellant_mass,
+        launch_elevation=launch_elevation,
         # Gravity turn parameters
         enable_gravity_turn=gt_enabled,
         gravity_turn_rotation_rate=gt_rotation_rate,

@@ -309,7 +309,8 @@ class IParachute(ABC):
     """
     
     @abstractmethod
-    def update(self, velocity: float, altitude: float, density: float) -> None:
+    def update(self, velocity: float, altitude: float, density: float,
+               time: Optional[float] = None) -> None:
         """
         Update parachute state based on flight conditions.
         

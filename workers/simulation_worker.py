@@ -451,7 +451,7 @@ class SimulationWorker(QThread):
                     # Apogee-triggered drogue
                     is_descending = current_altitude < prev_altitude
                     if (is_descending and parachute.drogue_enabled
-                            and not parachute._drogue_deployed):
+                            and not parachute.drogue_deployed):
                         parachute._drogue_deployed = True
                         parachute.drogue_deployment_time = t
                         parachute.drogue_deployment_altitude_actual = current_altitude
@@ -492,7 +492,8 @@ class SimulationWorker(QThread):
                 try:
                     accel_magnitude = 0.0
                     if len(rocket.simulation.history.forces) > 0:
-                        last_force = rocket.simulation.history.forces[-1]
+                        last_force_b = rocket.simulation.history.forces[-1]
+                        last_q = rocket.simulation.history.attitudes[-1]
                         last_mass = rocket.simulation.history.masses[-1]
                         if last_mass > 0:
                             accel_magnitude = _total_accel_magnitude(
@@ -576,9 +577,10 @@ class SimulationWorker(QThread):
                     
                 prev_altitude = current_altitude
                     
-                # Emit progress
+                # Emit progress at most ~100 times to avoid flooding the GUI queue
                 progress_value = (i + 1) / num_steps
-                self.progress.emit(progress_value)
+                if i % max(1, num_steps // 100) == 0 or i == num_steps - 1:
+                    self.progress.emit(progress_value)
                     
                 # Check termination conditions
                 if current_altitude <= 0 and t > 1.0:
@@ -635,9 +637,9 @@ class SimulationWorker(QThread):
         if rocket.engine is not None:
             metrics['propulsion'] = {
                 'thrust_source': getattr(rocket.engine, 'thrust_source', 'analytical'),
-                'propellant_consumed': getattr(rocket.engine, 'total_mass_flow', 0.0),
-                'remaining_propellant': getattr(rocket.engine, 'propellant_mass', 0.0) - getattr(rocket.engine, 'total_mass_flow', 0.0),
-                'total_impulse_delivered': getattr(rocket.engine, 'total_impulse', 0.0),
+                'propellant_consumed': getattr(rocket.engine, 'propellant_consumed', 0.0),
+                'remaining_propellant': getattr(rocket.engine, 'remaining_propellant', 0.0),
+                'total_impulse_delivered': getattr(rocket.engine, 'total_impulse_delivered', 0.0),
                 'burnout_reached': getattr(rocket.engine, 'burnout_reached', False),
                 'configured_propellant_mass': rocket_config['engine'].get('propellant_mass', 0.0),
                 'configured_burn_time': rocket_config['engine'].get('burn_time', 0.0),
@@ -680,6 +682,8 @@ class SimulationWorker(QThread):
             
         # ===== PARACHUTE METRICS =====
         if parachute is not None:
+            if parachute.is_deployed():
+                parachute.landing_speed = abs(float(rocket.state.v_enu[2]))
             parachute_metrics = parachute.finalize()
             metrics.update(parachute_metrics)
             if parachute.deployed:
@@ -745,31 +749,25 @@ class SimulationWorker(QThread):
                         v_by_list.append(0.0)
                         v_bz_list.append(0.0)
                 
-                # Extract forces (thrust, drag, lift)
-                hist_forces = rocket.simulation.history.forces if hasattr(rocket.simulation.history, 'forces') else []
-                thrust_list = []
-                drag_list = []
-                lift_list = []
-                if len(hist_forces) > 0:
-                    for force in hist_forces:
-                        if len(force) >= 3:
-                            thrust_list.append(float(np.abs(force[0])))
-                            drag_list.append(float(np.linalg.norm(force)))
-                            lift_list.append(0.0)
-                        else:
-                            thrust_list.append(0.0)
-                            drag_list.append(0.0)
-                            lift_list.append(0.0)
+                # Extract forces (thrust, drag, lift) from the per-component history.
+                # Body frame: engine force is +X (thrust), aero force is -X drag + +Z lift.
+                hist_forces_engine = getattr(rocket.simulation.history, 'forces_engine', [])
+                hist_forces_aero = getattr(rocket.simulation.history, 'forces_aero', [])
+                if len(hist_forces_engine) == history_length and len(hist_forces_aero) == history_length:
+                    thrust_list = [float(f[0]) for f in hist_forces_engine]
+                    drag_list = [float(abs(f[0])) for f in hist_forces_aero]
+                    lift_list = [float(abs(f[2])) for f in hist_forces_aero]
                 else:
                     thrust_list = [0.0] * history_length
                     drag_list = [0.0] * history_length
                     lift_list = [0.0] * history_length
                 
-                # Extract atmospheric data
+                # Extract atmospheric data (ASL = AGL + launch elevation) and mach
                 density_list = []
                 pressure_list = []
                 mach_list = []
-                
+                v_sonic_list = []
+
                 for pos in hist_positions:
                     alt = float(pos[2]) + altitude
                     density_list.append(float(atmosphere.give_dens(alt)))
@@ -802,9 +800,30 @@ class SimulationWorker(QThread):
                     alpha_list = [t_al.get(tt, 0.0) for tt in times_list]
                     xcp_list = [t_xcp.get(tt, 0.0) for tt in times_list]
                 
-                # Center of mass and center of pressure
-                cm_b_list = [[0.0, 0.0, 0.0] for _ in range(history_length)]
-                cp_b_list = [[0.0, 0.0, 0.0] for _ in range(history_length)]
+                # Aerodynamic coefficients from history
+                hist_coeffs = getattr(rocket.simulation.history, 'coeffs', [])
+                if len(hist_coeffs) == history_length:
+                    drag_coeff_list = [float(c[0]) for c in hist_coeffs]
+                    lift_coeff_list = [float(c[1]) for c in hist_coeffs]
+                else:
+                    drag_coeff_list = [0.0] * history_length
+                    lift_coeff_list = [0.0] * history_length
+
+                # Center of pressure from history, center of mass from mass properties
+                hist_cp = getattr(rocket.simulation.history, 'cp_b', [])
+                if len(hist_cp) == history_length:
+                    cp_b_list = [[float(c) for c in cp] for cp in hist_cp]
+                else:
+                    cp_b_list = [[0.0, 0.0, 0.0] for _ in range(history_length)]
+
+                mp = rocket.mass_properties
+                if mp is not None:
+                    cm_b_list = [
+                        [float(x) for x in mp.get_center_of_mass(mp.get_burn_fraction(float(m)))]
+                        for m in masses_list
+                    ]
+                else:
+                    cm_b_list = [[0.0, 0.0, 0.0] for _ in range(history_length)]
                 
                 # Build the final history data in dashboard format
                 history_data = {

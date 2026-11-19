@@ -171,22 +171,8 @@ all = [
 # Package directory structure
 package-dir = {"" = "."}
 
-# Include all Python packages
-packages = [
-    "src",
-    "src.config",
-    "src.models",
-    "src.models.rocket",
-    "src.models.engine",
-    "src.models.engine.grains",
-    "src.models.engine.mathlib",
-    "src.utils",
-    "models",
-    "ui",
-    "ui.widgets",
-    "ui.components",
-    "workers",
-]
+# Scripts to include
+scripts = ["main.py", "build_exe.py", "add_aero_methods.py"]
 
 # Scripts to include
 scripts = ["main.py", "build_exe.py", "add_aero_methods.py"]
