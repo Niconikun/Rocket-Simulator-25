@@ -50,6 +50,7 @@ class TestRocketSettingsWidgetInstantiation(unittest.TestCase):
             "Geometry",
             "Nosecone",
             "Fins",
+            "Aerodynamics",
             "Stability",
             "Thrust Curves"
         ]
@@ -169,18 +170,18 @@ class TestRocketSettingsWidgetDataLoading(unittest.TestCase):
                 'thrust_to_weight_ratio': 10.0
             },
             'geometry': {
-                'total length': 2000.0,
-                'length nosecone fins': 1000.0,
-                'total_length': 2000.0,
-                'length_nosecone_fins': 1000.0
+                'total length': 2.0,
+                'length nosecone fins': 1.0,
+                'total_length': 2.0,
+                'length_nosecone_fins': 1.0
             },
-            'fuselage': {'length': 1500.0, 'diameter': 120.0},
-            'rear_section': {'length': 200.0, 'diameter': 100.0},
+            'fuselage': {'length': 1.5, 'diameter': 0.12},
+            'rear_section': {'length': 0.2, 'diameter': 0.1},
             'nosecone': {
                 'type': 'Ogive',
                 'shape': 'ogive',
-                'length': 300.0,
-                'diameter': 120.0,
+                'length': 0.3,
+                'diameter': 0.12,
                 'ogive_radius': 500.0,
                 'parabolic_parameter': 0.5,
                 'power_value': 0.5,

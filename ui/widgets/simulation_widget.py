@@ -60,7 +60,8 @@ class SimulationWidget(BaseWidget):
         # Runtime
         self.runtime_spinbox = QSpinBox()
         self.runtime_spinbox.setRange(Constants.Simulation.MIN_RUNTIME, Constants.Simulation.MAX_RUNTIME)
-        self.runtime_spinbox.setValue(self.state.get(Constants.StateKeys.SIM_RUNTIME, Constants.Simulation.DEFAULT_RUNTIME))
+        # QSpinBox.setValue requires int; state values may be float (e.g. from JSON)
+        self.runtime_spinbox.setValue(int(self.state.get(Constants.StateKeys.SIM_RUNTIME, Constants.Simulation.DEFAULT_RUNTIME)))
         self.runtime_spinbox.setSuffix(tr(" seconds"))
         self.runtime_spinbox.valueChanged.connect(
             lambda v: self.state.set(Constants.StateKeys.SIM_RUNTIME, v)
@@ -177,7 +178,7 @@ class SimulationWidget(BaseWidget):
         self.aero_n_axial_spinbox = QSpinBox()
         self.aero_n_axial_spinbox.setRange(8, 200)
         self.aero_n_axial_spinbox.setValue(
-            self.state.get(Constants.StateKeys.AERO_PANEL_N_AXIAL, 48))
+            int(self.state.get(Constants.StateKeys.AERO_PANEL_N_AXIAL, 48)))
         self.aero_n_axial_spinbox.valueChanged.connect(
             lambda v: self.state.set(Constants.StateKeys.AERO_PANEL_N_AXIAL, v))
         aero_layout.addRow(tr("Panel axial strips:"), self.aero_n_axial_spinbox)
@@ -185,7 +186,7 @@ class SimulationWidget(BaseWidget):
         self.aero_n_theta_spinbox = QSpinBox()
         self.aero_n_theta_spinbox.setRange(8, 64)
         self.aero_n_theta_spinbox.setValue(
-            self.state.get(Constants.StateKeys.AERO_PANEL_N_THETA, 16))
+            int(self.state.get(Constants.StateKeys.AERO_PANEL_N_THETA, 16)))
         self.aero_n_theta_spinbox.valueChanged.connect(
             lambda v: self.state.set(Constants.StateKeys.AERO_PANEL_N_THETA, v))
         aero_layout.addRow(tr("Panel azimuth divisions:"), self.aero_n_theta_spinbox)
