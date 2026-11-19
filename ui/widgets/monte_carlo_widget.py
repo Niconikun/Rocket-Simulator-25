@@ -22,12 +22,10 @@ from matplotlib.figure import Figure
 import matplotlib.patches as mpatches
 from scipy.stats import chi2
 from ui.widgets import BaseWidget
-from models.app_state import ApplicationState
 from src.models.state import StateProvider
 from src.config import Constants
 from src.utils.event_bus import EventType, publish, subscribe, unsubscribe
 from typing import Optional
-from src.utils.simulation_manager import SimulationManager
 from src.utils.monte_carlo_aggregator import MonteCarloAggregator
 from workers.monte_carlo_runner import MonteCarloRunner
 from datetime import datetime
@@ -197,7 +195,9 @@ class MonteCarloWidget(BaseWidget):
         self.seed_spinbox = QSpinBox()
         self.seed_spinbox.setSpecialValueText("Random")
         self.seed_spinbox.setRange(0, 999999)
-        self.seed_spinbox.setValue(0)
+        self.seed_spinbox.setValue(self.state.get(Constants.StateKeys.MONTE_CARLO_SEED, 0))
+        self.seed_spinbox.valueChanged.connect(
+            lambda v: self.state.set(Constants.StateKeys.MONTE_CARLO_SEED, v))
         run_form.addRow("RNG Seed (0 = random):", self.seed_spinbox)
 
         self.workers_spinbox = QSpinBox()
@@ -223,15 +223,23 @@ class MonteCarloWidget(BaseWidget):
                 w.setSuffix(f"  {suffix}")
             return w
 
-        self.sigma_elev   = _dspin(1.0, 0, 45, suffix="°")
-        self.sigma_az     = _dspin(2.0, 0, 45, suffix="°")
-        self.sigma_temp   = _dspin(2.0, 0, 20, suffix="°C")
-        self.sigma_wind   = _dspin(1.0, 0, 50, suffix="m/s  (only if wind enabled)")
-        self.sigma_winddir= _dspin(10.0, 0, 90, suffix="°  (only if wind enabled)")
-        self.sigma_para_alt = _dspin(10.0, 0, 200, suffix="m  (only if chute enabled)")
-        self.sigma_para_cd  = _dspin(0.075, 0, 1.0, decimals=3, suffix="(only if chute enabled)")
-        self.sigma_drogue_alt = _dspin(15.0, 0, 300, suffix="m  (only if drogue enabled)")
-        self.sigma_drogue_cd  = _dspin(0.075, 0, 1.0, decimals=3, suffix="(only if drogue enabled)")
+        mc = Constants.MonteCarlo
+        sigmas = self.state.get(Constants.StateKeys.MONTE_CARLO_SIGMAS, {}) or {}
+
+        def _sig_dspin(key, default, lo, hi, decimals=2, suffix=""):
+            w = _dspin(sigmas.get(key, default), lo, hi, decimals, suffix)
+            w.valueChanged.connect(lambda v, k=key: self._persist_sigma(k, v))
+            return w
+
+        self.sigma_elev   = _sig_dspin('elevation', mc.DEFAULT_SIGMA_ELEVATION, 0, 45, suffix="°")
+        self.sigma_az     = _sig_dspin('azimuth', mc.DEFAULT_SIGMA_AZIMUTH, 0, 45, suffix="°")
+        self.sigma_temp   = _sig_dspin('temperature', mc.DEFAULT_SIGMA_TEMPERATURE, 0, 20, suffix="°C")
+        self.sigma_wind   = _sig_dspin('wind_speed', mc.DEFAULT_SIGMA_WIND_SPEED, 0, 50, suffix="m/s  (only if wind enabled)")
+        self.sigma_winddir= _sig_dspin('wind_direction', mc.DEFAULT_SIGMA_WIND_DIRECTION, 0, 90, suffix="°  (only if wind enabled)")
+        self.sigma_para_alt = _sig_dspin('parachute_altitude', mc.DEFAULT_SIGMA_PARACHUTE_ALTITUDE, 0, 200, suffix="m  (only if chute enabled)")
+        self.sigma_para_cd  = _sig_dspin('parachute_cd', mc.DEFAULT_SIGMA_PARACHUTE_CD, 0, 1.0, decimals=3, suffix="(only if chute enabled)")
+        self.sigma_drogue_alt = _sig_dspin('drogue_altitude', mc.DEFAULT_SIGMA_DROGUE_ALTITUDE, 0, 300, suffix="m  (only if drogue enabled)")
+        self.sigma_drogue_cd  = _sig_dspin('drogue_cd', mc.DEFAULT_SIGMA_DROGUE_CD, 0, 1.0, decimals=3, suffix="(only if drogue enabled)")
 
         unc_form.addRow("Launch elevation angle σ:", self.sigma_elev)
         unc_form.addRow("Launch azimuth σ:",          self.sigma_az)
@@ -353,6 +361,12 @@ class MonteCarloWidget(BaseWidget):
     # Flight-mode / landing-zone helpers
     # ------------------------------------------------------------------
 
+    def _persist_sigma(self, key: str, value: float) -> None:
+        """Persist one sigma override into the state dict."""
+        sigmas = dict(self.state.get(Constants.StateKeys.MONTE_CARLO_SIGMAS, {}) or {})
+        sigmas[key] = float(value)
+        self.state.set(Constants.StateKeys.MONTE_CARLO_SIGMAS, sigmas)
+
     def _refresh_mode_labels(self):
         """Reflect the currently configured descent mode and wind model."""
         parachute_on = self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False)
@@ -417,10 +431,13 @@ class MonteCarloWidget(BaseWidget):
         temp = float(self.state.get(Constants.StateKeys.AVERAGE_TEMPERATURE, 20.0))
         extra[Constants.StateKeys.AVERAGE_TEMPERATURE] = ParameterConfig(
             'normal', nominal=temp,
-            sigma=self.sigma_temp.value(), low=-50.0, high=55.0)
+            sigma=self.sigma_temp.value(),
+            low=Constants.Environmental.MIN_TEMPERATURE,
+            high=Constants.Environmental.MAX_TEMPERATURE)
 
         if self.state.get(Constants.StateKeys.WIND_ENABLED, False):
-            ws = float(self.state.get(Constants.StateKeys.WIND_SPEED_REF, 5.0))
+            ws = float(self.state.get(Constants.StateKeys.WIND_SPEED_REF,
+                                      self.state.get(Constants.StateKeys.WIND_SPEED, 5.0)))
             extra[Constants.StateKeys.WIND_SPEED_REF] = ParameterConfig(
                 'truncated_normal', nominal=ws,
                 sigma=self.sigma_wind.value(), low=0.0)

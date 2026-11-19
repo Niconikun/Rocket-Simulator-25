@@ -89,6 +89,44 @@ class TestFailedCount(TestMonteCarloWidgetBase):
         self.assertIn('(failed: 0)', self.widget.status_label.text())
 
 
+class TestSigmaAndSeedPersistence(TestMonteCarloWidgetBase):
+    def test_sigma_change_persisted_to_state(self):
+        from src.config import Constants
+        self.widget.sigma_elev.setValue(2.5)
+        sigmas = self.state.get(Constants.StateKeys.MONTE_CARLO_SIGMAS)
+        self.assertEqual(sigmas['elevation'], 2.5)
+
+    def test_sigma_defaults_come_from_constants(self):
+        from src.config import Constants
+        mc = Constants.MonteCarlo
+        self.assertEqual(self.widget.sigma_elev.value(), mc.DEFAULT_SIGMA_ELEVATION)
+        self.assertEqual(self.widget.sigma_az.value(), mc.DEFAULT_SIGMA_AZIMUTH)
+        self.assertEqual(self.widget.sigma_temp.value(), mc.DEFAULT_SIGMA_TEMPERATURE)
+        self.assertEqual(self.widget.sigma_wind.value(), mc.DEFAULT_SIGMA_WIND_SPEED)
+        self.assertEqual(self.widget.sigma_winddir.value(), mc.DEFAULT_SIGMA_WIND_DIRECTION)
+        self.assertEqual(self.widget.sigma_para_alt.value(), mc.DEFAULT_SIGMA_PARACHUTE_ALTITUDE)
+        self.assertEqual(self.widget.sigma_para_cd.value(), mc.DEFAULT_SIGMA_PARACHUTE_CD)
+        self.assertEqual(self.widget.sigma_drogue_alt.value(), mc.DEFAULT_SIGMA_DROGUE_ALTITUDE)
+        self.assertEqual(self.widget.sigma_drogue_cd.value(), mc.DEFAULT_SIGMA_DROGUE_CD)
+
+    def test_persisted_sigmas_restored_on_new_widget(self):
+        from src.config import Constants
+        self.widget.sigma_wind.setValue(3.5)
+        w2 = MonteCarloWidget(state=self.state)
+        self.addCleanup(w2.close)
+        self.addCleanup(w2.deleteLater)
+        self.assertEqual(w2.sigma_wind.value(), 3.5)
+
+    def test_seed_persisted_to_state(self):
+        from src.config import Constants
+        self.widget.seed_spinbox.setValue(123)
+        self.assertEqual(self.state.get(Constants.StateKeys.MONTE_CARLO_SEED), 123)
+        w2 = MonteCarloWidget(state=self.state)
+        self.addCleanup(w2.close)
+        self.addCleanup(w2.deleteLater)
+        self.assertEqual(w2.seed_spinbox.value(), 123)
+
+
 class TestLandingZoneFallback(TestMonteCarloWidgetBase):
     def test_map_failure_falls_back_to_local_plot(self):
         with mock.patch.object(mcw, 'HAS_CARTOPY', True), \

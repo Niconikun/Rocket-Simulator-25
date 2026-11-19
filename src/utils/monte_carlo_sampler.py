@@ -45,6 +45,8 @@ from typing import Any, Dict, Literal, Optional
 
 import numpy as np
 
+from src.config.constants import EnvironmentalConstants, MonteCarloConstants
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -248,27 +250,32 @@ class MonteCarloSampler:
 
         Default uncertainty budget
         --------------------------
+        All sigmas are absolute values taken from ``MonteCarloConstants``
+        (wind speed sigma is absolute m/s, not relative to the nominal).
+        Angles wrap modulo 360 instead of being truncated at the boundary.
+
         ======================= =============================== ============
-        Parameter               Distribution                    Justification
+        Parameter               Distribution                    Default sigma
         ======================= =============================== ============
-        launch_elevation_angle  Normal, σ=1°, floor 5°         Launch-rod alignment
-        launch_azimuth          Normal, σ=2°, full wrap [0,360] Compass heading error
-        launch_roll             Normal, σ=1°                    Roll at ignition
-        average_temperature     Normal, σ=2°C                   Forecast uncertainty
-        wind_speed_ref          TruncNormal, σ=20% of nominal   Anemometer error
-        wind_direction          Normal, σ=10°                   Wind vane uncertainty
-        parachute_deployment_altitude  Normal, σ=10 m, floor 50 m   Altimeter error
-        parachute_cd            Normal, σ=5%, floor 0.5         Manufacturing spread
+        launch_elevation_angle  TruncNormal [5°, 90°]          1°
+        launch_azimuth          Normal, wrapped mod 360         2°
+        launch_roll             Normal, clipped [-180°, 180°]  1°
+        average_temperature     Normal, clipped to env. range   2 °C
+        wind_speed_ref          TruncNormal, floor 0            1 m/s
+        wind_direction          Normal, wrapped mod 360         10°
+        parachute_deployment_altitude  TruncNormal, floor 50 m 10 m
+        parachute_cd            TruncNormal, floor 0.5          0.075
         ======================= =============================== ============
         """
         configs: Dict[str, ParameterConfig] = {}
+        mc = MonteCarloConstants
 
         # ---- Launch geometry ----
         elev = float(state.get('launch_elevation_angle', 85.0))
         configs['launch_elevation_angle'] = ParameterConfig(
             distribution='truncated_normal',
             nominal=elev,
-            sigma=1.0,
+            sigma=mc.DEFAULT_SIGMA_ELEVATION,
             low=5.0,
             high=90.0,
         )
@@ -277,7 +284,7 @@ class MonteCarloSampler:
         configs['launch_azimuth'] = ParameterConfig(
             distribution='normal',
             nominal=azimuth,
-            sigma=2.0,
+            sigma=mc.DEFAULT_SIGMA_AZIMUTH,
             wrap=360.0,
         )
 
@@ -295,19 +302,18 @@ class MonteCarloSampler:
         configs['average_temperature'] = ParameterConfig(
             distribution='normal',
             nominal=temp,
-            sigma=2.0,
-            low=-50.0,
-            high=50.0,
+            sigma=mc.DEFAULT_SIGMA_TEMPERATURE,
+            low=EnvironmentalConstants.MIN_TEMPERATURE,
+            high=EnvironmentalConstants.MAX_TEMPERATURE,
         )
 
         # ---- Wind ----
         if state.get('wind_enabled', False):
-            wind_speed = float(state.get('wind_speed_ref', 5.0))
-            wind_sigma = max(0.5, wind_speed * 0.20)   # 20% of nominal, min 0.5 m/s
+            wind_speed = float(state.get('wind_speed_ref', state.get('wind_speed', 5.0)))
             configs['wind_speed_ref'] = ParameterConfig(
                 distribution='truncated_normal',
                 nominal=wind_speed,
-                sigma=wind_sigma,
+                sigma=mc.DEFAULT_SIGMA_WIND_SPEED,
                 low=0.0,
                 high=None,
             )
@@ -316,7 +322,7 @@ class MonteCarloSampler:
             configs['wind_direction'] = ParameterConfig(
                 distribution='normal',
                 nominal=wind_dir,
-                sigma=10.0,
+                sigma=mc.DEFAULT_SIGMA_WIND_DIRECTION,
                 wrap=360.0,
             )
 
@@ -326,7 +332,7 @@ class MonteCarloSampler:
             configs['parachute_deployment_altitude'] = ParameterConfig(
                 distribution='truncated_normal',
                 nominal=deploy_alt,
-                sigma=10.0,
+                sigma=mc.DEFAULT_SIGMA_PARACHUTE_ALTITUDE,
                 low=50.0,
                 high=None,
             )
@@ -335,7 +341,7 @@ class MonteCarloSampler:
             configs['parachute_cd'] = ParameterConfig(
                 distribution='truncated_normal',
                 nominal=para_cd,
-                sigma=para_cd * 0.05,   # 5% spread
+                sigma=mc.DEFAULT_SIGMA_PARACHUTE_CD,
                 low=0.5,
                 high=None,
             )

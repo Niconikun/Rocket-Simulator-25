@@ -174,6 +174,35 @@ class TestFromState(unittest.TestCase):
         for _ in range(5):
             self.assertEqual(s.sample()['launch_elevation_angle'], 80.0)
 
+    def test_temperature_clip_uses_environmental_constants(self):
+        from src.config.constants import EnvironmentalConstants
+        s = MonteCarloSampler.from_state(self._state(), seed=1)
+        # sample far in the tail to hit the clip bounds
+        vals = [s.sample()['average_temperature'] for _ in range(2000)]
+        self.assertGreaterEqual(min(vals), EnvironmentalConstants.MIN_TEMPERATURE)
+        self.assertLessEqual(max(vals), EnvironmentalConstants.MAX_TEMPERATURE)
+
+    def test_wind_nominal_falls_back_to_legacy_wind_speed(self):
+        state = self._state(wind_enabled=True, wind_speed=7.5)
+        s = MonteCarloSampler.from_state(state, seed=1)
+        vals = [s.sample()['wind_speed_ref'] for _ in range(200)]
+        self.assertAlmostEqual(float(np.mean(vals)), 7.5, delta=0.2)
+
+    def test_wind_sigma_is_absolute_constant(self):
+        from src.config.constants import MonteCarloConstants
+        state = self._state(wind_enabled=True, wind_speed_ref=20.0)
+        s = MonteCarloSampler.from_state(state, seed=1)
+        vals = np.array([s.sample()['wind_speed_ref'] for _ in range(3000)])
+        # absolute sigma (1.0 m/s), not 20% of a 20 m/s nominal (which would be 4.0)
+        self.assertAlmostEqual(float(np.std(vals)), MonteCarloConstants.DEFAULT_SIGMA_WIND_SPEED, delta=0.1)
+
+    def test_parachute_cd_sigma_is_absolute_constant(self):
+        from src.config.constants import MonteCarloConstants
+        state = self._state(parachute_enabled=True, parachute_cd=1.5)
+        s = MonteCarloSampler.from_state(state, seed=1)
+        vals = np.array([s.sample()['parachute_cd'] for _ in range(3000)])
+        self.assertAlmostEqual(float(np.std(vals)), MonteCarloConstants.DEFAULT_SIGMA_PARACHUTE_CD, delta=0.02)
+
 
 if __name__ == '__main__':
     unittest.main()
