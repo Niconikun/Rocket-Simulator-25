@@ -26,6 +26,10 @@ Supported distribution types
 - ``'uniform'``          – Uniform on [low, high]
 - ``'fixed'``            – Always returns the nominal value (useful to pin a parameter)
 
+Any distribution can additionally set ``wrap`` (e.g. ``wrap=360.0``) to wrap the
+sampled value into ``[0, wrap)`` — use this for angular parameters such as
+azimuth or wind direction instead of truncating at the 0/360 boundary.
+
 Predefined rocket parameter sets
 ---------------------------------
 Call ``MonteCarloSampler.from_state(state)`` to build a sampler from an
@@ -68,6 +72,9 @@ class ParameterConfig:
     high:
         Upper bound. For ``'uniform'``: right edge. For ``'normal'`` / ``'truncated_normal'``:
         hard ceiling. ``None`` = no ceiling.
+    wrap:
+        If set (e.g. ``360.0``), the sampled value is wrapped into ``[0, wrap)``
+        via modulo — for angular parameters. ``None`` = no wrapping.
     """
 
     distribution: DistributionType = 'normal'
@@ -75,8 +82,11 @@ class ParameterConfig:
     sigma: Optional[float] = None
     low: Optional[float] = None
     high: Optional[float] = None
+    wrap: Optional[float] = None
 
     def __post_init__(self) -> None:
+        if self.wrap is not None and self.wrap <= 0:
+            raise ValueError(f"wrap must be > 0, got {self.wrap}")
         if self.distribution in ('normal', 'truncated_normal'):
             if self.nominal is None or self.sigma is None:
                 raise ValueError(
@@ -185,6 +195,8 @@ class MonteCarloSampler:
                 bounds = ""
                 if cfg.low is not None or cfg.high is not None:
                     bounds = f", clipped [{cfg.low}, {cfg.high}]"
+                if cfg.wrap is not None:
+                    bounds += f", wrapped mod {cfg.wrap}"
                 lines.append(
                     f"  {key}: Normal(μ={cfg.nominal}, σ={cfg.sigma}){bounds}"
                 )
@@ -255,11 +267,10 @@ class MonteCarloSampler:
 
         azimuth = float(state.get('launch_azimuth', 0.0))
         configs['launch_azimuth'] = ParameterConfig(
-            distribution='truncated_normal',
+            distribution='normal',
             nominal=azimuth,
             sigma=2.0,
-            low=0.0,
-            high=360.0,
+            wrap=360.0,
         )
 
         roll = float(state.get('launch_roll', 0.0))
@@ -295,11 +306,10 @@ class MonteCarloSampler:
 
             wind_dir = float(state.get('wind_direction', 180.0))
             configs['wind_direction'] = ParameterConfig(
-                distribution='truncated_normal',
+                distribution='normal',
                 nominal=wind_dir,
                 sigma=10.0,
-                low=0.0,
-                high=360.0,
+                wrap=360.0,
             )
 
         # ---- Parachute ----
@@ -335,11 +345,12 @@ class MonteCarloSampler:
     def _draw(self, key: str, cfg: ParameterConfig) -> float:
         """Sample a single value from the given distribution."""
         if cfg.distribution == 'fixed':
-            return float(cfg.nominal)  # type: ignore[arg-type]
+            value = float(cfg.nominal)  # type: ignore[arg-type]
+            return self._apply_wrap(value, cfg)
 
         if cfg.distribution == 'uniform':
             assert cfg.low is not None and cfg.high is not None
-            return float(self._rng.uniform(cfg.low, cfg.high))
+            return self._apply_wrap(float(self._rng.uniform(cfg.low, cfg.high)), cfg)
 
         if cfg.distribution == 'normal':
             # Type narrowing: __post_init__ guarantees nominal and sigma are not None for normal
@@ -350,12 +361,18 @@ class MonteCarloSampler:
                 value = max(value, cfg.low)
             if cfg.high is not None:
                 value = min(value, cfg.high)
-            return value
+            return self._apply_wrap(value, cfg)
 
         if cfg.distribution == 'truncated_normal':
-            return self._truncated_normal(key, cfg)
+            return self._apply_wrap(self._truncated_normal(key, cfg), cfg)
 
         raise ValueError(f"Unknown distribution '{cfg.distribution}' for parameter '{key}'")
+
+    @staticmethod
+    def _apply_wrap(value: float, cfg: ParameterConfig) -> float:
+        if cfg.wrap is not None:
+            return value % cfg.wrap
+        return value
 
     def _truncated_normal(self, key: str, cfg: ParameterConfig) -> float:
         """Rejection-sampling implementation of truncated normal.

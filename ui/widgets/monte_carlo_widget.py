@@ -410,8 +410,8 @@ class MonteCarloWidget(BaseWidget):
 
         az = float(self.state.get(Constants.StateKeys.LAUNCH_AZIMUTH, 0.0))
         extra[Constants.StateKeys.LAUNCH_AZIMUTH] = ParameterConfig(
-            'truncated_normal', nominal=az,
-            sigma=self.sigma_az.value(), low=0.0, high=360.0)
+            'normal', nominal=az,
+            sigma=self.sigma_az.value(), wrap=360.0)
 
         temp = float(self.state.get(Constants.StateKeys.AVERAGE_TEMPERATURE, 20.0))
         extra[Constants.StateKeys.AVERAGE_TEMPERATURE] = ParameterConfig(
@@ -425,8 +425,8 @@ class MonteCarloWidget(BaseWidget):
                 sigma=self.sigma_wind.value(), low=0.0)
             wd = float(self.state.get(Constants.StateKeys.WIND_DIRECTION, 180.0))
             extra[Constants.StateKeys.WIND_DIRECTION] = ParameterConfig(
-                'truncated_normal', nominal=wd,
-                sigma=self.sigma_winddir.value(), low=0.0, high=360.0)
+                'normal', nominal=wd,
+                sigma=self.sigma_winddir.value(), wrap=360.0)
 
         if self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False):
             pa = float(self.state.get(Constants.StateKeys.PARACHUTE_DEPLOYMENT_ALTITUDE, 300.0))
