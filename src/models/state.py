@@ -136,20 +136,6 @@ class StateProvider(ABC):
         """
         for key, value in updates.items():
             self.set(key, value)
-    
-    def update_from_dict(self, data: Dict[str, Any]) -> None:
-        """
-        Update state from a dictionary, only setting keys that exist.
-        
-        This is a convenience method for selectively updating state
-        without overwriting everything.
-        
-        Args:
-            data: Dictionary of key-value pairs to update
-        """
-        for key, value in data.items():
-            if self.get(key) is not None or key in self.get_all():
-                self.set(key, value)
 
 
 class ReadOnlyStateProvider(ABC):
@@ -225,17 +211,6 @@ class MockStateProvider(StateProvider):
         """Reset all state to empty."""
         self._state.clear()
         logger.debug("MockStateProvider reset to empty")
-    
-    def set_initial_state(self, initial_state: Dict[str, Any]) -> None:
-        """
-        Set the initial state (clears existing state first).
-        
-        Args:
-            initial_state: Dictionary to initialize state with
-        """
-        self._state.clear()
-        self._state.update(initial_state)
-        logger.debug(f"MockStateProvider initialized with {len(self._state)} keys")
 
 
 class StateProxy(StateProvider):

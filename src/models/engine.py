@@ -647,24 +647,3 @@ class EnhancedEngine(IEngine):
             float: Current mass flow rate in kg/s [kg/s]. Returns 0.0 if no flow.
         """
         return self._mass_flux
-
-    def calculate_specific_impulse(self, ambient_pressure=None):
-        """
-        Calculate specific impulse for given ambient pressure.
-        
-        Args:
-            ambient_pressure (float, optional): Ambient pressure [Pa]
-            
-        Returns:
-            float: Specific impulse [s]
-        """
-        g0 = EC.STANDARD_GRAVITY_G0
-        p_amb = self.ambient_pressure if ambient_pressure is None else ambient_pressure
-        
-        momentum_thrust = self._mass_flux * self.gas_speed
-        pressure_thrust = (self.exit_pressure - p_amb) * self.exit_area
-        total_thrust = momentum_thrust + pressure_thrust
-        
-        if self._mass_flux > 0:
-            return total_thrust / (self._mass_flux * g0)
-        return 0.0

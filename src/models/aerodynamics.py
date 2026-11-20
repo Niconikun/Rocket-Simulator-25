@@ -286,12 +286,21 @@ class Aerodynamics(IAerodynamics):
         """
         Create Aerodynamics instance from rocket configuration.
         
+        DEPRECATED: not used by the application; use factory.create_aerodynamics()
+        from src.models.rocket.factory instead.
+        
         Args:
             rocket_config: Dictionary containing rocket configuration with aerodynamics section
             
         Returns:
             Aerodynamics: Instance initialized from configuration
         """
+        import warnings
+        warnings.warn(
+            "Aerodynamics.from_rocket_config() is deprecated; use factory.create_aerodynamics() instead",
+            DeprecationWarning,
+            stacklevel=2
+        )
         aero_config = rocket_config.get("aerodynamics", {})
         cd = aero_config.get("cd", 0.5)
         cl = aero_config.get("cl", 0.0)
@@ -767,14 +776,10 @@ class Aerodynamics(IAerodynamics):
 # Keep SimpleAerodynamics as an alias for backward compatibility
 SimpleAerodynamics = Aerodynamics
 
-# Legacy aliases
-AerodynamicsClass = Aerodynamics
-
 
 __all__ = [
     'Aerodynamics',
     'SimpleAerodynamics',
-    'AerodynamicsClass',
     'MAX_ANGLE_OF_ATTACK',
     'SEA_LEVEL_DENSITY',
     'SEA_LEVEL_TEMPERATURE',

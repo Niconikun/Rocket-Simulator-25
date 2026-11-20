@@ -671,6 +671,12 @@ class WindShearWind(WindModel):
         Returns:
             Tuple[np.ndarray, np.ndarray]: East and North components at each altitude
         """
+        import warnings
+        warnings.warn(
+            "WindShearWind.get_hodograph() is deprecated and unused by the application",
+            DeprecationWarning,
+            stacklevel=2
+        )
         hodograph_vectors = np.array([self.get_wind_vector(alt)[:2] for alt in altitude_levels])
         return hodograph_vectors[:, 0], hodograph_vectors[:, 1]
     

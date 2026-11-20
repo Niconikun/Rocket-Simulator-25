@@ -65,6 +65,12 @@ class Clock:
         Returns:
             numpy array: [year, month, day, hour, minute, second] with Delta_UT1 applied
         """
+        import warnings
+        warnings.warn(
+            "Clock.time_utc() is deprecated and unused by the application",
+            DeprecationWarning,
+            stacklevel=2
+        )
         time_vec: np.ndarray = self._get_current_time()
         
         # Apply Delta_UT1 only to seconds

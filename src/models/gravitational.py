@@ -57,6 +57,12 @@ def g_accel(r_eci: np.ndarray) -> np.ndarray:
         InputValidationError: If r_eci is not a 3-element array or has invalid values
     """
     # Validate input
+    import warnings
+    warnings.warn(
+        "g_accel() is deprecated: not connected to the simulation pipeline (RocketDynamics uses constant gravity)",
+        DeprecationWarning,
+        stacklevel=2
+    )
     if not isinstance(r_eci, np.ndarray):
         raise InputValidationError(f"r_eci must be a numpy array, got {type(r_eci).__name__}")
     
@@ -95,6 +101,12 @@ def g_torque(r_ecef: np.ndarray, inertia: np.ndarray, q_ecef_body: np.ndarray) -
     Raises:
         InputValidationError: If inputs are invalid (wrong shape, non-finite values, etc.)
     """
+    import warnings
+    warnings.warn(
+        "g_torque() is deprecated: not connected to the simulation pipeline (RocketDynamics uses constant gravity)",
+        DeprecationWarning,
+        stacklevel=2
+    )
     # Validate r_ecef
     if not isinstance(r_ecef, np.ndarray):
         raise InputValidationError(f"r_ecef must be a numpy array, got {type(r_ecef).__name__}")
