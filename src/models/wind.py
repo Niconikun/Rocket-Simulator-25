@@ -719,49 +719,16 @@ def create_wind_model_from_state(scenario: dict) -> WindModel:
     Returns:
         WindModel: Initialized wind model instance
     """
-    model_type = scenario.get('model_type', 'logarithmic')
-    
-    # Build kwargs based on scenario data
-    kwargs = {
-        'wind_direction': scenario.get('wind_direction', 0.0),
-        'launch_altitude': scenario.get('launch_altitude', 0.0),
-    }
-    
-    if model_type == 'constant':
-        kwargs['wind_speed'] = scenario.get('wind_speed', 5.0)
-    elif model_type == 'logarithmic':
-        kwargs['wind_speed_ref'] = scenario.get('wind_speed', scenario.get('wind_speed_ref', 5.0))
-        kwargs['reference_height'] = scenario.get('wind_reference_height', 10.0)
-        kwargs['roughness_length'] = scenario.get('wind_roughness_length', 0.1)
-    elif model_type == 'power_law':
-        kwargs['wind_speed_ref'] = scenario.get('wind_speed', scenario.get('wind_speed_ref', 5.0))
-        kwargs['reference_height'] = scenario.get('wind_reference_height', 10.0)
-        kwargs['exponent'] = scenario.get('wind_exponent', 0.2)
-    elif model_type == 'gust':
-        # Create base logarithmic wind for gust model
-        base_kwargs = {
-            'wind_speed_ref': scenario.get('wind_speed', scenario.get('wind_speed_ref', 5.0)),
-            'reference_height': scenario.get('wind_reference_height', 10.0),
-            'roughness_length': scenario.get('wind_roughness_length', 0.1),
-            'wind_direction': scenario.get('wind_direction', 0.0),
-            'launch_altitude': scenario.get('launch_altitude', 0.0),
-        }
-        base_wind = LogarithmicWind(**base_kwargs)
-        kwargs['base_wind_model'] = base_wind
-        kwargs['gust_intensity'] = scenario.get('wind_gust_intensity', 0.1)
-        kwargs['gust_length_scale'] = scenario.get('wind_gust_length_scale', 300.0)
-        kwargs.pop('wind_direction', None)  # Remove as it's in base_wind
-        kwargs.pop('launch_altitude', None)  # Remove as it's in base_wind
-    elif model_type == 'shear':
-        kwargs['base_wind_speed'] = scenario.get('wind_speed', 5.0)
-        kwargs['base_wind_direction'] = scenario.get('wind_direction', 0.0)
-        kwargs['shear_direction_change'] = scenario.get('shear_direction_change', 0.0)
-        kwargs['shear_altitude_range'] = scenario.get('shear_altitude_range', 1000.0)
-        kwargs['vertical_wind_speed'] = scenario.get('vertical_wind', 0.0)
-        kwargs['launch_altitude'] = scenario.get('launch_altitude', 0.0)
-        kwargs.pop('wind_direction', None)  # Use base_wind_direction instead
-    
-    return create_wind_model(model_type, **kwargs)
+    from src.utils.wind_utils import create_wind_model_from_state as _create_from_state
+
+    # Delegate to the canonical state/scenario factory in src.utils.wind_utils.
+    # Scenario dicts may carry wind_enabled=False, but the scenario editor
+    # always wants a model instance for preview, so strip the flag here.
+    scenario = {k: v for k, v in scenario.items() if k != 'wind_enabled'}
+    wind = _create_from_state(scenario)
+    if wind is None:
+        raise InputValidationError("Could not create wind model from scenario")
+    return wind
 
 
 def create_wind_model(model_type: str = 'logarithmic', **kwargs) -> WindModel:

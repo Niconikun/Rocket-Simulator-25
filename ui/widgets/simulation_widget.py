@@ -349,6 +349,7 @@ class SimulationWidget(BaseWidget):
                 'pressure': self.state.get(Constants.StateKeys.AVERAGE_PRESSURE, 101325.0),
                 'launch_date': str(self.state.get(Constants.StateKeys.SIM_DATE, '')),
                 'launch_time': str(self.state.get(Constants.StateKeys.SIM_TIME, '')),
+                'parachute_enabled': self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False),
                 'timestamp': datetime.now().isoformat()
             }
             
@@ -474,6 +475,16 @@ class SimulationWidget(BaseWidget):
         self.launch_azimuth_spinbox.setValue(Constants.Simulation.DEFAULT_LAUNCH_AZIMUTH)
         self.launch_roll_spinbox.setValue(Constants.Simulation.DEFAULT_LAUNCH_ROLL)
         self.timezone_combo.setCurrentText('UTC')
+        idx = self.aero_method_combo.findData('default')
+        self.aero_method_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.aero_n_axial_spinbox.setValue(48)
+        self.aero_n_theta_spinbox.setValue(16)
+        self.aero_include_fins_check.setChecked(True)
+        self.aero_viscous_cf_check.setChecked(True)
+        self.thermo_enabled_check.setChecked(False)
+        now = datetime.now()
+        self.date_edit.setDate(QDate(now.year, now.month, now.day))
+        self.time_edit.setTime(QTime(now.hour, now.minute, now.second))
         
         # Reset state
         self.state.set(Constants.StateKeys.SIMULATION_RESULTS, None)

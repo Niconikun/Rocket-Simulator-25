@@ -12,7 +12,7 @@ from ui.widgets import BaseWidget
 from src.models.state import StateProvider
 from src.config import Constants
 from src.config.translations import tr
-from typing import Optional, Dict
+from typing import Optional, Any, Dict
 from src.utils.simulation_manager import SimulationManager
 from src.utils.event_bus import EventType, subscribe, unsubscribe
 import logging
@@ -44,8 +44,6 @@ except ImportError:
     logger.warning("PyQtGraph not available, falling back to matplotlib")
 
 from pathlib import Path
-
-from typing import Any, Dict
 
 # Try to import cartopy for geographic map
 try:
@@ -134,11 +132,11 @@ class DashboardWidget(BaseWidget):
         Refreshes the dashboard when it becomes the active tab.
         """
         tab_name = data.get('tab_name', '')
-        index = data.get('index', -1)
-        
-        # Check if dashboard tab is now active (index 6 based on main_window)
-        # Dashboard is typically at index 6 in the tab widget
-        if tab_name == "📊 Dashboard" or index == 6:
+        object_name = data.get('object_name', '')
+
+        # MainWindow publishes the tab widget's objectName; fall back to the
+        # tab text for payloads without it
+        if object_name == 'dashboard_widget' or (not object_name and tab_name == "📊 Dashboard"):
             logger.info("Dashboard tab activated, refreshing data")
             self.load_simulation_history()
     
