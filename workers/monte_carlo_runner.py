@@ -48,7 +48,7 @@ from typing import Optional
 import numpy as np
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from src.config import Paths
+from src.config import Paths, Constants
 from src.utils.monte_carlo_sampler import MonteCarloSampler, ParameterConfig
 from src.utils.monte_carlo_stats import extract_impact_position, compute_cep
 from workers.simulation_worker import SimulationWorker
@@ -241,12 +241,12 @@ class MonteCarloRunner(QObject):
         The per-run seed also makes the wind cache key unique per run, so no
         two runs share a wind model object.
         """
-        if not self._state.get('wind_enabled', False):
+        if not self._state.get(Constants.StateKeys.WIND_ENABLED, False):
             return
         if 'random_seed' in overrides:
             return
         model_type = self._state.get(
-            'wind_model_type', self._state.get('model_type', 'logarithmic'))
+            Constants.StateKeys.WIND_MODEL_TYPE, self._state.get('model_type', 'logarithmic'))
         if str(model_type).lower() == 'gust':
             overrides['random_seed'] = sampler.draw_seed()
 
