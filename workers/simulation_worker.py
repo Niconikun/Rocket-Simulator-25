@@ -567,6 +567,7 @@ class SimulationWorker(QThread):
                         'time': t,
                         'altitude': current_altitude,
                         'velocity': current_velocity,
+                        'acceleration': accel_magnitude,
                         'range': current_range,
                         'mach': mach,
                         'alpha': aero_alpha,
@@ -827,7 +828,9 @@ class SimulationWorker(QThread):
                     ]
                 else:
                     cm_b_list = [[0.0, 0.0, 0.0] for _ in range(history_length)]
-                
+
+                cm2cp_list = [float(cp[0]) - float(cm[0]) for cp, cm in zip(cp_b_list, cm_b_list)]
+
                 # Build the final history data in dashboard format
                 history_data = {
                     'hist_time': times_list,
@@ -855,6 +858,7 @@ class SimulationWorker(QThread):
                     'hist_x_cp': xcp_list,
                     'hist_cm_b': cm_b_list,
                     'hist_cp_b': cp_b_list,
+                    'hist_cm2cp_b': cm2cp_list,
                     # Raw simulation data for backward compatibility
                     'times': times_list,
                     'positions': [list(pos) for pos in hist_positions],
