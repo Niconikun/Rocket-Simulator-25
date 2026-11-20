@@ -97,6 +97,7 @@ class MainWindow(QMainWindow):
         self.location_widget = LocationSettingsWidget(state=self.state)
         self.monte_carlo_widget = MonteCarloWidget(state=self.state)
         self.dashboard_widget = DashboardWidget(state=self.state)
+        self.dashboard_widget.setObjectName("dashboard_widget")
         self.units_widget = UnitsConverterWidget(state=self.state)
         self.parachute_widget = ParachuteSettingsWidget(state=self.state)
         self.wind_widget = WindSettingsWidget(state=self.state)
@@ -254,9 +255,11 @@ class MainWindow(QMainWindow):
         logger.info(f"Switched to tab {index}: {tab_name}")
         
         # Publish tab changed event
+        widget = self.tabs.widget(index)
         publish(EventType.TAB_CHANGED, {
             'index': index,
             'tab_name': tab_name,
+            'object_name': widget.objectName() if widget is not None else '',
             'timestamp': datetime.now().isoformat()
         })
         logger.debug(f"Published TAB_CHANGED event for: {tab_name}")
