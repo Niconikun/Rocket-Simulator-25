@@ -100,6 +100,8 @@ class SimulationManager:
                 "timestamp": datetime.now().isoformat(),
                 "rocket": metadata.get("rocket", "Unknown"),
                 "location": metadata.get("location", "Unknown"),
+                "launch_date": metadata.get("launch_date", "Unknown"),
+                "launch_time": metadata.get("launch_time", "Unknown"),
                 "launch_latitude": metadata.get("launch_latitude", 0.0),
                 "launch_longitude": metadata.get("launch_longitude", 0.0),
                 "launch_azimuth": metadata.get("launch_azimuth", 0.0),
