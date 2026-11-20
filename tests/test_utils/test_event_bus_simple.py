@@ -10,7 +10,7 @@ requiring Qt to be installed. They test:
 """
 
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from typing import Any, Dict
 
 # Test imports without Qt
@@ -143,11 +143,10 @@ class TestEventBusSingletonSimple(unittest.TestCase):
         """Test that only one instance is created."""
         # Create instances directly (not via get_instance)
         # This tests the __new__ method
-        with patch.object(EventBus, '__init__', lambda self: None):
-            bus1 = EventBus()
-            bus2 = EventBus()
-            
-            self.assertIs(bus1, bus2)
+        bus1 = EventBus()
+        bus2 = EventBus()
+        
+        self.assertIs(bus1, bus2)
     
     def test_get_instance_creates_instance(self):
         """Test that get_instance creates instance if none exists."""

@@ -179,19 +179,25 @@ class EventBus(QObject):
     
     # Singleton instance
     _instance: Optional['EventBus'] = None
+    _initialized: bool = False
     
     # Signal for event publishing
     _event_signal = pyqtSignal(EventType, dict)
     
     def __new__(cls):
-        """Singleton pattern - only one instance allowed."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+        """Return the singleton wrapper, creating it on first use."""
+        if cls._instance is not None:
+            return cls._instance
+        cls._initialized = False
+        return super().__new__(cls)
     
     def __init__(self):
-        """Initialize the event bus."""
+        """Initialize the event bus (only once, since this is a QObject singleton)."""
+        if EventBus._initialized:
+            return
         super().__init__()
+        EventBus._instance = self
+        EventBus._initialized = True
         self._subscribers: Dict[EventType, List[Any]] = {}
         self._metrics = EventMetrics()
         self._metrics_lock = Lock()
@@ -202,7 +208,7 @@ class EventBus(QObject):
     def get_instance(cls) -> 'EventBus':
         """Get the singleton instance."""
         if cls._instance is None:
-            cls._instance = cls()
+            cls()
         return cls._instance
     
     @classmethod

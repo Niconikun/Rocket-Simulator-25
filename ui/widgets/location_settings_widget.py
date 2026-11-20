@@ -330,9 +330,9 @@ class LocationSettingsWidget(BaseWidget):
             else:
                 ax = self._map_fig.add_subplot(1, 1, 1)
                 if focused:
-                    delta = radius_km / 111.32
-                    ax.set_xlim(focus_lon - delta, focus_lon + delta) # type: ignore
-                    ax.set_ylim(focus_lat - delta, focus_lat + delta) # type: ignore
+                    delta_lat = radius_km / 111.32
+                    ax.set_xlim(focus_lon - delta_lat, focus_lon + delta_lat) # type: ignore
+                    ax.set_ylim(focus_lat - delta_lat, focus_lat + delta_lat) # type: ignore
                 else:
                     ax.set_xlim(-180, 180)
                     ax.set_ylim(-90, 90)
