@@ -34,6 +34,8 @@ from .clock import Clock
 from .aerodynamics import Aerodynamics, SimpleAerodynamics
 from .panel_method import PanelMethodAerodynamics
 from .engine import EnhancedEngine
+from .grain import GrainGeometry, create_grain
+from .solid_motor import SolidMotorEngine, create_solid_motor
 from .gravitational import g_accel, g_torque
 from .parachute import Parachute
 from .planet import Planet
@@ -66,6 +68,10 @@ __all__ = [
     'PanelMethodAerodynamics',
     # Engine
     'EnhancedEngine',
+    'SolidMotorEngine',
+    'create_solid_motor',
+    'GrainGeometry',
+    'create_grain',
     # Gravity
     'g_accel',
     'g_torque',

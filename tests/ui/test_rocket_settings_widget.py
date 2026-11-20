@@ -475,5 +475,128 @@ class TestRocketSettingsWidgetNameValidation(unittest.TestCase):
             self.assertTrue(is_valid, f"Name '{name}' should be valid: {msg}")
 
 
+class TestRocketSettingsWidgetSolidMotor(unittest.TestCase):
+    """Tests for the solid motor (grain design, Nakka) section of the Engine tab."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)
+
+    def setUp(self):
+        self.widget = RocketSettingsWidget()
+        self.app.processEvents()
+
+    def tearDown(self):
+        self.widget.deleteLater()
+        self.app.processEvents()
+
+    def test_engine_model_combo_exists(self):
+        """Engine tab should expose the engine model selector."""
+        self.assertIsNotNone(self.widget.engine_model_combo)
+        models = [self.widget.engine_model_combo.itemData(i)
+                  for i in range(self.widget.engine_model_combo.count())]
+        self.assertEqual(models, ['enhanced', 'experimental', 'solid'])
+
+    def test_motor_group_toggle(self):
+        """Grain-design group is enabled only for the solid model."""
+        self.widget.engine_model_combo.setCurrentIndex(0)
+        self.assertFalse(self.widget.motor_group.isEnabled())
+        self.widget.engine_model_combo.setCurrentIndex(2)
+        self.assertTrue(self.widget.motor_group.isEnabled())
+
+    def test_grain_design_fields_exist(self):
+        """All grain/propellant/nozzle input fields should exist."""
+        for attr in ('grain_type', 'grain_od', 'grain_core_d', 'grain_tip_d',
+                     'grain_length', 'grain_seg_length', 'grain_segments',
+                     'star_points', 'star_half_angle', 'valley_ratio', 'slot_width',
+                     'prop_density', 'burn_rate_a', 'burn_rate_n', 'chamber_temp',
+                     'gas_constant_spin', 'gamma_spin', 'char_vel',
+                     'throat_d', 'exit_d', 'compute_motor_btn', 'motor_summary'):
+            self.assertIsNotNone(getattr(self.widget, attr), attr)
+
+    def test_compute_solid_motor_fills_performance_fields(self):
+        """Compute button runs the SRM solver and fills the Engine tab fields."""
+        self.widget.engine_model_combo.setCurrentIndex(2)
+        self.widget.initial_mass_spinbox.setValue(8.0)
+        self.widget.grain_type.setCurrentIndex(0)  # BATES defaults
+        self.widget._compute_solid_motor()
+        self.assertGreater(self.widget.burn_time.value(), 0.0)
+        self.assertGreater(self.widget.propellant_mass.value(), 0.0)
+        self.assertGreater(self.widget.mean_thrust.value(), 0.0)
+        self.assertGreater(self.widget.max_thrust.value(), self.widget.mean_thrust.value())
+        self.assertGreater(self.widget.specific_impulse.value(), 0.0)
+        self.assertGreater(self.widget.mean_chamber_pressure.value(), 0.0)
+        self.assertGreater(self.widget.thrust_to_weight.value(), 0.0)
+        self.assertIn("Burn time", self.widget.motor_summary.text())
+        self.assertIsNotNone(self.widget._solid_motor)
+
+    def test_engine_section_dict_contains_solid_motor(self):
+        """Saved engine section should carry engine_model + motor config."""
+        self.widget.engine_model_combo.setCurrentIndex(2)
+        engine = self.widget._engine_section_dict()
+        self.assertEqual(engine['engine_model'], 'solid')
+        self.assertIn('motor', engine)
+        self.assertEqual(engine['motor']['grain']['type'], 'bates')
+        self.assertIn('propellant', engine['motor'])
+        self.assertIn('nozzle', engine['motor'])
+
+    def test_build_and_collect_dicts_include_engine_model(self):
+        """Both rocket-data builders should include the engine model."""
+        self.widget.engine_model_combo.setCurrentIndex(2)
+        for data in (self.widget._build_rocket_data_dict(), self.widget._collect_rocket_data()):
+            self.assertEqual(data['engine']['engine_model'], 'solid')
+            self.assertIn('motor', data['engine'])
+
+    def test_load_rocket_data_restores_solid_section(self):
+        """Loading a rocket JSON with a motor section restores combo + fields."""
+        self.widget.engine_model_combo.setCurrentIndex(2)
+        motor = self.widget._motor_config_from_ui()
+        rocket_data = {
+            'name': 'Solid_Test',
+            'engine': {
+                'engine_model': 'solid',
+                'motor': motor,
+                'burn_time': 2.5, 'propellant_mass': 2.0, 'specific_impulse': 200.0,
+                'mean_thrust': 1000.0, 'max_thrust': 1200.0,
+                'nozzle_exit_diameter': 0.036, 'mass_flux': 0.8,
+                'gas_speed': 1960.0, 'exit_pressure': 1.5e5,
+                'mean_chamber_pressure': 4e6, 'max_chamber_pressure': 5e6,
+                'thrust_to_weight_ratio': 15.0,
+            },
+        }
+        self.widget.load_rocket_data(rocket_data)
+        self.assertEqual(self.widget.engine_model_combo.currentData(), 'solid')
+        self.assertEqual(self.widget.grain_type.currentData(), motor['grain']['type'])
+        self.assertAlmostEqual(self.widget.grain_od.value(), motor['grain']['outer_diameter'])
+        self.assertAlmostEqual(self.widget.throat_d.value(), motor['nozzle']['throat_diameter'])
+        self.assertAlmostEqual(self.widget.prop_density.value(), motor['propellant']['density'])
+        self.assertAlmostEqual(self.widget.burn_time.value(), 2.5)
+
+    def test_load_legacy_experimental_mode_maps_to_combo(self):
+        """Configs with thrust_curve_mode='experimental' select the experimental model."""
+        self.widget.load_rocket_data({'engine': {'thrust_curve_mode': 'experimental'}})
+        self.assertEqual(self.widget.engine_model_combo.currentData(), 'experimental')
+
+    def test_validate_solid_model_ok_with_defaults(self):
+        """Validation passes for a solvable grain design."""
+        self.widget.name_edit.setText('Solid_Valid')
+        self.widget.initial_mass_spinbox.setValue(8.0)
+        self.widget.engine_model_combo.setCurrentIndex(2)
+        self.widget._compute_solid_motor()
+        is_valid, errors, warnings = self.widget.validate_rocket_config()
+        solid_errors = [e for e in errors if 'Solid motor' in e]
+        self.assertEqual(solid_errors, [], f"unexpected solid motor errors: {solid_errors}")
+
+    def test_validate_solid_model_invalid_grain(self):
+        """Validation reports an error when the grain design cannot be solved."""
+        self.widget.name_edit.setText('Solid_Invalid')
+        self.widget.initial_mass_spinbox.setValue(8.0)
+        self.widget.engine_model_combo.setCurrentIndex(2)
+        self.widget.grain_core_d.setValue(0.5)  # core larger than outer diameter
+        is_valid, errors, warnings = self.widget.validate_rocket_config()
+        self.assertTrue(any('Solid motor' in e for e in errors))
+
+
 if __name__ == '__main__':
     unittest.main()

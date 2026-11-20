@@ -66,7 +66,9 @@ from src.models.rocket.state import RocketState
 from src.models.atmosphere import Atmosphere
 from src.config.constants import Constants
 from src.utils.simulation_constants import RocketConstants as RC
+from src.utils.simulation_errors import InputValidationError
 from src.models.engine import EnhancedEngine
+from src.models.solid_motor import SolidMotorEngine, create_solid_motor
 from src.models.aerodynamics import Aerodynamics
 from src.models.mass_properties import MassProperties
 from src.models.wind import WindModel, LogarithmicWind, ConstantWind
@@ -110,6 +112,9 @@ class EngineConfig:
     thrust_curve_file: Optional[str] = None
     thrust_curve_unit: str = 'N'
     thrust_curve_mode: str = 'analytical'
+    engine_model: str = 'enhanced'  # 'enhanced' | 'experimental' | 'solid'
+    motor_config: Optional[Dict[str, Any]] = None  # grain design section for 'solid'
+    rocket_mass: Optional[float] = None  # used to derive thrust_to_weight_ratio for 'solid'
 
 
 @dataclass
@@ -481,20 +486,28 @@ class RocketBuilder:
         self, config: EngineConfig, atmosphere: IAtmosphere
     ) -> IEngine:
         """Create engine from configuration."""
-        return EnhancedEngine(
+        engine_data: Dict[str, Any] = {
+            'burn_time': config.burn_time,
+            'nozzle_exit_diameter': config.nozzle_exit_diameter,
+            'propellant_mass': config.propellant_mass,
+            'specific_impulse': config.specific_impulse,
+            'mean_thrust': config.mean_thrust,
+            'max_thrust': config.max_thrust,
+            'mean_chamber_pressure': config.mean_chamber_pressure,
+            'max_chamber_pressure': config.max_chamber_pressure,
+            'thrust_to_weight_ratio': config.thrust_to_weight_ratio,
+            'thrust_curve_file': config.thrust_curve_file,
+            'thrust_curve_unit': config.thrust_curve_unit,
+            'thrust_curve_mode': config.thrust_curve_mode,
+            'engine_model': config.engine_model,
+        }
+        if config.motor_config is not None:
+            engine_data['motor'] = config.motor_config
+        return create_engine(
+            engine_data,
             time=0.0,
-            burn_time=config.burn_time,
-            ambient_pressure=config.ambient_pressure,
-            nozzle_exit_diameter=config.nozzle_exit_diameter,
-            propellant_mass=config.propellant_mass,
-            specific_impulse=config.specific_impulse,
-            mean_thrust=config.mean_thrust,
-            max_thrust=config.max_thrust,
-            mean_chamber_pressure=config.mean_chamber_pressure,
-            max_chamber_pressure=config.max_chamber_pressure,
-            thrust_to_weight_ratio=config.thrust_to_weight_ratio,
-            thrust_curve_file=config.thrust_curve_file,
-            thrust_curve_unit=config.thrust_curve_unit
+            ambient_pressure=atmosphere.give_pressure(0.0),
+            rocket_mass=config.rocket_mass,
         )
     
     def _create_mass_properties_from_config(
@@ -615,22 +628,74 @@ def load_rocket_config(rocket_name: str, configs_dir: str = 'data/rockets/config
 def create_engine(
     engine_data: dict,
     time: float = 0.0,
-    ambient_pressure: float = RC.DEFAULT_PRESSURE
+    ambient_pressure: float = RC.DEFAULT_PRESSURE,
+    rocket_mass: Optional[float] = None
 ) -> IEngine:
     """
     Create an engine instance from configuration dictionary.
-    
+
     Args:
-        engine_data: Engine configuration dictionary
+        engine_data: Engine configuration dictionary.  ``engine_data['engine_model']``
+            selects the model: 'enhanced' (default, scalar EnhancedEngine),
+            'experimental' (EnhancedEngine + CSV thrust curve) or 'solid'
+            (SolidMotorEngine driven by the ``engine_data['motor']`` grain-design
+            section; the scalar performance keys are backfilled from the computed
+            motor so downstream consumers keep working unchanged).
         time: Initial time [s]
         ambient_pressure: Initial ambient pressure [Pa]
-    
+        rocket_mass: Total rocket mass [kg] used to derive thrust_to_weight_ratio
+            for solid motors (falls back to ``engine_data['initial_mass']``)
+
     Returns:
         IEngine: Configured engine instance
-    
+
     Raises:
         RocketConfigurationError: If engine_data is missing required fields
     """
+    engine_model = str(engine_data.get('engine_model', '')).lower()
+    if not engine_model:
+        engine_model = 'experimental' if engine_data.get('thrust_curve_mode') == 'experimental' else 'enhanced'
+
+    if engine_model == 'solid':
+        motor_cfg = engine_data.get('motor')
+        if not isinstance(motor_cfg, dict) or not motor_cfg:
+            raise RocketConfigurationError(
+                "engine_model='solid' requires a 'motor' section with 'grain', "
+                "'propellant' and 'nozzle' subsections"
+            )
+        mass = rocket_mass if rocket_mass is not None else engine_data.get('initial_mass')
+        curve_file = engine_data.get('thrust_curve_file')
+        if engine_data.get('thrust_curve_mode') == 'experimental' and curve_file:
+            motor_cfg = dict(motor_cfg)
+            motor_cfg['thrust_curve_file'] = curve_file
+            motor_cfg['thrust_curve_unit'] = engine_data.get('thrust_curve_unit', 'N')
+        try:
+            engine = create_solid_motor(
+                motor_cfg, time=time, ambient_pressure=ambient_pressure,
+                rocket_mass=float(mass) if mass is not None else None,
+            )
+        except InputValidationError as exc:
+            raise RocketConfigurationError(f"Invalid solid motor configuration: {exc}") from exc
+        summary = engine.summary()
+        backfill = {
+            'burn_time': summary['burn_time'],
+            'propellant_mass': summary['propellant_mass'],
+            'specific_impulse': summary['specific_impulse'],
+            'mean_thrust': summary['mean_thrust'],
+            'max_thrust': summary['max_thrust'],
+            'mean_chamber_pressure': summary['mean_chamber_pressure'],
+            'max_chamber_pressure': summary['max_chamber_pressure'],
+            'nozzle_exit_diameter': summary['nozzle_exit_diameter'],
+            'mass_flux': summary['mass_flux'],
+            'gas_speed': summary['gas_speed'],
+            'exit_pressure': summary['exit_pressure'],
+            'thrust_to_weight_ratio': engine.thrust_to_weight_ratio,
+        }
+        for key, value in backfill.items():
+            if value:
+                engine_data.setdefault(key, value)
+        return engine
+
     # Validate required fields
     required_fields = [
         'burn_time',
@@ -1022,7 +1087,8 @@ def create_rocket_from_config(
     # Create engine
     engine_data = rocket_config.get('engine', {})
     propellant_mass = engine_data.get('propellant_mass', 0.0)
-    engine = create_engine(engine_data, time=0.0, ambient_pressure=atmosphere.give_pressure(0.0))
+    engine = create_engine(engine_data, time=0.0, ambient_pressure=atmosphere.give_pressure(0.0),
+                           rocket_mass=initial_mass)
     
     # Create mass properties
     mass_props_before = rocket_config.get('CoM_before_burn', {'x': 0, 'y': 0, 'z': 0})
