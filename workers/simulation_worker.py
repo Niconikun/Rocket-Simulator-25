@@ -19,6 +19,7 @@ Migration Status: Phase 4 - Migrated to new architecture
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from src.models.state import StateProvider, StateProxy
+from src.config import Constants
 from src.models.rocket.factory import (
     create_rocket_from_config,
     create_engine,
@@ -159,32 +160,32 @@ class SimulationWorker(QThread):
         logger.info("Starting rocket flight simulation with real physics engine")
 
         # Get simulation parameters from state
-        runtime = self.state.get('sim_runtime', 600)  # seconds
-        timestep = self.state.get('sim_time_step', 0.001)  # seconds
-        rocket_name = self.state.get('selected_rocket', 'agni-1')
-        location_name = self.state.get('sim_location', 'Unknown')
+        runtime = self.state.get(Constants.StateKeys.SIM_RUNTIME, 600)  # seconds
+        timestep = self.state.get(Constants.StateKeys.SIM_TIME_STEP, 0.001)  # seconds
+        rocket_name = self.state.get(Constants.StateKeys.SELECTED_ROCKET, 'agni-1')
+        location_name = self.state.get(Constants.StateKeys.SIM_LOCATION, 'Unknown')
             
         # ===== PARACHUTE INITIALIZATION =====
         parachute = None
-        if self.state.get('parachute_enabled', False):
+        if self.state.get(Constants.StateKeys.PARACHUTE_ENABLED, False):
             parachute_config = {
-                'name': self.state.get('selected_parachute', 'Main Parachute'),
-                'diameter': self.state.get('parachute_diameter', 0.6),
-                'Cd': self.state.get('parachute_cd', 1.5),
-                'material': self.state.get('parachute_material', 'ripstop_nylon'),
-                'deployment_altitude': self.state.get('parachute_deployment_altitude', 300.0),
-                'min_velocity': self.state.get('parachute_min_velocity', 5.0),
-                'max_velocity': self.state.get('parachute_max_velocity', 80.0),
-                'inflation_time': self.state.get('parachute_inflation_time', 0.5),
-                'drogue_enabled': self.state.get('drogue_enabled', False),
+                'name': self.state.get(Constants.StateKeys.SELECTED_PARACHUTE, 'Main Parachute'),
+                'diameter': self.state.get(Constants.StateKeys.PARACHUTE_DIAMETER, 0.6),
+                'Cd': self.state.get(Constants.StateKeys.PARACHUTE_CD, 1.5),
+                'material': self.state.get(Constants.StateKeys.PARACHUTE_MATERIAL, 'ripstop_nylon'),
+                'deployment_altitude': self.state.get(Constants.StateKeys.PARACHUTE_DEPLOYMENT_ALTITUDE, 300.0),
+                'min_velocity': self.state.get(Constants.StateKeys.PARACHUTE_MIN_VELOCITY, 5.0),
+                'max_velocity': self.state.get(Constants.StateKeys.PARACHUTE_MAX_VELOCITY, 80.0),
+                'inflation_time': self.state.get(Constants.StateKeys.PARACHUTE_INFLATION_TIME, 0.5),
+                'drogue_enabled': self.state.get(Constants.StateKeys.DROGUE_ENABLED, False),
             }
                 
             if parachute_config['drogue_enabled']:
                 parachute_config.update({
-                    'drogue_diameter': self.state.get('drogue_diameter', 0.25),
-                    'drogue_Cd': self.state.get('drogue_cd', 1.5),
-                    'drogue_deployment_altitude': self.state.get('drogue_deployment_altitude', 800.0),
-                    'drogue_inflation_time': self.state.get('drogue_inflation_time', 0.2),
+                    'drogue_diameter': self.state.get(Constants.StateKeys.DROGUE_DIAMETER, 0.25),
+                    'drogue_Cd': self.state.get(Constants.StateKeys.DROGUE_CD, 1.5),
+                    'drogue_deployment_altitude': self.state.get(Constants.StateKeys.DROGUE_DEPLOYMENT_ALTITUDE, 800.0),
+                    'drogue_inflation_time': self.state.get(Constants.StateKeys.DROGUE_INFLATION_TIME, 0.2),
                 })
                 
             parachute = Parachute(parachute_config)
@@ -215,19 +216,19 @@ class SimulationWorker(QThread):
                           "Simulation may have unexpected results.")
             
         # Get environmental parameters
-        temperature = self.state.get('average_temperature', 20.0)  # Celsius
-        latitude = self.state.get('launch_latitude', 0.0)
-        longitude = self.state.get('launch_longitude', 0.0)
-        altitude = self.state.get('launch_elevation', 60.0)  # meters
+        temperature = self.state.get(Constants.StateKeys.AVERAGE_TEMPERATURE, 20.0)  # Celsius
+        latitude = self.state.get(Constants.StateKeys.LAUNCH_LATITUDE, 0.0)
+        longitude = self.state.get(Constants.StateKeys.LAUNCH_LONGITUDE, 0.0)
+        altitude = self.state.get(Constants.StateKeys.LAUNCH_ELEVATION, 60.0)  # meters
             
         # Get launch parameters
-        launch_elevation_angle = self.state.get('launch_elevation_angle', 85.0)  # degrees
-        launch_azimuth = self.state.get('launch_azimuth', 0.0)  # degrees
-        launch_roll = self.state.get('launch_roll', 0.0)  # degrees
+        launch_elevation_angle = self.state.get(Constants.StateKeys.LAUNCH_ELEVATION_ANGLE, 85.0)  # degrees
+        launch_azimuth = self.state.get(Constants.StateKeys.LAUNCH_AZIMUTH, 0.0)  # degrees
+        launch_roll = self.state.get(Constants.StateKeys.LAUNCH_ROLL, 0.0)  # degrees
             
         # Get launch date/time
-        launch_date = self.state.get('sim_date', datetime.now().date())
-        launch_time = self.state.get('sim_time', datetime.now().time())
+        launch_date = self.state.get(Constants.StateKeys.SIM_DATE, datetime.now().date())
+        launch_time = self.state.get(Constants.StateKeys.SIM_TIME, datetime.now().time())
             
         # Initialize physics models
         logger.info(f"Initializing physics models for {rocket_name}")
@@ -319,7 +320,7 @@ class SimulationWorker(QThread):
         # ===== THERMO (Phase 4): aerodynamic heating from the panel Cp map =====
         thermo_enabled = (
             HAS_THERMO
-            and bool(self.state.get('thermo_enabled', False))
+            and bool(self.state.get(Constants.StateKeys.THERMO_ENABLED, False))
             and callable(getattr(aerodynamics, 'get_surface_pressure', None))
         )
         heat_load_joules = 0.0
@@ -377,7 +378,7 @@ class SimulationWorker(QThread):
             'rocket': rocket_name,
             'location': location_name,
             'aero_method': aero_method_name,
-            'thermo_enabled': bool(self.state.get('thermo_enabled', False)),
+            'thermo_enabled': bool(self.state.get(Constants.StateKeys.THERMO_ENABLED, False)),
         }
             
         # Phase 1: Diagnostic tracking
