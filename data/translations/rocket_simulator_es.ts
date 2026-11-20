@@ -118,6 +118,416 @@
         <source>Ready</source>
         <translation>Listo</translation>
     </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>2D Trajectory Map</source>
+        <translation>Mapa de trayectoria 2D</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>3D Flight Path</source>
+        <translation>Trayectoria de vuelo 3D</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Aero Coefficients</source>
+        <translation>Coeficientes aerodinámicos</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Altitude &amp; Velocity</source>
+        <translation>Altitud y velocidad</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Altitude [m]</source>
+        <translation>Altitud [m]</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Atmosphere</source>
+        <translation>Atmósfera</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Attitude</source>
+        <translation>Actitud</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>CSV Files (*.csv);;All Files (*)</source>
+        <translation>Archivos CSV (*.csv);;Todos los archivos (*)</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Chart Error</source>
+        <translation>Error de gráfico</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Confirm Delete</source>
+        <translation>Confirmar eliminación</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Could not delete simulation</source>
+        <translation>No se pudo eliminar la simulación</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Cp Map (max-q)</source>
+        <translation>Mapa Cp (max-q)</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Cp Profile (max-q)</source>
+        <translation>Perfil Cp (max-q)</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Deployed ✅</source>
+        <translation>Desplegado ✅</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Deployment Altitude</source>
+        <translation>Altitud de despliegue</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Deployment Time</source>
+        <translation>Tiempo de despliegue</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Deployment Velocity</source>
+        <translation>Velocidad de despliegue</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Drogue Status</source>
+        <translation>Estado del drogue</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Dynamic Pressure</source>
+        <translation>Presión dinámica</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Energy</source>
+        <translation>Energía</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Error</source>
+        <translation>Error</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Event</source>
+        <translation>Evento</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Export CSV</source>
+        <translation>Exportar a CSV</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Flight Events Timeline</source>
+        <translation>Cronología de eventos de vuelo</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Flight Metrics</source>
+        <translation>Métricas de vuelo</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Flight Path</source>
+        <translation>Trayectoria de vuelo</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Flight Time</source>
+        <translation>Tiempo de vuelo</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Flight Visualization</source>
+        <translation>Visualización del vuelo</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Forces</source>
+        <translation>Fuerzas</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Generate PDF</source>
+        <translation>Generar PDF</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Heat Flux</source>
+        <translation>Flujo de calor</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Landing Speed</source>
+        <translation>Velocidad de aterrizaje</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Load</source>
+        <translation>Cargar</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Load Simulation:</source>
+        <translation>Cargar simulación:</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Location</source>
+        <translation>Ubicación</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Mach Number</source>
+        <translation>Número de Mach</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Mass &amp; Altitude</source>
+        <translation>Masa y altitud</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Max Acceleration</source>
+        <translation>Aceleración máx.</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Max Altitude</source>
+        <translation>Altitud máx.</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Max Descent Rate</source>
+        <translation>Tasa máx. de descenso</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Max Heat Flux</source>
+        <translation>Flujo de calor máx.</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Max Mach</source>
+        <translation>Mach máx.</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Max Range</source>
+        <translation>Alcance máx.</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Max Stag Temp</source>
+        <translation>Temp. de estancamiento máx.</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Max Velocity</source>
+        <translation>Velocidad máx.</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>N/A</source>
+        <translation>N/D</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>No data</source>
+        <translation>Sin datos</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>No simulation loaded</source>
+        <translation>Ninguna simulación cargada</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>No simulation selected</source>
+        <translation>Ninguna simulación seleccionada</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>No simulations</source>
+        <translation>Sin simulaciones</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Not deployed</source>
+        <translation>No desplegado</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>PDF Files (*.pdf);;All Files (*)</source>
+        <translation>Archivos PDF (*.pdf);;Todos los archivos (*)</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Parachute Recovery</source>
+        <translation>Recuperación con paracaídas</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Pressure</source>
+        <translation>Presión</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Rocket</source>
+        <translation>Cohete</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Rocket Flight Simulation Report</source>
+        <translation>Informe de simulación de vuelo del cohete</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Simulation Information</source>
+        <translation>Información de la simulación</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Simulation deleted</source>
+        <translation>Simulación eliminada</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Simulations</source>
+        <translation>Simulaciones</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Stability</source>
+        <translation>Estabilidad</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Stagnation Temp</source>
+        <translation>Temp. de estancamiento</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Success</source>
+        <translation>Éxito</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Temperature</source>
+        <translation>Temperatura</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Thrust/Weight</source>
+        <translation>Empuje/Peso</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Time [s]</source>
+        <translation>Tiempo [s]</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Velocity Components</source>
+        <translation>Componentes de velocidad</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Velocity [m/s]</source>
+        <translation>Velocidad [m/s]</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>Warning</source>
+        <translation>Aviso</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>theta [rad]</source>
+        <translation>theta [rad]</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>x from nose [m]</source>
+        <translation>x desde la punta [m]</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>—</source>
+        <translation>—</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>🎯 Landing</source>
+        <translation>🎯 Aterrizaje</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>🏔️ Apogee</source>
+        <translation>🏔️ Apogeo</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>💨 Max-Q</source>
+        <translation>💨 Max-Q</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>📄 Generate PDF Report</source>
+        <translation>📄 Generar informe PDF</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>📥 Export to CSV</source>
+        <translation>📥 Exportar a CSV</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>🔄 Refresh</source>
+        <translation>🔄 Actualizar</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>🔥 Ignition</source>
+        <translation>🔥 Ignición</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>🗑️ Delete</source>
+        <translation>🗑️ Eliminar</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>🛑 Burnout</source>
+        <translation>🛑 Fin de combustión</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>🪂 Drogue Deploy</source>
+        <translation>🪂 Despliegue de drogue</translation>
+    </message>
+    <message>
+        <location filename="ui/widgets/dashboard_widget.py"/>
+        <source>🪂 Parachute Deploy</source>
+        <translation>🪂 Despliegue de paracaídas</translation>
+    </message>
 </context>
 
 <context>
