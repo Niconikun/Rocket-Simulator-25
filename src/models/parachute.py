@@ -197,37 +197,6 @@ class Parachute(IParachute):
         
         return drag_main + drag_drogue
     
-    def calculate_descent_rate(
-        self, mass: float, air_density: float, g: float = PC.STANDARD_GRAVITY
-    ) -> float:
-        """
-        Calculate equilibrium descent rate under parachute.
-        
-        At equilibrium: D = mg, so:
-        v_eq = sqrt(2*m*g / (rho * C_d * A))
-        
-        Args:
-            mass: Rocket mass in kg
-            air_density: Air density in kg/m³
-            g: Gravitational acceleration in m/s²
-        
-        Returns:
-            Equilibrium descent rate in m/s
-        """
-        if not self._deployed or air_density <= 0:
-            return 0.0
-        
-        # Combined parachute area
-        area = np.pi * (self.diameter / 2.0) ** 2
-        if self._drogue_deployed:
-            area += np.pi * (self.drogue_diameter / 2.0) ** 2
-        
-        # Combined drag coefficient (approximate)
-        effective_cd = self.Cd + (self.drogue_Cd if self._drogue_deployed else 0)
-        
-        descent_rate = np.sqrt(2 * mass * g / (air_density * effective_cd * area))
-        return descent_rate
-    
     def get_deployment_info(self) -> Dict:
         """
         Get deployment event information for logging.

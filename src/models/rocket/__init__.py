@@ -11,7 +11,6 @@ Phase 4 Status:
     - All code now uses the new architecture with dependency injection
 
 Structure:
-    adapter.py: Backward compatible wrapper for new Rocket
     state.py: RocketState - Pure state management
     dynamics.py: RocketDynamics - Force and torque calculations
     simulation.py: RocketSimulation - Numerical integration and history
@@ -49,7 +48,6 @@ from src.models.rocket.rocket import Rocket
 from src.models.rocket.state import RocketState
 from src.models.rocket.dynamics import RocketDynamics
 from src.models.rocket.simulation import RocketSimulation
-from src.models.rocket.adapter import LegacyRocketAdapter
 from src.models.engine import EnhancedEngine
 from src.models.aerodynamics import Aerodynamics
 from src.models.atmosphere import Atmosphere
@@ -63,7 +61,6 @@ from src.models.interfaces import (
 
 __all__ = [
     'Rocket',
-    'LegacyRocketAdapter',
     'RocketState',
     'RocketDynamics',
     'RocketSimulation',

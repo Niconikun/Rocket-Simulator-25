@@ -426,6 +426,12 @@ class Rocket:
         Args:
             engine: Engine instance implementing IEngine
         """
+        import warnings
+        warnings.warn(
+            "Rocket.set_engine() is deprecated; pass the engine via the constructor instead",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.engine = engine
         self.dynamics.engine = engine
     
@@ -449,16 +455,6 @@ class Rocket:
         self.atmosphere = atmosphere
         self.dynamics.atmosphere = atmosphere
     
-    def set_mass_properties(self, mass_properties: 'IMassProperties') -> None:
-        """
-        Set the mass properties implementation.
-        
-        Args:
-            mass_properties: Mass properties instance implementing IMassProperties
-        """
-        self.mass_properties = mass_properties
-        self.dynamics.mass_properties = mass_properties
-    
     def set_wind(self, wind_vector_enu: np.ndarray) -> None:
         """
         Set the wind vector directly.
@@ -468,15 +464,6 @@ class Rocket:
         """
         self.wind_vector_enu = np.array(wind_vector_enu)
         self.dynamics.update_environment(wind_vector_enu=wind_vector_enu)
-    
-    def set_wind_model(self, wind_model: 'WindModel') -> None:
-        """
-        Set the wind model for dynamic wind calculations.
-        
-        Args:
-            wind_model: WindModel instance for atmospheric wind
-        """
-        self.wind_model = wind_model
     
     def set_parachute(self, parachute: 'Parachute') -> None:
         """
@@ -530,49 +517,8 @@ class Rocket:
         return self.dynamics.alpha
     
     # ------------------------------------------------------------------
-    # History Access
-    # ------------------------------------------------------------------
-    
-    def get_history_positions(self) -> np.ndarray:
-        """Get history of positions."""
-        return self.simulation.get_history_array('positions')
-    
-    def get_history_velocities(self) -> np.ndarray:
-        """Get history of velocities."""
-        return self.simulation.get_history_array('velocities')
-    
-    def get_history_times(self) -> np.ndarray:
-        """Get history of times."""
-        return self.simulation.get_history_array('times')
-    
-    def get_history_masses(self) -> np.ndarray:
-        """Get history of masses."""
-        return self.simulation.get_history_array('masses')
-    
-    # ------------------------------------------------------------------
     # Utility Methods
     # ------------------------------------------------------------------
-    
-    def get_state_dict(self) -> dict:
-        """
-        Get current state as a dictionary.
-        
-        Returns:
-            dict: Current state values
-        """
-        return {
-            'time': self.state.time,
-            'position': self.state.r_enu.tolist(),
-            'velocity': self.state.v_enu.tolist(),
-            'attitude': self.state.q_enu2b.tolist(),
-            'mass': self.state.mass,
-            'yaw': self.state.yaw,
-            'pitch': self.state.pitch,
-            'roll': self.state.roll,
-            'thrust': self.thrust,
-            'mach': self.mach,
-            'alpha': self.alpha
-        }
     
     def __repr__(self) -> str:
         """String representation."""
@@ -584,7 +530,4 @@ class Rocket:
         )
 
 
-# Backward compatibility: keep the same name for the main class
-RocketClass = Rocket
-
-__all__ = ['Rocket', 'RocketClass']
+__all__ = ['Rocket']

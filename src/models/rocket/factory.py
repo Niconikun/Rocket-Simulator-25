@@ -1196,7 +1196,15 @@ def update_rocket_for_step(
         coordinates: Launch coordinates [lat, lon, alt]
         timestep: Simulation timestep [s]
         wind_vector_enu: Wind vector in ENU frame [m/s]
+    
+    DEPRECATED: not used by the application; the worker calls rocket.step() directly.
     """
+    import warnings
+    warnings.warn(
+        "update_rocket_for_step() is deprecated; the simulation worker calls rocket.step() directly",
+        DeprecationWarning,
+        stacklevel=2
+    )
     # Update wind
     if wind_vector_enu is not None:
         rocket.set_wind(wind_vector_enu)
@@ -1237,7 +1245,15 @@ def run_simulation(
     
     Returns:
         dict: Simulation results with trajectory and metrics
+    
+    DEPRECATED: not used by the application; see workers/simulation_worker.py for the real loop.
     """
+    import warnings
+    warnings.warn(
+        "run_simulation() is deprecated; see workers/simulation_worker.py for the real simulation loop",
+        DeprecationWarning,
+        stacklevel=2
+    )
     num_steps = int(runtime / timestep)
     trajectory = []
     

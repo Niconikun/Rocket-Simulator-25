@@ -208,15 +208,6 @@ class MassProperties(IMassProperties):
         inertia = self.inertia_before * (1 - t) + self.inertia_after * t
         return inertia.copy()
     
-    def get_propellant_mass(self) -> float:
-        """
-        Get total propellant mass.
-        
-        Returns:
-            float: Total propellant mass in kg [kg]
-        """
-        return self.propellant_mass
-    
     def get_burn_fraction(self, current_mass: float) -> float:
         """
         Calculate burn fraction from current mass.
@@ -233,32 +224,5 @@ class MassProperties(IMassProperties):
         burn_fraction = (self.mass_before - current_mass) / self._mass_range
         return np.clip(burn_fraction, 0.0, 1.0)
     
-    def get_mass_properties_dict(self, burn_fraction: float) -> dict:
-        """
-        Get all mass properties as a dictionary.
-        
-        Convenience method for getting all properties at once.
-        
-        Args:
-            burn_fraction: Fraction of propellant burned (0.0 to 1.0) [-]
-        
-        Returns:
-            dict: Dictionary containing:
-                - 'mass': Current total mass [kg]
-                - 'center_of_mass': Current CoM [x, y, z] [m]
-                - 'inertia': Current moments of inertia [Ixx, Iyy, Izz] [kg·m²]
-                - 'burn_fraction': Current burn fraction [-]
-                - 'propellant_remaining': Remaining propellant [kg]
-        """
-        burn_fraction = np.clip(burn_fraction, 0.0, 1.0)
-        
-        return {
-            'mass': self.get_mass(burn_fraction),
-            'center_of_mass': self.get_center_of_mass(burn_fraction),
-            'inertia': self.get_inertia(burn_fraction),
-            'burn_fraction': burn_fraction,
-            'propellant_remaining': self.propellant_mass * (1 - burn_fraction)
-        }
-
 
 __all__ = ['MassProperties']

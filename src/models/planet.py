@@ -93,7 +93,15 @@ class Planet:
     def save_data(self) -> None:
         """
         Saves current GMST value to history.
+        
+        DEPRECATED: unused by the application.
         """
+        import warnings
+        warnings.warn(
+            "Planet.save_data() is deprecated and unused by the application",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.hist_gmst.append(self.gmst)
         logger.debug(f"GMST saved to history, total entries: {len(self.hist_gmst)}")
     
@@ -103,5 +111,13 @@ class Planet:
         
         Returns:
             Current Greenwich Mean Sidereal Time [rad]
+        
+        DEPRECATED: unused by the application (use the gmst attribute directly).
         """
+        import warnings
+        warnings.warn(
+            "Planet.give_gmst() is deprecated; use the gmst attribute directly",
+            DeprecationWarning,
+            stacklevel=2
+        )
         return self.gmst

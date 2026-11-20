@@ -198,7 +198,15 @@ class ApplicationState(StateProvider):
         to be created. Useful for testing to ensure a clean state.
         
         WARNING: This affects the global singleton state. Use with caution.
+        
+        DEPRECATED: not used by the application; kept for backward compatibility.
         """
+        import warnings
+        warnings.warn(
+            "ApplicationState.hard_reset() is deprecated and unused by the application",
+            DeprecationWarning,
+            stacklevel=2
+        )
         ApplicationState._instance = None
         logger.info("ApplicationState singleton instance cleared")
     
@@ -208,7 +216,15 @@ class ApplicationState(StateProvider):
         
         Returns:
             A fresh ApplicationState instance
+        
+        DEPRECATED: not used by the application; kept for backward compatibility.
         """
+        import warnings
+        warnings.warn(
+            "ApplicationState.reset_instance() is deprecated and unused by the application",
+            DeprecationWarning,
+            stacklevel=2
+        )
         cls._instance = None
         new_instance = cls()
         logger.info("ApplicationState singleton reset and recreated")
@@ -366,31 +382,4 @@ class ApplicationState(StateProvider):
                 result.append(item)
         return result
     
-    def save_session(self, filepath: Optional[str] = None) -> bool:
-        """Save current session to file (alias for save_to_file)."""
-        return self.save_to_file(filepath)
-    
-    def load_session(self, filepath: Optional[str] = None) -> bool:
-        """Load session from file (alias for load_from_file)."""
-        return self.load_from_file(filepath)
-    
-    def auto_save(self, filepath: Optional[str] = None) -> bool:
-        """Auto-save state with timestamp backup."""
-        if filepath is None:
-            filepath = DEFAULT_SESSION_FILE
-        
-        # Create backup with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_filepath = f"{filepath}.bak_{timestamp}"
-        
-        # Save current state to backup first
-        if os.path.exists(filepath):
-            try:
-                import shutil
-                shutil.copy2(filepath, backup_filepath)
-                logger.debug(f"Backup created: {backup_filepath}")
-            except Exception as e:
-                logger.warning(f"Failed to create backup: {e}")
-        
-        # Save current state
-        return self.save_to_file(filepath)
+
