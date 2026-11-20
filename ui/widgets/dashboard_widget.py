@@ -11,6 +11,7 @@ from PyQt6.QtGui import QPalette, QCloseEvent
 from ui.widgets import BaseWidget
 from src.models.state import StateProvider
 from src.config import Constants
+from src.config.translations import tr
 from typing import Optional, Dict
 from src.utils.simulation_manager import SimulationManager
 from src.utils.event_bus import EventType, subscribe, unsubscribe
@@ -123,7 +124,7 @@ class DashboardWidget(BaseWidget):
         # Show error in dashboard
         QMessageBox.warning(
             self, 
-            "Simulation Error",
+            tr("Simulation Error"),
             f"Simulation failed at {timestamp}:\n{error_msg}"
         )
     
@@ -145,11 +146,11 @@ class DashboardWidget(BaseWidget):
         """Clear the dashboard display."""
         # Clear metric labels
         for key in self.metric_labels:
-            self.metric_labels[key].setText("No data")
+            self.metric_labels[key].setText(tr("No data"))
         
         # Clear info labels
         for key in self.info_labels:
-            self.info_labels[key].setText("N/A")
+            self.info_labels[key].setText(tr("N/A"))
         
         # Clear events table
         self.events_table.setRowCount(0)
@@ -188,20 +189,20 @@ class DashboardWidget(BaseWidget):
         main_layout = QVBoxLayout()
         
         # ===== SIMULATION SELECTION =====
-        selection_group = QGroupBox("Simulations")
+        selection_group = QGroupBox(tr("Simulations"))
         selection_layout = QHBoxLayout()
         
-        selection_layout.addWidget(QLabel("Load Simulation:"))
+        selection_layout.addWidget(QLabel(tr("Load Simulation:")))
         
         self.sim_combo = QComboBox()
         self.sim_combo.currentIndexChanged.connect(self.on_simulation_selected)
         selection_layout.addWidget(self.sim_combo)
         
-        load_button = QPushButton("Load")
+        load_button = QPushButton(tr("Load"))
         load_button.clicked.connect(self.load_selected_simulation)
         selection_layout.addWidget(load_button)
         
-        delete_button = QPushButton("🗑️ Delete")
+        delete_button = QPushButton(tr("🗑️ Delete"))
         delete_button.clicked.connect(self.delete_selected_simulation)
         selection_layout.addWidget(delete_button)
         
@@ -209,20 +210,20 @@ class DashboardWidget(BaseWidget):
         main_layout.addWidget(selection_group)
         
         # ===== KEY METRICS =====
-        metrics_group = QGroupBox("Flight Metrics")
+        metrics_group = QGroupBox(tr("Flight Metrics"))
         metrics_layout = QGridLayout()
         
         # Metric display labels
         self.metric_labels = {}
         metrics = [
-            ("max_altitude", "Max Altitude"),
-            ("max_velocity", "Max Velocity"),
-            ("max_range", "Max Range"),
-            ("max_mach", "Max Mach"),
-            ("flight_duration", "Flight Time"),
-            ("max_accel_g", "Max Acceleration"),
-            ("max_heat_flux", "Max Heat Flux"),
-            ("max_stagnation_temp", "Max Stag Temp"),
+            ("max_altitude", tr("Max Altitude")),
+            ("max_velocity", tr("Max Velocity")),
+            ("max_range", tr("Max Range")),
+            ("max_mach", tr("Max Mach")),
+            ("flight_duration", tr("Flight Time")),
+            ("max_accel_g", tr("Max Acceleration")),
+            ("max_heat_flux", tr("Max Heat Flux")),
+            ("max_stagnation_temp", tr("Max Stag Temp")),
         ]
         
         for i, (key, label) in enumerate(metrics):
@@ -231,7 +232,7 @@ class DashboardWidget(BaseWidget):
             
             metric_subgroup = QGroupBox(label)
             metric_layout = QVBoxLayout()
-            metric_value = QLabel("No data")
+            metric_value = QLabel(tr("No data"))
             metric_value.setStyleSheet("font-size: 18px; font-weight: bold;")
             self.metric_labels[key] = metric_value
             metric_layout.addWidget(metric_value)
@@ -244,15 +245,15 @@ class DashboardWidget(BaseWidget):
         main_layout.addWidget(metrics_group)
         
         # ===== SIMULATION INFO =====
-        info_group = QGroupBox("Simulation Information")
+        info_group = QGroupBox(tr("Simulation Information"))
         info_layout = QGridLayout()
         
         self.info_labels = {}
         info_fields = [
-            ("rocket", "Rocket"),
-            ("location", "Location"),
-            ("temperature", "Temperature"),
-            ("pressure", "Pressure"),
+            ("rocket", tr("Rocket")),
+            ("location", tr("Location")),
+            ("temperature", tr("Temperature")),
+            ("pressure", tr("Pressure")),
         ]
         
         for i, (key, label) in enumerate(info_fields):
@@ -260,7 +261,7 @@ class DashboardWidget(BaseWidget):
             col = (i % 2) * 2
             
             info_layout.addWidget(QLabel(f"{label}:"), row, col)
-            value_label = QLabel("N/A")
+            value_label = QLabel(tr("N/A"))
             self.info_labels[key] = value_label
             info_layout.addWidget(value_label, row, col + 1)
         
@@ -268,12 +269,12 @@ class DashboardWidget(BaseWidget):
         main_layout.addWidget(info_group)
         
         # ===== FLIGHT EVENTS TIMELINE =====
-        events_group = QGroupBox("Flight Events Timeline")
+        events_group = QGroupBox(tr("Flight Events Timeline"))
         events_layout = QVBoxLayout()
         
         self.events_table = QTableWidget()
         self.events_table.setColumnCount(4)
-        self.events_table.setHorizontalHeaderLabels(["Event", "Time [s]", "Altitude [m]", "Velocity [m/s]"])
+        self.events_table.setHorizontalHeaderLabels([tr("Event"), tr("Time [s]"), tr("Altitude [m]"), tr("Velocity [m/s]")])
         header = self.events_table.horizontalHeader()
         if header:
             header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -286,24 +287,24 @@ class DashboardWidget(BaseWidget):
         main_layout.addWidget(events_group)
         
         # ===== PARACHUTE RECOVERY SUMMARY =====
-        self.parachute_group = QGroupBox("Parachute Recovery")
+        self.parachute_group = QGroupBox(tr("Parachute Recovery"))
         parachute_layout = QGridLayout()
         
         self.parachute_labels = {}
         parachute_fields = [
-            ("deploy_alt", "Deployment Altitude"),
-            ("deploy_vel", "Deployment Velocity"),
-            ("deploy_time", "Deployment Time"),
-            ("landing_speed", "Landing Speed"),
-            ("max_descent", "Max Descent Rate"),
-            ("drogue_status", "Drogue Status"),
+            ("deploy_alt", tr("Deployment Altitude")),
+            ("deploy_vel", tr("Deployment Velocity")),
+            ("deploy_time", tr("Deployment Time")),
+            ("landing_speed", tr("Landing Speed")),
+            ("max_descent", tr("Max Descent Rate")),
+            ("drogue_status", tr("Drogue Status")),
         ]
         
         for i, (key, label) in enumerate(parachute_fields):
             row = i // 3
             col = (i % 3) * 2
             parachute_layout.addWidget(QLabel(f"{label}:"), row, col)
-            value_label = QLabel("N/A")
+            value_label = QLabel(tr("N/A"))
             value_label.setStyleSheet("font-weight: bold;")
             self.parachute_labels[key] = value_label
             parachute_layout.addWidget(value_label, row, col + 1)
@@ -313,7 +314,7 @@ class DashboardWidget(BaseWidget):
         main_layout.addWidget(self.parachute_group)
         
         # ===== FLIGHT VISUALIZATION (all charts as tabs) =====
-        viz_group = QGroupBox("Flight Visualization")
+        viz_group = QGroupBox(tr("Flight Visualization"))
         viz_layout = QVBoxLayout()
         self.charts_tab_widget = QTabWidget()
         self.charts_tab_widget.setMinimumHeight(550)
@@ -324,15 +325,15 @@ class DashboardWidget(BaseWidget):
         # ===== EXPORT BUTTONS =====
         export_layout = QHBoxLayout()
         
-        csv_button = QPushButton("📥 Export to CSV")
+        csv_button = QPushButton(tr("📥 Export to CSV"))
         csv_button.clicked.connect(self.export_csv)
         export_layout.addWidget(csv_button)
         
-        pdf_button = QPushButton("📄 Generate PDF Report")
+        pdf_button = QPushButton(tr("📄 Generate PDF Report"))
         pdf_button.clicked.connect(self.generate_pdf)
         export_layout.addWidget(pdf_button)
         
-        refresh_button = QPushButton("🔄 Refresh")
+        refresh_button = QPushButton(tr("🔄 Refresh"))
         refresh_button.clicked.connect(self.refresh_dashboard)
         export_layout.addWidget(refresh_button)
         
@@ -355,7 +356,7 @@ class DashboardWidget(BaseWidget):
         simulations = self.sim_manager.list_simulations()
         
         if not simulations:
-            self.sim_combo.addItem("No simulations", None)
+            self.sim_combo.addItem(tr("No simulations"), None)
             self.sim_combo.blockSignals(False)
             return
         
@@ -400,12 +401,12 @@ class DashboardWidget(BaseWidget):
         sim_id = self.sim_combo.currentData()
         
         if not sim_id:
-            QMessageBox.warning(self, "Warning", "No simulation selected")
+            QMessageBox.warning(self, tr("Warning"), tr("No simulation selected"))
             return
         
         sim_data = self.sim_manager.load_simulation(sim_id)
         if not sim_data:
-            QMessageBox.critical(self, "Error", f"Could not load simulation {sim_id}")
+            QMessageBox.critical(self, tr("Error"), f"Could not load simulation {sim_id}")
             return
         
         metadata = self.sim_manager.metadata.get(sim_id, {})
@@ -441,11 +442,11 @@ class DashboardWidget(BaseWidget):
         )
         hf = metadata.get('max_heat_flux', sim_metrics.get('max_heat_flux', 0.0))
         self.metric_labels['max_heat_flux'].setText(
-            f"{hf / 1000.0:.1f} kW/m²" if hf else "—"
+            f"{hf / 1000.0:.1f} kW/m²" if hf else tr("—")
         )
         ts = metadata.get('max_stagnation_temp', sim_metrics.get('max_stagnation_temperature', 0.0))
         self.metric_labels['max_stagnation_temp'].setText(
-            f"{ts:.0f} K" if ts else "—"
+            f"{ts:.0f} K" if ts else tr("—")
         )
         
         # Update info
@@ -478,11 +479,11 @@ class DashboardWidget(BaseWidget):
         sim_id = self.sim_combo.currentData()
         
         if not sim_id:
-            QMessageBox.warning(self, "Warning", "No simulation selected")
+            QMessageBox.warning(self, tr("Warning"), tr("No simulation selected"))
             return
         
         reply = QMessageBox.question(
-            self, "Confirm Delete",
+            self, tr("Confirm Delete"),
             f"Delete simulation {sim_id}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
@@ -490,10 +491,10 @@ class DashboardWidget(BaseWidget):
         if reply == QMessageBox.StandardButton.Yes:
             if self.sim_manager.delete_simulation(sim_id):
                 self.load_simulation_history()
-                QMessageBox.information(self, "Success", "Simulation deleted")
+                QMessageBox.information(self, tr("Success"), tr("Simulation deleted"))
                 logger.info(f"Deleted simulation: {sim_id}")
             else:
-                QMessageBox.critical(self, "Error", "Could not delete simulation")
+                QMessageBox.critical(self, tr("Error"), tr("Could not delete simulation"))
     
     def _populate_flight_events(self, sim_data):
         """Detect and display flight events in the events table."""
@@ -509,7 +510,7 @@ class DashboardWidget(BaseWidget):
         events = []
         
         # Event 1: Ignition (always at t=0)
-        events.append(("🔥 Ignition", 0.0, 0.0, 0.0))
+        events.append((tr("🔥 Ignition"), 0.0, 0.0, 0.0))
         
         # Aero model used for this run (barrowman / panel)
         aero_method = metrics.get('aero_method', 'barrowman') if isinstance(metrics, dict) else 'barrowman'
@@ -527,7 +528,7 @@ class DashboardWidget(BaseWidget):
                     burn_mask = thrust > 0.1
                     if burn_mask.any() and not burn_mask.all():
                         burnout_idx = np.where(burn_mask)[0][-1]
-                        events.append(("🛑 Burnout", 
+                        events.append((tr("🛑 Burnout"), 
                                       times[burnout_idx],
                                       altitudes[burnout_idx] if len(altitudes) > burnout_idx else 0,
                                       velocities[burnout_idx] if len(velocities) > burnout_idx else 0))
@@ -537,7 +538,7 @@ class DashboardWidget(BaseWidget):
                 if len(density) > 0 and len(velocities) > 0:
                     q = 0.5 * density * velocities**2
                     maxq_idx = np.argmax(q)
-                    events.append(("💨 Max-Q",
+                    events.append((tr("💨 Max-Q"),
                                   times[maxq_idx],
                                   altitudes[maxq_idx] if len(altitudes) > maxq_idx else 0,
                                   velocities[maxq_idx] if len(velocities) > maxq_idx else 0))
@@ -545,27 +546,27 @@ class DashboardWidget(BaseWidget):
                 # Event 4: Apogee
                 if len(altitudes) > 0:
                     apogee_idx = np.argmax(altitudes)
-                    events.append(("🏔️ Apogee",
+                    events.append((tr("🏔️ Apogee"),
                                   times[apogee_idx],
                                   altitudes[apogee_idx],
                                   velocities[apogee_idx] if len(velocities) > apogee_idx else 0))
                 
                 # Event 5: Parachute deployment
                 if parachute_info and parachute_info.get('deployed', False):
-                    events.append(("🪂 Parachute Deploy",
+                    events.append((tr("🪂 Parachute Deploy"),
                                   parachute_info.get('deployment_time', 0),
                                   parachute_info.get('deployment_altitude', 0),
                                   parachute_info.get('deployment_velocity', 0)))
                 
                 # Event 6: Drogue deployment
                 if parachute_info and parachute_info.get('drogue_deployed', False):
-                    events.append(("🪂 Drogue Deploy",
+                    events.append((tr("🪂 Drogue Deploy"),
                                   parachute_info.get('drogue_deployment_time', 0),
                                   parachute_info.get(Constants.StateKeys.DROGUE_DEPLOYMENT_ALTITUDE, 0),
                                   0))
                 
                 # Event 7: Landing (last data point)
-                events.append(("🎯 Landing",
+                events.append((tr("🎯 Landing"),
                               times[-1],
                               altitudes[-1] if len(altitudes) > 0 else 0,
                               velocities[-1] if len(velocities) > 0 else 0))
@@ -610,13 +611,13 @@ class DashboardWidget(BaseWidget):
         self.parachute_labels['deploy_vel'].setText(f"{deploy_vel:.1f} m/s")
         self.parachute_labels['deploy_time'].setText(f"{deploy_time:.2f} s")
         self.parachute_labels['landing_speed'].setText(
-            f"{landing_speed:.1f} m/s" if landing_speed else "N/A"
+            f"{landing_speed:.1f} m/s" if landing_speed else tr("N/A")
         )
         self.parachute_labels['max_descent'].setText(
-            f"{max_descent:.1f} m/s" if max_descent else "N/A"
+            f"{max_descent:.1f} m/s" if max_descent else tr("N/A")
         )
         self.parachute_labels['drogue_status'].setText(
-            "Deployed ✅" if drogue else "Not deployed"
+            tr("Deployed ✅") if drogue else tr("Not deployed")
         )
     
     def generate_performance_charts(self, sim_data):
@@ -650,21 +651,21 @@ class DashboardWidget(BaseWidget):
                 ['Altitude [m]', 'Velocity [m/s]'], ['blue', 'red'],
                 use_secondary_axis=True
             )
-            self._add_pyqtgraph_as_tab(plot1, "Altitude & Velocity")
+            self._add_pyqtgraph_as_tab(plot1, tr("Altitude & Velocity"))
             
             # Chart 2: Flight Path - Altitude vs Range
             plot2 = self._create_pyqtgraph_simple_plot(
                 "Flight Path",
                 ranges, altitudes, 'Range [m]', 'Altitude [m]', color='blue', name='Flight Path'
             )
-            self._add_pyqtgraph_as_tab(plot2, "Flight Path")
+            self._add_pyqtgraph_as_tab(plot2, tr("Flight Path"))
             
             # Chart 3: Mach Number vs Time
             plot3 = self._create_pyqtgraph_simple_plot(
                 "Mach Number",
                 times, machs, 'Time [s]', 'Mach', color='darkblue', name='Mach Number'
             )
-            self._add_pyqtgraph_as_tab(plot3, "Mach Number")
+            self._add_pyqtgraph_as_tab(plot3, tr("Mach Number"))
             
             # Charts 3b-3c: Aero & Thermal (present when panel method + thermo enabled)
             heat_flux = np.array([p.get('max_heat_flux', 0.0) for p in trajectory])
@@ -675,13 +676,13 @@ class DashboardWidget(BaseWidget):
                     times, heat_flux / 1000.0, 'Time [s]', 'q [kW/m²]',
                     color='red', name='Heat Flux'
                 )
-                self._add_pyqtgraph_as_tab(plot_hf, "Heat Flux")
+                self._add_pyqtgraph_as_tab(plot_hf, tr("Heat Flux"))
                 plot_st = self._create_pyqtgraph_simple_plot(
                     "Stagnation Temperature",
                     times, stag_temp, 'Time [s]', 'T0 [K]',
                     color='orange', name='Stagnation T'
                 )
-                self._add_pyqtgraph_as_tab(plot_st, "Stagnation Temp")
+                self._add_pyqtgraph_as_tab(plot_st, tr("Stagnation Temp"))
             
             # Charts 4-13: Additional performance data if available from history
             # Generate advanced charts from history data using PyQtGraph
@@ -694,7 +695,7 @@ class DashboardWidget(BaseWidget):
             
         except Exception as e:
             logger.error(f"Error generating charts: {e}")
-            QMessageBox.warning(self, "Chart Error", f"Failed to generate charts: {str(e)}")
+            QMessageBox.warning(self, tr("Chart Error"), f"Failed to generate charts: {str(e)}")
     
     def _generate_thermal_charts(self, sim_data):
         """Cp(x) profile and unwrapped Cp(x, theta) map at max-q (panel + thermo)."""
@@ -713,7 +714,7 @@ class DashboardWidget(BaseWidget):
                     f"Cp(x) at max-q (M={prof.get('mach', 0.0):.2f})",
                     x, cp, 'x from nose [m]', 'Cp', color='purple', name='Cp profile'
                 )
-                self._add_pyqtgraph_as_tab(plot, "Cp Profile (max-q)")
+                self._add_pyqtgraph_as_tab(plot, tr("Cp Profile (max-q)"))
             except Exception as e:
                 logger.warning(f"Could not create Cp profile chart: {e}")
         
@@ -730,9 +731,9 @@ class DashboardWidget(BaseWidget):
                     img.setRect(float(x[0]), float(az[0]),
                                 float(x[-1] - x[0]), float(az[-1] - az[0]))
                 w.setTitle(f"Cp(x, theta) at max-q (M={cmap.get('mach', 0.0):.2f})")
-                w.setLabel('bottom', 'x from nose [m]')
-                w.setLabel('left', 'theta [rad]')
-                self._add_pyqtgraph_as_tab(w, "Cp Map (max-q)")
+                w.setLabel('bottom', tr('x from nose [m]'))
+                w.setLabel('left', tr('theta [rad]'))
+                self._add_pyqtgraph_as_tab(w, tr("Cp Map (max-q)"))
             except Exception as e:
                 logger.warning(f"Could not create Cp map chart: {e}")
 
@@ -767,7 +768,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create forces chart: {e}")
             plot4 = self._create_pyqtgraph_placeholder("Forces Analysis")
-        self._add_pyqtgraph_as_tab(plot4, "Forces")
+        self._add_pyqtgraph_as_tab(plot4, tr("Forces"))
         
         # Chart 5: Mass & Altitude
         try:
@@ -787,7 +788,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create mass chart: {e}")
             plot5 = self._create_pyqtgraph_placeholder("Mass & Altitude")
-        self._add_pyqtgraph_as_tab(plot5, "Mass & Altitude")
+        self._add_pyqtgraph_as_tab(plot5, tr("Mass & Altitude"))
         
         # Chart 6: Attitude (Euler Angles)
         try:
@@ -808,7 +809,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create attitude chart: {e}")
             plot6 = self._create_pyqtgraph_placeholder("Attitude")
-        self._add_pyqtgraph_as_tab(plot6, "Attitude")
+        self._add_pyqtgraph_as_tab(plot6, tr("Attitude"))
         
         # Chart 7: Velocity Components
         try:
@@ -829,7 +830,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create velocity chart: {e}")
             plot7 = self._create_pyqtgraph_placeholder("Velocity Components")
-        self._add_pyqtgraph_as_tab(plot7, "Velocity Components")
+        self._add_pyqtgraph_as_tab(plot7, tr("Velocity Components"))
         
         # Chart 8: Atmospheric Conditions
         try:
@@ -849,7 +850,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create atmosphere chart: {e}")
             plot8 = self._create_pyqtgraph_placeholder("Atmosphere")
-        self._add_pyqtgraph_as_tab(plot8, "Atmosphere")
+        self._add_pyqtgraph_as_tab(plot8, tr("Atmosphere"))
         
         # Chart 9: Aerodynamic Coefficients (+ alpha, x_cp when available)
         try:
@@ -879,7 +880,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create aero coefficients chart: {e}")
             plot9 = self._create_pyqtgraph_placeholder("Aero Coefficients")
-        self._add_pyqtgraph_as_tab(plot9, "Aero Coefficients")
+        self._add_pyqtgraph_as_tab(plot9, tr("Aero Coefficients"))
         
         # Chart 10: Dynamic Pressure (Q)
         try:
@@ -911,7 +912,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create dynamic pressure chart: {e}")
             plot10 = self._create_pyqtgraph_placeholder("Dynamic Pressure")
-        self._add_pyqtgraph_as_tab(plot10, "Dynamic Pressure")
+        self._add_pyqtgraph_as_tab(plot10, tr("Dynamic Pressure"))
         
         # Chart 11: Thrust-to-Weight Ratio
         try:
@@ -941,7 +942,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create TWR chart: {e}")
             plot11 = self._create_pyqtgraph_placeholder("Thrust/Weight")
-        self._add_pyqtgraph_as_tab(plot11, "Thrust/Weight")
+        self._add_pyqtgraph_as_tab(plot11, tr("Thrust/Weight"))
         
         # Chart 12: Energy Analysis
         try:
@@ -967,7 +968,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create energy chart: {e}")
             plot12 = self._create_pyqtgraph_placeholder("Energy")
-        self._add_pyqtgraph_as_tab(plot12, "Energy")
+        self._add_pyqtgraph_as_tab(plot12, tr("Energy"))
         
         # Chart 13: Stability Margin
         try:
@@ -999,7 +1000,7 @@ class DashboardWidget(BaseWidget):
         except Exception as e:
             logger.warning(f"Could not create stability chart: {e}")
             plot13 = self._create_pyqtgraph_placeholder("Stability")
-        self._add_pyqtgraph_as_tab(plot13, "Stability")
+        self._add_pyqtgraph_as_tab(plot13, tr("Stability"))
     
     def _create_simple_chart(self, title, x_data, y_data, x_label, y_label):
         """Create a simple matplotlib figure with single dataset."""
@@ -1434,7 +1435,7 @@ class DashboardWidget(BaseWidget):
             ax.legend(loc='upper right', fontsize=8)
             fig.tight_layout()
 
-            self._add_chart_as_tab(fig, "2D Trajectory Map")
+            self._add_chart_as_tab(fig, tr("2D Trajectory Map"))
 
         except Exception as e:
             logger.error(f"Error generating 2D map: {e}")
@@ -1460,7 +1461,7 @@ class DashboardWidget(BaseWidget):
         plt.tight_layout()
         
         # Add as a tab
-        self._add_chart_as_tab(fig, "2D Trajectory Map")
+        self._add_chart_as_tab(fig, tr("2D Trajectory Map"))
     
     def _generate_3d_flight_path(self, times, ranges, altitudes, metadata):
         """Generate a 3D flight path with cartopy map texture on the ground plane."""
@@ -1606,7 +1607,7 @@ class DashboardWidget(BaseWidget):
             ax3d.legend(loc='upper left', fontsize=8)
             fig.tight_layout()
 
-            self._add_chart_as_tab(fig, "3D Flight Path")
+            self._add_chart_as_tab(fig, tr("3D Flight Path"))
 
         except Exception as e:
             logger.error(f"Error generating 3D flight path: {e}")
@@ -1614,12 +1615,12 @@ class DashboardWidget(BaseWidget):
     def export_csv(self):
         """Export simulation data to CSV."""
         if not self.current_sim_id:
-            QMessageBox.warning(self, "Warning", "No simulation loaded")
+            QMessageBox.warning(self, tr("Warning"), tr("No simulation loaded"))
             return
         
         filepath, _ = QFileDialog.getSaveFileName(
-            self, "Export CSV", f"simulation_{self.current_sim_id[:8]}.csv",
-            "CSV Files (*.csv);;All Files (*)"
+            self, tr("Export CSV"), f"simulation_{self.current_sim_id[:8]}.csv",
+            tr("CSV Files (*.csv);;All Files (*)")
         )
         
         if not filepath:
@@ -1675,23 +1676,23 @@ class DashboardWidget(BaseWidget):
                 writer.writerow([json.dumps(sim_data, indent=2)])
             
             QMessageBox.information(
-                self, "Success",
+                self, tr("Success"),
                 f"Data exported successfully to:\n{filepath}"
             )
             logger.info(f"CSV exported: {filepath}")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to export CSV:\n{str(e)}")
+            QMessageBox.critical(self, tr("Error"), f"Failed to export CSV:\n{str(e)}")
             logger.error(f"CSV export error: {e}")
     
     def generate_pdf(self):
         """Generate PDF report."""
         if not self.current_sim_id:
-            QMessageBox.warning(self, "Warning", "No simulation loaded")
+            QMessageBox.warning(self, tr("Warning"), tr("No simulation loaded"))
             return
         
         filepath, _ = QFileDialog.getSaveFileName(
-            self, "Generate PDF", f"simulation_{self.current_sim_id[:8]}.pdf",
-            "PDF Files (*.pdf);;All Files (*)"
+            self, tr("Generate PDF"), f"simulation_{self.current_sim_id[:8]}.pdf",
+            tr("PDF Files (*.pdf);;All Files (*)")
         )
         
         if not filepath:
@@ -1725,11 +1726,11 @@ class DashboardWidget(BaseWidget):
             )
             
             # Title
-            elements.append(Paragraph("Rocket Flight Simulation Report", title_style))
+            elements.append(Paragraph(tr("Rocket Flight Simulation Report"), title_style))
             elements.append(Spacer(1, 0.2*inch))
             
             # Metadata section
-            elements.append(Paragraph("Simulation Information", heading_style))
+            elements.append(Paragraph(tr("Simulation Information"), heading_style))
             
             metadata_data = [
                 ["Property", "Value"],
@@ -1757,7 +1758,7 @@ class DashboardWidget(BaseWidget):
             elements.append(Spacer(1, 0.3*inch))
             
             # Key metrics section
-            elements.append(Paragraph("Flight Metrics", heading_style))
+            elements.append(Paragraph(tr("Flight Metrics"), heading_style))
             
             metrics_data = [
                 ["Metric", "Value", "Unit"],
@@ -1785,7 +1786,7 @@ class DashboardWidget(BaseWidget):
             elements.append(Spacer(1, 0.3*inch))
             
             # Environmental conditions
-            elements.append(Paragraph("Environmental Conditions", heading_style))
+            elements.append(Paragraph(tr("Environmental Conditions"), heading_style))
             
             env_data = [
                 ["Parameter", "Value"],
@@ -1821,12 +1822,12 @@ class DashboardWidget(BaseWidget):
             doc.build(elements)
             
             QMessageBox.information(
-                self, "Success",
+                self, tr("Success"),
                 f"PDF report generated successfully:\n{filepath}"
             )
             logger.info(f"PDF generated: {filepath}")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to generate PDF:\n{str(e)}")
+            QMessageBox.critical(self, tr("Error"), f"Failed to generate PDF:\n{str(e)}")
             logger.error(f"PDF generation error: {e}")
     
     def refresh_dashboard(self):
